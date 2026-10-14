@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema de Apoyo para Inspectoría</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#fff; --soft:#f1f5f8; --ink:#14212e; --muted:#566670; --line:#d6dee4; --accent:#1f4e8c;
+  --top:#62b0dc; --top-ink:#0b1626;
+  --side:#0b1626; --side-act:#18293f; --side-mut:#9fb0c3; --amber:#f2b45c;
+  --ok:#1c7a46; --ok-soft:#e1f2e8; --bad:#b3261e; --bad-soft:#fbe6e4; --warn:#8f5400; --warn-soft:#fbefd9;
+  --f-head:"Bricolage Grotesque",system-ui,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--f-body)}
+button,input,select{font:inherit;color:inherit}
+h1,h2{font-family:var(--f-head);text-wrap:balance;margin:0}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.side :focus-visible{outline-color:#9cc4f2}
+code,.mono{font-family:ui-monospace,Consolas,monospace;font-size:.82rem}
+label{display:block;margin-bottom:4px;font-size:.8rem;font-weight:600;color:var(--muted)}
+input,select{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+
+/* Botones y etiquetas */
+.btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:10px 16px;font-weight:600;cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+.btn.sm{padding:6px 12px;font-size:.85rem}
+.btn.ghost{background:none;color:var(--accent);border:1px solid var(--accent)}
+.btn.ghost:hover{background:var(--soft);filter:none}
+.chip{display:inline-block;border:1px solid currentColor;border-radius:99px;padding:2px 12px;font:600 .78rem var(--f-body)}
+button.chip{background:none;cursor:pointer}
+.s-P{color:var(--ok);background:var(--ok-soft)}
+.s-A{color:var(--bad);background:var(--bad-soft)}
+.s-T{color:var(--warn);background:var(--warn-soft)}
+.s-N{color:var(--muted)}
+
+/* Login */
+.login{min-height:100%;display:grid;place-items:center;padding:32px 16px}
+.login form{width:min(100%,380px);display:flex;flex-direction:column;gap:16px}
+.login h1{font-size:1.7rem}
+.login p{margin:0}
+.brand{display:flex;align-items:center;gap:12px;font:600 1rem var(--f-head)}
+.logo{width:32px;height:32px;display:grid;grid-template-columns:1fr 1fr;gap:3px;flex:none}
+.logo i{background:var(--side-mut);border-radius:2px}
+.logo i:nth-child(2){background:var(--amber)}
+.login .logo i{background:var(--side)}
+.login .logo i:nth-child(2){background:var(--amber)}
+.pw{position:relative}
+.pw input{padding-right:84px}
+.pw button{position:absolute;inset:4px 4px 4px auto;background:none;border:0;border-radius:4px;padding:0 10px;color:var(--accent);font-size:.85rem;font-weight:600;cursor:pointer}
+.err{padding:9px 12px;border-radius:6px;background:var(--bad-soft);color:var(--bad);font-size:.88rem;font-weight:500}
+.hint{padding:10px 12px;border:1px dashed var(--line);border-radius:6px;color:var(--muted);font-size:.85rem}
+
+/* App: barra lateral, barra superior y área de trabajo */
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr)}
+.side{position:fixed;inset:0 auto 0 0;z-index:30;width:min(300px,86vw);display:flex;flex-direction:column;overflow-y:auto;background:var(--side);color:#fff;transform:translateX(-100%);transition:transform .2s}
+.side.open{transform:none}
+.scrim{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5)}
+@media (min-width:900px){
+  .app{grid-template-columns:280px minmax(0,1fr)}
+  .side{position:static;width:auto;transform:none}
+  .top .menu-btn,.scrim{display:none}
+}
+@media (prefers-reduced-motion:reduce){.side{transition:none}}
+.side-head{padding:20px 20px 14px}
+.side nav{padding-bottom:12px}
+.side ul{list-style:none;margin:0;padding:0}
+.nav-link{display:flex;align-items:center;gap:10px;width:100%;padding:9px 20px;background:none;border:0;color:inherit;font-size:.92rem;text-align:left;cursor:pointer}
+.nav-link:hover,.nav-link.on{background:var(--side-act)}
+.nav-link.on{font-weight:600;box-shadow:inset 3px 0 0 var(--amber)}
+.chev{margin-left:auto;flex:none;transition:transform .15s}
+.grp[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.sub{margin-left:29px;border-left:1px solid rgba(255,255,255,.14)}
+.sub .nav-link{padding-left:18px;font-size:.88rem}
+.sub .sub{margin-left:14px}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding:14px 20px;border-top:1px solid rgba(255,255,255,.14);font-size:.88rem}
+.side-foot small{display:block;color:var(--side-mut)}
+.side-foot button{padding:7px 12px;background:none;border:1px solid rgba(255,255,255,.2);border-radius:6px;color:inherit;text-align:left;cursor:pointer}
+.side-foot button:hover{background:var(--side-act)}
+.main{display:flex;flex-direction:column;min-height:0;min-width:0}
+.top{display:flex;align-items:center;gap:12px;min-height:52px;padding-inline:clamp(16px,3vw,32px);background:var(--top);color:var(--top-ink)}
+.menu-btn{display:grid;place-items:center;flex:none;width:36px;height:36px;background:none;color:inherit;border:1px solid rgba(11,22,38,.4);border-radius:6px;cursor:pointer}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;min-width:0;font-size:.85rem;color:#17324d}
+.crumbs b{color:var(--top-ink);font-weight:700}
+.work{flex:1;min-height:0;overflow:auto;padding:24px clamp(16px,3vw,32px) 48px;outline:0}
+.wrap{max-width:1180px;margin-inline:auto}
+.wrap h1{font-size:1.6rem}
+.wrap h2{margin-bottom:12px;font-size:1.05rem}
+.lead{margin:6px 0 0;color:var(--muted);max-width:65ch}
+.note,.count,.legend{color:var(--muted);font-size:.82rem}
+.note{margin:10px 0 0}
+.count{margin:0 0 10px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px}
+.empty{margin:0;padding:24px;border:1px dashed var(--line);border-radius:8px;color:var(--muted)}
+.filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:18px 0 12px}
+.filters>div{flex:1 1 170px;max-width:260px;min-width:0}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+
+/* Inicio */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin:18px 0 28px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.strip div{padding:14px 16px;background:var(--bg)}
+.strip b{display:block;font:700 1.7rem/1.1 var(--f-head)}
+.strip span{color:var(--muted);font-size:.8rem}
+.links{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.link{display:flex;flex-direction:column;gap:4px;padding:14px 16px;background:var(--bg);border:1px solid var(--line);border-radius:8px;text-align:left;cursor:pointer}
+.link:hover{border-color:var(--accent)}
+.link b{font:600 1rem var(--f-head)}
+.link span{color:var(--muted);font-size:.85rem}
+
+/* Tablas */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
+th{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--muted);font:600 .7rem var(--f-body);letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tfoot td{border-top:1px solid var(--line);font-weight:600}
+.mx th,.mx td{min-width:22px;padding:6px 0;text-align:center}
+.mx th.dc{font-weight:500;line-height:1.25;letter-spacing:0;text-transform:none}
+.mx th.dc span{display:block;font-size:.62rem;opacity:.75}
+.mx .nm{position:sticky;left:0;z-index:1;min-width:148px;padding:6px 10px;background:var(--bg);border-right:1px solid var(--line);text-align:left}
+.mx .fer{background:var(--soft);color:var(--muted)}
+.mx .pc{min-width:60px;padding-inline:4px;font-weight:600}
+.mx th.pc{font-size:.6rem;letter-spacing:.02em}
+.dot,.xx{display:inline-block;width:12px;height:12px;vertical-align:middle}
+.dot{border-radius:50%;background:var(--ok)}
+.xx{color:var(--bad)}
+.low{color:var(--bad);font-weight:600}
+
+/* Asistencia anual */
+.sumrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;margin-bottom:14px}
+.big{font:700 2.4rem/1 var(--f-head)}
+.bar{position:relative;height:8px;min-width:140px;background:var(--soft);border:1px solid var(--line);border-radius:4px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.bar.low i{background:var(--bad)}
+.bar::after{content:"";position:absolute;left:85%;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+</style>
+</head>
+<body>
+<div id="login" class="login">
+  <form id="loginForm" novalidate>
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Sistema de Apoyo para Inspectoría</div>
+    <div>
+      <h1>Iniciar sesión</h1>
+      <p style="color:var(--muted)">Ingresa con tu usuario de inspectoría.</p>
+    </div>
+    <div>
+      <label for="user">Usuario</label>
+      <input id="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
+    </div>
+    <div>
+      <label for="pass">Contraseña</label>
+      <div class="pw">
+        <input id="pass" type="password" autocomplete="current-password">
+        <button type="button" id="togglePass" aria-pressed="false" aria-controls="pass">Mostrar</button>
+      </div>
+    </div>
+    <p id="err" class="err" role="alert" hidden></p>
+    <button class="btn" type="submit">Ingresar</button>
+    <p class="hint">Acceso de prueba: usuario <code>inspector</code>, contraseña <code>inspectoria</code>. Esta pantalla es una maqueta y no se conecta a ningún servidor.</p>
+  </form>
+</div>
+
+<div id="app" class="app" hidden>
+  <div id="scrim" class="scrim" hidden></div>
+  <aside id="side" class="side">
+    <div class="side-head"><div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Sistema de Apoyo</div></div>
+    <nav id="nav" aria-label="Principal"></nav>
+    <div class="side-foot">
+      <div>Inspector<small>Sesión de prueba</small></div>
+      <button id="logout" type="button">Cerrar sesión</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button id="menuBtn" class="menu-btn" type="button" aria-label="Abrir menú" aria-controls="side" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <nav id="crumbs" class="crumbs" aria-label="Ruta"></nav>
+    </header>
+    <div id="work" class="work" tabindex="-1"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+
+/* ---------- Datos de ejemplo ---------- */
+const TODAY='2026-10-13';
+const FER=new Set(['2026-04-03','2026-05-01','2026-05-21','2026-06-29','2026-07-16','2026-09-18','2026-10-12','2026-12-08','2026-12-25']);
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const MES_LECT=[3,4,5,6,7,8,9,10,11,12];
+const CURSOS=['7°A','7°B','8°A','8°B','1°M A','1°M B'];
+const BLOQUES=['08:00 – 09:30','09:45 – 11:15','11:30 – 13:00','14:00 – 15:30','15:45 – 17:15'];
+const NOM=['Camila','Matías','Valentina','Benjamín','Sofía','Tomás','Isidora','Vicente','Antonia','Joaquín','Florencia','Agustín','Martina','Lucas','Josefa','Diego','Emilia','Cristóbal','Trinidad','Felipe','Javiera','Nicolás','Catalina','Maximiliano'];
+const APE=['Rojas Pérez','Soto Díaz','Muñoz Araya','Pizarro Vega','Contreras León','Fuentes Mora','Reyes Silva','Herrera Lagos','Navarro Cid','Castro Ibáñez','Vidal Peña','Lara Núñez','Torres Bravo','Espinoza Rivas','Cárdenas Ortiz','Molina Paredes','Sepúlveda Gil','Carrasco Toro','Aravena Ruiz','Vargas Mella','Figueroa Salas','Orellana Cea','Bustos Leiva','Parra Godoy'];
+const MOT_R=['Control médico','Malestar de salud','Trámite familiar','Emergencia familiar'];
+const MOT_G=['Control médico','Trámite familiar','Retraso de transporte'];
+const LBL={P:'Presente',A:'Ausente',T:'Atraso',N:'Sin registrar'};
+
+const pad=n=>String(n).padStart(2,'0');
+const iso=(y,m,d)=>y+'-'+pad(m)+'-'+pad(d);
+const fmt=f=>f.split('-').reverse().join('/');
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const pct=p=>p==null?'–':p.toFixed(1).replace('.',',')+' %';
+const fecha=f=>{const [y,m,d]=f.split('-').map(Number);return new Date(y,m-1,d)};
+const largo=f=>{const d=fecha(f);return DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear()};
+const esDia=f=>{const w=fecha(f).getDay();return w>0&&w<6&&!FER.has(f)};
+
+function dv(n){let s=0,m=2;for(const d of String(n).split('').reverse()){s+=d*m;m=m===7?2:m+1}const r=11-s%11;return r===11?'0':r===10?'K':String(r)}
+const rutFmt=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+dv(n);
+const AL=NOM.map((n,i)=>({rut:rutFmt(23500000+i*113047),nombres:n,apellidos:APE[i],curso:CURSOS[i%6]}));
+const cmp=(a,b)=>a.apellidos.localeCompare(b.apellidos,'es')||a.nombres.localeCompare(b.nombres,'es');
+const ORD=AL.slice().sort(cmp);
+const nombre=a=>a.apellidos+', '+a.nombres;
+
+// Número pseudoaleatorio estable entre 0 y 1: la misma clave da siempre el mismo dato de ejemplo.
+function h(s){let x=2166136261;for(let i=0;i<s.length;i++){x^=s.charCodeAt(i);x=Math.imul(x,16777619)}return((x>>>0)%10000)/10000}
+const elige=(l,k)=>l[Math.floor(h(k)*l.length)];
+const hora=(h0,n,k)=>(h0+Math.floor(h(k)*n))+':'+elige(['00','15','30','45'],k+'m');
+const estado=(rut,f)=>{const x=h(rut+f);return x<.05?'A':x<.13?'T':'P'};
+function claseEstado(rut,f,b){const e=estado(rut,f);if(e==='A')return'A';if(e==='T')return b===1?'T':'P';return h(rut+f+'b'+b)<.02?'A':'P'}
+const atraso=(a,f)=>estado(a.rut,f)==='T'?{hora:'08:'+pad(5+Math.floor(h(a.rut+f+'h')*40)),just:h(a.rut+f+'j')<.4}:null;
+const sale=(a,f,k)=>estado(a.rut,f)!=='A'&&h(a.rut+f+k)<.03;
+const retiro=(a,f)=>sale(a,f,'r')?{hora:hora(10,6,a.rut+f+'rh'),quien:h(a.rut+f+'q')<.7?'Apoderado titular':'Apoderado suplente',motivo:elige(MOT_R,a.rut+f+'rt')}:null;
+const reingreso=(a,f)=>sale(a,f,'g')?{hora:hora(9,3,a.rut+f+'gh'),motivo:elige(MOT_G,a.rut+f+'gt')}:null;
+
+const diasHabiles=(y,m)=>Array.from({length:new Date(y,m,0).getDate()},(_,i)=>{const d=i+1,f=iso(y,m,d);return{d,f,w:new Date(y,m-1,d).getDay(),fer:FER.has(f)}}).filter(x=>x.w>0&&x.w<6);
+const lectivos=m=>diasHabiles(2026,m).filter(d=>!d.fer&&d.f<=TODAY);
+const cerrado=m=>iso(2026,m,new Date(2026,m,0).getDate())<TODAY;
+function ultimosHabiles(n){const out=[],d=new Date(2026,9,13);while(out.length<n){const f=iso(d.getFullYear(),d.getMonth()+1,d.getDate());if(esDia(f))out.push(f);d.setDate(d.getDate()-1)}return out}
+
+// Asistencia de un curso en un mes, con los porcentajes mensual y anual de cada alumno.
+function detalleMes(curso,m){
+  const dias=diasHabiles(2026,m),lm=lectivos(m).length;
+  const anio=MES_LECT.flatMap(k=>lectivos(k).map(d=>d.f));
+  const alumnos=ORD.filter(a=>a.curso===curso).map(a=>{
+    const cells=dias.map(d=>d.fer?'F':d.f>TODAY?null:estado(a.rut,d.f));
+    const aus=cells.filter(c=>c==='A').length;
+    const ausA=anio.filter(f=>estado(a.rut,f)==='A').length;
+    return{a,cells,pres:lm-aus,aus,pm:lm?(lm-aus)/lm*100:null,pa:anio.length?(anio.length-ausA)/anio.length*100:null};
+  });
+  return{curso,mes:m,dias,alumnos,lect:lm,etapa:cerrado(m)?'Cerrada':'Abierta'};
+}
+
+/* ---------- Exportar a Excel y PDF (sin librerías externas) ---------- */
+const mesTxt=m=>cap(MESES[m.mes-1])+' 2026';
+const nota=()=>'% anual: acumulado de marzo al '+fmt(TODAY)+'. Atraso cuenta como presente. Datos de ejemplo.';
+const utf8=new TextEncoder();
+const xe=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const colName=i=>{let s='';for(i++;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s};
+const CRC=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c>>>0});
+const crc32=u8=>{let c=-1;for(const b of u8)c=CRC[(c^b)&255]^(c>>>8);return(c^-1)>>>0};
+const le=(...f)=>f.flatMap(([v,n])=>Array.from({length:n},(_,i)=>(v>>>(8*i))&255));
+const cat=parts=>{const o=new Uint8Array(parts.reduce((a,b)=>a+b.length,0));let p=0;parts.forEach(b=>{o.set(b,p);p+=b.length});return o};
+
+// Archivo .zip sin compresión: es lo que necesita un .xlsx.
+function zip(files){
+  const local=[],central=[];let off=0;
+  files.forEach(({name,data})=>{
+    const nm=utf8.encode(name),crc=crc32(data),sz=data.length;
+    local.push(Uint8Array.from(le([0x04034b50,4],[20,2],[0x800,2],[0,2],[0,2],[0x21,2],[crc,4],[sz,4],[sz,4],[nm.length,2],[0,2])),nm,data);
+    central.push(Uint8Array.from(le([0x02014b50,4],[20,2],[20,2],[0x800,2],[0,2],[0,2],[0x21,2],[crc,4],[sz,4],[sz,4],[nm.length,2],[0,2],[0,2],[0,2],[0,2],[0,4],[off,4])),nm);
+    off+=30+nm.length+sz;
+  });
+  const csz=central.reduce((a,b)=>a+b.length,0),n=files.length;
+  return cat([...local,...central,Uint8Array.from(le([0x06054b50,4],[0,2],[0,2],[n,2],[n,2],[csz,4],[off,4],[0,2]))]);
+}
+
+function buildXlsx(m){
+  const H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const NS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const MAIN='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const S={ok:1,bad:2,head:3,fer:4,pct:5,txt:6,num:7,title:8,blank:9};
+  const c=(v,s)=>({v,s});
+  const rows=[
+    [c('Asistencia mensual por curso',S.title)],
+    [c('Curso '+m.curso+' · '+mesTxt(m)+' · Etapa: '+m.etapa)],
+    [c('Alumno',S.head),c('RUT',S.head),...m.dias.map(d=>c('DLMMJVS'[d.w]+' '+d.d,S.head)),...['Presentes','Ausentes','% mensual','% anual'].map(t=>c(t,S.head))],
+    ...m.alumnos.map(r=>[c(nombre(r.a),S.txt),c(r.a.rut,S.txt),
+      ...r.cells.map(x=>x==='A'?c('✕',S.bad):x==='F'?c('F',S.fer):x?c('●',S.ok):c('',S.blank)),
+      c(r.pres,S.num),c(r.aus,S.num),...[r.pm,r.pa].map(p=>p==null?c('',S.blank):c(p/100,S.pct))]),
+    [],[c('● Presente (incluye atrasos)')],[c('✕ Ausente')],[c('F Feriado')],[c(nota())]
+  ];
+  const cell=(x,r,j)=>{
+    const ref=colName(j)+r,s=x.s?' s="'+x.s+'"':'';
+    if(typeof x.v==='number')return '<c r="'+ref+'"'+s+'><v>'+x.v+'</v></c>';
+    if(x.v==='')return x.s?'<c r="'+ref+'"'+s+'/>':'';
+    return '<c r="'+ref+'"'+s+' t="inlineStr"><is><t>'+xe(x.v)+'</t></is></c>';
+  };
+  const data=rows.map((r,i)=>'<row r="'+(i+1)+'"'+(i===2?' ht="30" customHeight="1"':'')+'>'+r.map((x,j)=>cell(x,i+1,j)).join('')+'</row>').join('');
+  const nd=m.dias.length;
+  const sheet=H+'<worksheet xmlns="'+MAIN+'"><sheetViews><sheetView workbookViewId="0"><pane xSplit="2" ySplit="3" topLeftCell="C4" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>'+
+    '<cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="14" customWidth="1"/><col min="3" max="'+(2+nd)+'" width="6.5" customWidth="1"/><col min="'+(3+nd)+'" max="'+(6+nd)+'" width="12" customWidth="1"/></cols>'+
+    '<sheetData>'+data+'</sheetData></worksheet>';
+  // Estilos, en este orden: 0 base, 1 verde, 2 rojo, 3 encabezado, 4 feriado, 5 porcentaje, 6 texto, 7 número, 8 título, 9 celda vacía con borde
+  const xf=(num,font,fill,border,al,wrap)=>'<xf numFmtId="'+num+'" fontId="'+font+'" fillId="'+fill+'" borderId="'+border+'" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"'+(al?' applyAlignment="1"><alignment horizontal="'+al+'" vertical="center"'+(wrap?' wrapText="1"':'')+'/></xf>':'/>');
+  const font=(rgb,sz=11,b=true)=>'<font>'+(b?'<b/>':'')+'<sz val="'+sz+'"/>'+(rgb?'<color rgb="'+rgb+'"/>':'')+'<name val="Calibri"/></font>';
+  const fill=rgb=>'<fill><patternFill patternType="solid"><fgColor rgb="'+rgb+'"/><bgColor indexed="64"/></patternFill></fill>';
+  const side=t=>'<'+t+' style="thin"><color rgb="FFD3DCE1"/></'+t+'>';
+  const styles=H+'<styleSheet xmlns="'+MAIN+'"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0%"/></numFmts>'+
+    '<fonts count="6">'+[font(null,11,false),font('FF1C7A46'),font('FFB3261E'),font(null),font('FF566670',11,false),font(null,14)].join('')+'</fonts>'+
+    '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'+fill('FFEEF1F2')+fill('FFE3E8EA')+'</fills>'+
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border>'+['left','right','top','bottom'].map(side).join('')+'<diagonal/></border></borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="10">'+[xf(0,0,0,0),xf(0,1,0,1,'center'),xf(0,2,0,1,'center'),xf(0,3,2,1,'center',true),xf(0,4,3,1,'center'),xf(164,0,0,1,'center'),xf(0,0,0,1,'left'),xf(0,0,0,1,'center'),xf(0,5,0,0),xf(0,0,0,1)].join('')+'</cellXfs>'+
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  const rels=(...r)=>H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+r.map(([id,t,to])=>'<Relationship Id="'+id+'" Type="'+NS+'/'+t+'" Target="'+to+'"/>').join('')+'</Relationships>';
+  const SS='application/vnd.openxmlformats-officedocument.spreadsheetml.';
+  const over=(p,t)=>'<Override PartName="'+p+'" ContentType="'+SS+t+'+xml"/>';
+  return zip([
+    ['[Content_Types].xml',H+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+over('/xl/workbook.xml','sheet.main')+over('/xl/worksheets/sheet1.xml','worksheet')+over('/xl/styles.xml','styles')+'</Types>'],
+    ['_rels/.rels',rels(['rId1','officeDocument','xl/workbook.xml'])],
+    ['xl/workbook.xml',H+'<workbook xmlns="'+MAIN+'" xmlns:r="'+NS+'"><sheets><sheet name="Asistencia" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+    ['xl/_rels/workbook.xml.rels',rels(['rId1','worksheet','worksheets/sheet1.xml'],['rId2','styles','styles.xml'])],
+    ['xl/styles.xml',styles],
+    ['xl/worksheets/sheet1.xml',sheet]
+  ].map(([name,x])=>({name,data:utf8.encode(x)})));
+}
+
+function buildPdf(m){
+  const PW=842,PH=595,MX=30,RH=20,HH=30,nd=m.dias.length;
+  const WS=[40,40,48,48],XN=MX,XR=XN+128,XD=XR+62,dw=Math.min(20,(PW-2*MX-190-8-176)/nd);
+  const XS=XD+dw*nd+8,XE=XS+176,XC=[XS,XS+40,XS+80,XS+128];
+  const GRAY='0.34 0.40 0.44',GREEN='0.11 0.48 0.27',RED='0.70 0.15 0.12';
+  const n=v=>v.toFixed(2),p=(...v)=>v.map(n).join(' ');
+  const lat=s=>String(s).replace(/[–—]/g,'-').replace(/[^\x00-\xff]/g,'?');
+  const T=(x,top,s,sz,b,col)=>'BT /F'+(b?2:1)+' '+sz+' Tf '+(col||'0 0 0')+' rg '+p(x,PH-top)+' Td ('+lat(s).replace(/[\\()]/g,'\\$&')+') Tj ET\n';
+  const TC=(cx,top,s,sz,b,col)=>T(cx-lat(s).length*sz*.26,top,s,sz,b,col);
+  const circ=(x,y,r)=>{const k=.5523*r;return GREEN+' rg '+p(x+r,y)+' m '+p(x+r,y+k,x+k,y+r,x,y+r)+' c '+p(x-k,y+r,x-r,y+k,x-r,y)+' c '+p(x-r,y-k,x-k,y-r,x,y-r)+' c '+p(x+k,y-r,x+r,y-k,x+r,y)+' c f\n'};
+  const cross=(x,y,r)=>RED+' RG 1.6 w 1 J '+p(x-r,y-r)+' m '+p(x+r,y+r)+' l S '+p(x-r,y+r)+' m '+p(x+r,y-r)+' l S\n';
+  const line=top=>'0.83 0.86 0.88 RG 0.5 w '+p(MX,PH-top)+' m '+p(XE,PH-top)+' l S\n';
+  const porPag=Math.floor((PH-2*MX-58-HH-40)/RH),paginas=[];
+  for(let i=0;i<Math.max(1,m.alumnos.length);i+=porPag)paginas.push(m.alumnos.slice(i,i+porPag));
+  const streams=paginas.map((rows,pi)=>{
+    const top0=MX+46;
+    let c=T(MX,MX+10,'Asistencia mensual por curso',15,true)+T(MX,MX+28,'Curso '+m.curso+'  ·  '+mesTxt(m)+'  ·  Etapa: '+m.etapa,10,false,GRAY);
+    c+='0.93 0.95 0.95 rg '+p(MX,PH-top0-HH,XE-MX,HH)+' re f\n'+T(XN+4,top0+19,'Alumno',8,true)+T(XR+4,top0+19,'RUT',8,true);
+    m.dias.forEach((d,j)=>{const cx=XD+dw*(j+.5);c+=TC(cx,top0+11,'DLMMJVS'[d.w],6.5,false,GRAY)+TC(cx,top0+23,String(d.d),8,true)});
+    ['Presentes','Ausentes','% mensual','% anual'].forEach((s,k)=>{c+=TC(XC[k]+WS[k]/2,top0+19,s,7.5,true)});
+    c+=line(top0+HH);
+    rows.forEach((r,i)=>{
+      const tr=top0+HH+i*RH,tb=tr+13,cy=PH-(tr+RH/2);
+      c+=T(XN+4,tb,nombre(r.a),8.5)+T(XR+4,tb,r.a.rut,8,false,GRAY);
+      r.cells.forEach((v,j)=>{const cx=XD+dw*(j+.5);if(v==='A')c+=cross(cx,cy,3.6);else if(v==='F')c+=TC(cx,tb,'F',8,false,GRAY);else if(v)c+=circ(cx,cy,4.2)});
+      [String(r.pres),String(r.aus),pct(r.pm),pct(r.pa)].forEach((s,k)=>{
+        const v=k===2?r.pm:k===3?r.pa:null,bajo=v!=null&&v<85;
+        c+=TC(XC[k]+WS[k]/2,tb,s,8.5,bajo,bajo?RED:'0 0 0');
+      });
+      c+=line(tr+RH);
+    });
+    const ly=top0+HH+rows.length*RH+22;
+    c+=circ(MX+5,PH-ly+3,4)+T(MX+14,ly,'Presente (incluye atrasos)',8,false,GRAY)+cross(MX+135,PH-ly+3,3.4)+T(MX+144,ly,'Ausente',8,false,GRAY)+T(MX+190,ly,'F  Feriado',8,false,GRAY);
+    return c+T(MX,ly+16,nota(),7.5,false,GRAY)+T(XE-60,PH-14,'Página '+(pi+1)+' de '+paginas.length,8,false,GRAY);
+  });
+  // Objetos del PDF: 1 catálogo, 2 páginas, 3 y 4 fuentes, luego (página, contenido) por cada hoja
+  const obj=['','<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids ['+streams.map((_,i)=>(5+2*i)+' 0 R').join(' ')+'] /Count '+streams.length+' >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'];
+  streams.forEach((s,i)=>obj.push(
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+PW+' '+PH+'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents '+(6+2*i)+' 0 R >>',
+    '<< /Length '+s.length+' >>\nstream\n'+s+'endstream'));
+  let out='%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';const off=[];
+  for(let i=1;i<obj.length;i++){off.push(out.length);out+=i+' 0 obj\n'+obj[i]+'\nendobj\n'}
+  const xr=out.length;
+  out+='xref\n0 '+obj.length+'\n0000000000 65535 f \n'+off.map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size '+obj.length+' /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF';
+  return Uint8Array.from(out,ch=>ch.charCodeAt(0)&255);
+}
+
+/* ---------- Navegación ---------- */
+const TREE=[
+ {id:'inicio',label:'Inicio',ic:'home'},
+ {id:'libro',label:'Libro de clases',ic:'book',children:[
+  {id:'asistencia',label:'Asistencia',children:[
+   {id:'asistencia-clase',label:'Asistencia por clase',desc:'Pasa lista de un curso en un bloque horario.'},
+   {id:'atrasos',label:'Atrasos',desc:'Llegadas después del inicio de la jornada.'},
+   {id:'retiro',label:'Retiro anticipado',desc:'Salidas antes del término de la jornada.'},
+   {id:'reingreso',label:'Reingreso',desc:'Alumnos que vuelven a clases durante el día.'},
+   {id:'mensual',label:'Asistencia mensual por curso',desc:'Matriz de un mes completo para un curso.'},
+   {id:'anual',label:'Asistencia anual por alumno',desc:'Porcentaje mes a mes frente al mínimo de 85 %.'}]},
+  {id:'calificaciones',label:'Calificaciones'},
+  {id:'observaciones',label:'Observaciones'},
+  {id:'planificacion',label:'Planificación'}]},
+ {id:'justificativos',label:'Justificativos',ic:'doc'},
+ {id:'alertas',label:'Alertas',ic:'bell'}
+];
+const BYID={};(function reg(l){l.forEach(n=>{BYID[n.id]=n;if(n.children)reg(n.children)})})(TREE);
+const path=(id,list=TREE,acc=[])=>{for(const n of list){const p=[...acc,n];if(n.id===id)return p;const r=n.children&&path(id,n.children,p);if(r)return r}return null};
+const ICONOS={
+ home:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ book:'<path d="M5 4h14v16H7a2 2 0 0 1-2-2z"/><path d="M5 18a2 2 0 0 1 2-2h12"/>',
+ doc:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
+ bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
+ chev:'<path d="M9 6l6 6-6 6"/>'
+};
+const svg=(k,s=18)=>'<svg'+(k==='chev'?' class="chev"':'')+' viewBox="0 0 24 24" width="'+s+'" height="'+s+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICONOS[k]+'</svg>';
+const abiertos=new Set(['libro','asistencia']);
+let cur='inicio',redraw=null;
+
+function navHtml(list,sub){
+  return '<ul'+(sub?' class="sub"':'')+'>'+list.map(n=>{
+    const ico=n.ic?svg(n.ic):'';
+    if(n.children){
+      const o=abiertos.has(n.id);
+      return '<li><button type="button" class="nav-link grp" data-toggle="'+n.id+'" aria-expanded="'+o+'">'+ico+'<span>'+n.label+'</span>'+svg('chev',14)+'</button><div'+(o?'':' hidden')+'>'+navHtml(n.children,true)+'</div></li>';
+    }
+    const on=cur===n.id;
+    return '<li><button type="button" class="nav-link'+(on?' on':'')+'" data-go="'+n.id+'"'+(on?' aria-current="page"':'')+'>'+ico+'<span>'+n.label+'</span></button></li>';
+  }).join('')+'</ul>';
+}
+const drawNav=()=>{$('#nav').innerHTML=navHtml(TREE)};
+function drawCrumbs(){
+  const p=path(cur);
+  $('#crumbs').innerHTML=p.map((n,i)=>i===p.length-1?'<b>'+n.label+'</b>':'<span>'+n.label+'</span><span aria-hidden="true">/</span>').join('');
+}
+function setDrawer(v){
+  $('#side').classList.toggle('open',v);
+  $('#scrim').hidden=!v;
+  $('#menuBtn').setAttribute('aria-expanded',String(v));
+}
+function go(id){
+  const n=BYID[id];
+  if(!n||n.children)return;
+  cur=id;redraw=null;if(id==='mensual')M.det=null;
+  path(id).forEach(p=>{if(p.children)abiertos.add(p.id)});
+  drawNav();drawCrumbs();
+  (VIEWS[id]||(()=>W('<h1>'+n.label+'</h1><p class="lead">Esta sección todavía no está construida en el prototipo.</p>')))();
+  $('#work').scrollTop=0;
+  setDrawer(false);
+  try{history.replaceState(null,'','#'+id)}catch(e){}
+}
+
+/* ---------- Piezas de las vistas ---------- */
+const W=html=>{$('#work').innerHTML='<div class="wrap">'+html+'</div>'};
+const head=id=>'<h1>'+BYID[id].label+'</h1><p class="lead">'+BYID[id].desc+'</p>';
+const chip=(k,t)=>'<span class="chip s-'+k+'">'+t+'</span>';
+const mono=t=>'<span class="mono">'+t+'</span>';
+const opts=(list,sel)=>list.map(([v,l])=>'<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+l+'</option>').join('');
+const sel=(id,label,list,val,style)=>'<div'+(style?' style="'+style+'"':'')+'><label for="'+id+'">'+label+'</label><select id="'+id+'">'+opts(list,val)+'</select></div>';
+const CURSO_OPT=CURSOS.map(c=>[c,c]),TODOS=[['','Todos los cursos'],...CURSO_OPT];
+const tabla=(cols,rows,pie)=>'<table><thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody>'+(pie||'')+'</table>';
+const barra=v=>'<div class="bar'+(v!=null&&v<85?' low':'')+'" role="img" aria-label="'+(v==null?'Sin datos':Math.round(v)+' por ciento')+'"><i style="width:'+(v||0)+'%"></i></div>';
+// Une cada control (por su id) con una propiedad del estado de la vista y vuelve a dibujar la tabla.
+const ligar=(st,ids)=>Object.entries(ids).forEach(([id,k])=>{const e=$('#'+id);e.oninput=e.onchange=()=>{st[k]=e.value;redraw()}});
+
+/* ---------- Vistas ---------- */
+function vInicio(){
+  const c={P:0,A:0,T:0};AL.forEach(a=>c[estado(a.rut,TODAY)]++);
+  const ret=AL.filter(a=>retiro(a,TODAY)).length;
+  W('<h1>Buenos días, inspector</h1><p class="lead">'+cap(largo(TODAY))+'. Datos de ejemplo de '+AL.length+' alumnos.</p>'+
+    '<div class="strip" role="group" aria-label="Resumen de la jornada">'+
+    [[c.P,'Presentes'],[c.A,'Ausentes'],[c.T,'Atrasos'],[ret,'Retiros anticipados']].map(([v,t])=>'<div><b>'+v+'</b><span>'+t+'</span></div>').join('')+'</div>'+
+    '<h2>Libro de clases · Asistencia</h2><div class="links">'+
+    BYID.asistencia.children.map(n=>'<button type="button" class="link" data-go="'+n.id+'"><b>'+n.label+'</b><span>'+n.desc+'</span></button>').join('')+'</div>');
+}
+
+// Asistencia por clase: el estado de cada alumno se puede cambiar tocándolo.
+const C={curso:'7°A',fecha:TODAY,bloque:'1',ov:{}};
+const claveC=a=>[C.curso,C.fecha||TODAY,C.bloque,a.rut].join('|');
+const estadoC=a=>{const f=C.fecha||TODAY;return C.ov[claveC(a)]??(f>TODAY?null:claseEstado(a.rut,f,+C.bloque))};
+function vClase(){
+  W(head('asistencia-clase')+'<div class="filters">'+sel('cCurso','Curso',CURSO_OPT,C.curso)+
+    '<div><label for="cFecha">Fecha</label><input id="cFecha" type="date" value="'+C.fecha+'"></div>'+
+    sel('cBloque','Bloque',BLOQUES.map((b,i)=>[i+1,b]),C.bloque)+'</div>'+
+    '<p class="count" id="cnt"></p><div class="tw" id="tbl"></div>'+
+    '<p class="note">Toca el estado de un alumno para cambiarlo. Los cambios duran mientras esta página esté abierta.</p>');
+  redraw=()=>{
+    if(!esDia(C.fecha||TODAY)){$('#cnt').textContent='';$('#tbl').innerHTML='<p class="empty">Ese día no hay clases (fin de semana o feriado).</p>';return}
+    const als=ORD.filter(a=>a.curso===C.curso),n={P:0,A:0,T:0,N:0};
+    als.forEach(a=>n[estadoC(a)||'N']++);
+    $('#cnt').textContent=n.P+' presentes · '+n.A+' ausentes · '+n.T+' atrasos'+(n.N?' · '+n.N+' sin registrar':'');
+    $('#tbl').innerHTML=tabla(['N.º','Alumno','RUT','Estado'],als.map((a,i)=>{
+      const s=estadoC(a)||'N';
+      return [mono(i+1),nombre(a),mono(a.rut),'<button type="button" class="chip s-'+s+'" data-cyc="'+a.rut+'" aria-label="Cambiar estado de '+nombre(a)+'. Actual: '+LBL[s]+'">'+LBL[s]+'</button>'];
+    }));
+  };
+  ligar(C,{cCurso:'curso',cFecha:'fecha',cBloque:'bloque'});
+  redraw();
+}
+function ciclar(rut){
+  const a=AL.find(x=>x.rut===rut),c=estadoC(a);
+  C.ov[claveC(a)]=c==null?'P':{P:'A',A:'T',T:'P'}[c];
+  redraw();
+  const b=document.querySelector('[data-cyc="'+rut+'"]');if(b)b.focus();
+}
+
+// Atrasos, retiro anticipado y reingreso: tres listas con el mismo formato.
+const LISTAS={
+ atrasos:{fn:atraso,cols:['Fecha','Alumno','RUT','Curso','Hora de llegada','Justificado'],
+  fila:x=>[x.r.hora,x.r.just?chip('P','Sí'):chip('T','No')]},
+ retiro:{fn:retiro,cols:['Fecha','Alumno','RUT','Curso','Hora de retiro','Retira','Motivo'],
+  fila:x=>[x.r.hora,x.r.quien,x.r.motivo]},
+ reingreso:{fn:reingreso,cols:['Fecha','Alumno','RUT','Curso','Hora de reingreso','Motivo'],
+  fila:x=>[x.r.hora,x.r.motivo]}
+};
+function vLista(id){
+  const L=LISTAS[id],F={curso:'',q:''},todos=[];
+  ultimosHabiles(20).forEach(f=>ORD.forEach(a=>{const r=L.fn(a,f);if(r)todos.push({a,f,r})}));
+  W(head(id)+'<div class="filters">'+sel('fCurso','Curso',TODOS,'')+
+    '<div><label for="fQ">Buscar</label><input id="fQ" type="search" placeholder="Nombre o RUT" autocomplete="off"></div></div>'+
+    '<p class="count" id="cnt"></p><div class="tw" id="tbl"></div><p class="note">Registros de los últimos 20 días hábiles. Datos de ejemplo.</p>');
+  redraw=()=>{
+    const q=F.q.trim().toLowerCase();
+    const rows=todos.filter(x=>(!F.curso||x.a.curso===F.curso)&&(!q||(nombre(x.a)+' '+x.a.rut).toLowerCase().includes(q)));
+    $('#cnt').textContent=rows.length+(rows.length===1?' registro':' registros');
+    $('#tbl').innerHTML=rows.length?tabla(L.cols,rows.map(x=>[fmt(x.f),nombre(x.a),mono(x.a.rut),x.a.curso,...L.fila(x)])):'<p class="empty">No hay registros con estos filtros.</p>';
+  };
+  ligar(F,{fCurso:'curso',fQ:'q'});
+  redraw();
+}
+
+// Asistencia mensual por curso: lista de cursos y meses, y el detalle de cada uno.
+const M={curso:'',det:null};
+const DOT='<span class="dot" role="img" aria-label="Presente"></span>';
+const DOT_T='<span class="dot" role="img" aria-label="Presente (llegó atrasado)" title="Llegó atrasado"></span>';
+const EQUIS='<svg class="xx" viewBox="0 0 12 12" role="img" aria-label="Ausente"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
+function baja(nombreArchivo,bytes,tipo){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([bytes],{type:tipo}));a.download=nombreArchivo;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function vMensual(){
+  if(M.det)return vDetalle();
+  W(head('mensual')+'<div class="filters">'+sel('mCurso','Curso',TODOS,M.curso)+'</div>'+
+    '<p class="count" id="cnt"></p><div class="tw" id="tbl"></div>'+
+    '<p class="note">Un mes queda cerrado cuando termina. Los meses en curso y los futuros siguen abiertos.</p>');
+  redraw=()=>{
+    const rows=(M.curso?[M.curso]:CURSOS).flatMap(c=>MES_LECT.map(m=>[c,cap(MESES[m-1]),
+      chip(cerrado(m)?'N':'P',cerrado(m)?'Cerrada':'Abierta'),
+      '<button type="button" class="btn sm" data-curso="'+c+'" data-mes="'+m+'" aria-label="Ver detalle de '+c+', '+MESES[m-1]+'">Ver detalle</button>']));
+    $('#cnt').textContent=rows.length+' filas';
+    $('#tbl').innerHTML=tabla(['Curso','Mes','Etapa','Detalle'],rows);
+  };
+  ligar(M,{mCurso:'curso'});
+  $('#tbl').onclick=e=>{
+    const b=e.target.closest('[data-mes]');if(!b)return;
+    M.det={curso:b.dataset.curso,mes:+b.dataset.mes};
+    vMensual();$('#work').scrollTop=0;
+  };
+  redraw();
+}
+function vDetalle(){
+  redraw=null;
+  const m=detalleMes(M.det.curso,M.det.mes),bajo=v=>v!=null&&v<85?' low':'';
+  const celda=c=>c==='A'?'<td>'+EQUIS+'</td>':c==='F'?'<td class="fer">F</td>':c==='T'?'<td>'+DOT_T+'</td>':c?'<td>'+DOT+'</td>':'<td></td>';
+  W('<p style="margin:0 0 14px"><button type="button" class="btn ghost sm" id="back">← Volver a cursos y meses</button></p>'+
+    '<h1>'+m.curso+' · '+mesTxt(m)+'</h1>'+
+    '<p class="lead">Etapa: '+chip(m.etapa==='Cerrada'?'N':'P',m.etapa)+(m.lect?' · '+m.lect+' días lectivos transcurridos':' · Este mes aún no comienza, todavía no hay asistencia registrada')+'</p>'+
+    '<div class="actions"><button type="button" class="btn" id="xls">Exportar a Excel</button><button type="button" class="btn ghost" id="pdf">Exportar a PDF</button></div>'+
+    '<div class="tw"><table class="mx"><thead><tr><th class="nm">Alumno</th>'+
+    m.dias.map(d=>'<th class="dc'+(d.fer?' fer':'')+'"><span>'+'DLMMJVS'[d.w]+'</span>'+d.d+'</th>').join('')+
+    ['Presentes','Ausentes','% mensual','% anual'].map(t=>'<th class="pc">'+t+'</th>').join('')+'</tr></thead><tbody>'+
+    m.alumnos.map(r=>'<tr><td class="nm">'+nombre(r.a)+'</td>'+r.cells.map(celda).join('')+
+      '<td class="pc">'+r.pres+'</td><td class="pc">'+r.aus+'</td><td class="pc'+bajo(r.pm)+'">'+pct(r.pm)+'</td><td class="pc'+bajo(r.pa)+'">'+pct(r.pa)+'</td></tr>').join('')+
+    '</tbody></table></div>'+
+    '<div class="legend"><span>'+DOT+' Presente (incluye atrasos)</span><span>'+EQUIS+' Ausente</span><span><b>F</b> Feriado</span></div>'+
+    '<p class="note">'+nota()+' En rojo, lo que está bajo el 85 %.</p>');
+  const archivo='asistencia-'+m.curso.replace(/[^A-Za-z0-9]/g,'')+'-'+MESES[m.mes-1]+'-2026';
+  $('#back').onclick=()=>{M.det=null;vMensual();$('#work').scrollTop=0};
+  $('#xls').onclick=()=>baja(archivo+'.xlsx',buildXlsx(m),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  $('#pdf').onclick=()=>baja(archivo+'.pdf',buildPdf(m),'application/pdf');
+}
+
+// Asistencia anual por alumno
+const Y={rut:ORD[0].rut};
+function vAnual(){
+  W(head('anual')+'<div class="filters">'+sel('yAl','Alumno',ORD.map(a=>[a.rut,nombre(a)+' · '+a.curso]),Y.rut,'max-width:380px')+'</div>'+
+    '<div id="sum"></div><div class="tw" id="tbl"></div>'+
+    '<p class="note">La línea vertical de cada barra marca el 85 %, mínimo de asistencia para aprobar el año. Cálculo de ejemplo con días hábiles, sin vacaciones de invierno.</p>');
+  redraw=()=>{
+    const a=AL.find(x=>x.rut===Y.rut),t={n:0,P:0,A:0,T:0};
+    const rows=MES_LECT.map(m=>{
+      const ds=lectivos(m),c={P:0,A:0,T:0};
+      ds.forEach(d=>c[estado(a.rut,d.f)]++);
+      t.n+=ds.length;['P','A','T'].forEach(k=>{t[k]+=c[k]});
+      const v=ds.length?(c.P+c.T)/ds.length*100:null,x=z=>ds.length?z:'–';
+      return [cap(MESES[m-1]),x(ds.length),x(c.P),x(c.A),x(c.T),pct(v),barra(v)];
+    });
+    const tot=t.n?(t.P+t.T)/t.n*100:null;
+    $('#sum').innerHTML='<div class="sumrow"><span class="big">'+pct(tot)+'</span>'+chip(tot>=85?'P':'A',tot>=85?'Sobre el mínimo de 85 %':'Bajo el mínimo de 85 %')+
+      '<span class="count" style="margin:0">'+nombre(a)+' · '+a.curso+' · '+mono(a.rut)+'</span></div>';
+    $('#tbl').innerHTML=tabla(['Mes','Días lectivos','Presentes','Ausencias','Atrasos','% asistencia','Frente al 85 %'],rows,
+      '<tfoot><tr><td>Año 2026</td><td>'+t.n+'</td><td>'+t.P+'</td><td>'+t.A+'</td><td>'+t.T+'</td><td>'+pct(tot)+'</td><td></td></tr></tfoot>');
+  };
+  ligar(Y,{yAl:'rut'});
+  redraw();
+}
+
+const VIEWS={inicio:vInicio,'asistencia-clase':vClase,atrasos:()=>vLista('atrasos'),retiro:()=>vLista('retiro'),reingreso:()=>vLista('reingreso'),mensual:vMensual,anual:vAnual};
+
+/* ---------- Eventos ---------- */
+$('#nav').addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]');
+  if(g)return go(g.dataset.go);
+  const t=e.target.closest('[data-toggle]');
+  if(!t)return;
+  const id=t.dataset.toggle;
+  abiertos.has(id)?abiertos.delete(id):abiertos.add(id);
+  drawNav();
+  document.querySelector('[data-toggle="'+id+'"]').focus();
+});
+$('#work').addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]');
+  if(g)return go(g.dataset.go);
+  const c=e.target.closest('[data-cyc]');
+  if(c&&redraw)ciclar(c.dataset.cyc);
+});
+$('#menuBtn').addEventListener('click',()=>setDrawer(true));
+$('#scrim').addEventListener('click',()=>setDrawer(false));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')setDrawer(false)});
+
+/* ---------- Login ---------- */
+const err=$('#err');
+const error=t=>{err.textContent=t;err.hidden=false};
+$('#togglePass').addEventListener('click',e=>{
+  const p=$('#pass'),ver=p.type==='password';
+  p.type=ver?'text':'password';
+  e.currentTarget.textContent=ver?'Ocultar':'Mostrar';
+  e.currentTarget.setAttribute('aria-pressed',String(ver));
+});
+$('#loginForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const u=$('#user').value.trim(),p=$('#pass').value;
+  if(!u||!p)return error('Ingresa tu usuario y tu contraseña.');
+  if(u.toLowerCase()!=='inspector'||p!=='inspectoria'){error('Usuario o contraseña incorrectos. Revisa los datos de acceso de prueba.');return $('#pass').select()}
+  err.hidden=true;$('#pass').value='';
+  $('#login').hidden=true;$('#app').hidden=false;
+  let inicio='inicio';
+  try{const k=location.hash.slice(1);if(BYID[k]&&!BYID[k].children)inicio=k}catch(x){}
+  go(inicio);
+});
+$('#logout').addEventListener('click',()=>{
+  setDrawer(false);
+  $('#app').hidden=true;$('#login').hidden=false;
+  $('#user').focus();
+});
+})();
+</script>
+</body>
+</html>
