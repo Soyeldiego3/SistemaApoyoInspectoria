@@ -190,18 +190,12 @@ tfoot td{border-top:1px solid var(--line);font-weight:600}
 (function(){
 const $=s=>document.querySelector(s);
 
-/* ---------- Datos de ejemplo ---------- */
-const TODAY='2026-10-13';
-const FER=new Set(['2026-04-03','2026-05-01','2026-05-21','2026-06-29','2026-07-16','2026-09-18','2026-10-12','2026-12-08','2026-12-25']);
+/* ---------- Datos (vienen del servidor, ver cargar()) ---------- */
+let TODAY,FER,CURSOS,AL,ORD,CURSO_OPT,TODOS;
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const MES_LECT=[3,4,5,6,7,8,9,10,11,12];
-const CURSOS=['7°A','7°B','8°A','8°B','1°M A','1°M B'];
 const BLOQUES=['08:00 – 09:30','09:45 – 11:15','11:30 – 13:00','14:00 – 15:30','15:45 – 17:15'];
-const NOM=['Camila','Matías','Valentina','Benjamín','Sofía','Tomás','Isidora','Vicente','Antonia','Joaquín','Florencia','Agustín','Martina','Lucas','Josefa','Diego','Emilia','Cristóbal','Trinidad','Felipe','Javiera','Nicolás','Catalina','Maximiliano'];
-const APE=['Rojas Pérez','Soto Díaz','Muñoz Araya','Pizarro Vega','Contreras León','Fuentes Mora','Reyes Silva','Herrera Lagos','Navarro Cid','Castro Ibáñez','Vidal Peña','Lara Núñez','Torres Bravo','Espinoza Rivas','Cárdenas Ortiz','Molina Paredes','Sepúlveda Gil','Carrasco Toro','Aravena Ruiz','Vargas Mella','Figueroa Salas','Orellana Cea','Bustos Leiva','Parra Godoy'];
-const MOT_R=['Control médico','Malestar de salud','Trámite familiar','Emergencia familiar'];
-const MOT_G=['Control médico','Trámite familiar','Retraso de transporte'];
 const LBL={P:'Presente',A:'Ausente',T:'Atraso',N:'Sin registrar'};
 
 const pad=n=>String(n).padStart(2,'0');
@@ -212,24 +206,32 @@ const pct=p=>p==null?'–':p.toFixed(1).replace('.',',')+' %';
 const fecha=f=>{const [y,m,d]=f.split('-').map(Number);return new Date(y,m-1,d)};
 const largo=f=>{const d=fecha(f);return DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear()};
 const esDia=f=>{const w=fecha(f).getDay();return w>0&&w<6&&!FER.has(f)};
-
-function dv(n){let s=0,m=2;for(const d of String(n).split('').reverse()){s+=d*m;m=m===7?2:m+1}const r=11-s%11;return r===11?'0':r===10?'K':String(r)}
-const rutFmt=n=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+dv(n);
-const AL=NOM.map((n,i)=>({rut:rutFmt(23500000+i*113047),nombres:n,apellidos:APE[i],curso:CURSOS[i%6]}));
 const cmp=(a,b)=>a.apellidos.localeCompare(b.apellidos,'es')||a.nombres.localeCompare(b.nombres,'es');
-const ORD=AL.slice().sort(cmp);
 const nombre=a=>a.apellidos+', '+a.nombres;
 
-// Número pseudoaleatorio estable entre 0 y 1: la misma clave da siempre el mismo dato de ejemplo.
-function h(s){let x=2166136261;for(let i=0;i<s.length;i++){x^=s.charCodeAt(i);x=Math.imul(x,16777619)}return((x>>>0)%10000)/10000}
-const elige=(l,k)=>l[Math.floor(h(k)*l.length)];
-const hora=(h0,n,k)=>(h0+Math.floor(h(k)*n))+':'+elige(['00','15','30','45'],k+'m');
-const estado=(rut,f)=>{const x=h(rut+f);return x<.05?'A':x<.13?'T':'P'};
-function claseEstado(rut,f,b){const e=estado(rut,f);if(e==='A')return'A';if(e==='T')return b===1?'T':'P';return h(rut+f+'b'+b)<.02?'A':'P'}
-const atraso=(a,f)=>estado(a.rut,f)==='T'?{hora:'08:'+pad(5+Math.floor(h(a.rut+f+'h')*40)),just:h(a.rut+f+'j')<.4}:null;
-const sale=(a,f,k)=>estado(a.rut,f)!=='A'&&h(a.rut+f+k)<.03;
-const retiro=(a,f)=>sale(a,f,'r')?{hora:hora(10,6,a.rut+f+'rh'),quien:h(a.rut+f+'q')<.7?'Apoderado titular':'Apoderado suplente',motivo:elige(MOT_R,a.rut+f+'rt')}:null;
-const reingreso=(a,f)=>sale(a,f,'g')?{hora:hora(9,3,a.rut+f+'gh'),motivo:elige(MOT_G,a.rut+f+'gt')}:null;
+// Registros por alumno y día, rellenados por cargar().
+const ASIS=new Map(),ATR=new Map(),RET=new Map(),REI=new Map();
+const clave=(rut,f)=>rut+'|'+f;
+const estado=(rut,f)=>ASIS.get(clave(rut,f));
+function claseEstado(rut,f,b){const e=estado(rut,f);return e==='T'&&b!==1?'P':e}
+const atraso=(a,f)=>ATR.get(clave(a.rut,f))||null;
+const retiro=(a,f)=>RET.get(clave(a.rut,f))||null;
+const reingreso=(a,f)=>REI.get(clave(a.rut,f))||null;
+
+// Pide los datos a la API (que lee SQLite) y deja listas las estructuras que usan las vistas.
+async function cargar(){
+  const get=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
+  const [base,asis,atr,ret,rei]=await Promise.all(['base','asistencia','atrasos','retiros','reingresos'].map(n=>get('/api/'+n)));
+  TODAY=base.hoy;FER=new Set(base.feriados);CURSOS=base.cursos;AL=base.alumnos;
+  ORD=AL.slice().sort(cmp);
+  CURSO_OPT=CURSOS.map(c=>[c,c]);TODOS=[['','Todos los cursos'],...CURSO_OPT];
+  [ASIS,ATR,RET,REI].forEach(m=>m.clear());
+  asis.forEach(([rut,f,e])=>ASIS.set(clave(rut,f),e));
+  atr.forEach(x=>ATR.set(clave(x.rut,x.fecha),{hora:x.hora,just:!!x.just}));
+  ret.forEach(x=>RET.set(clave(x.rut,x.fecha),x));
+  rei.forEach(x=>REI.set(clave(x.rut,x.fecha),x));
+  C.curso=CURSOS[0];C.fecha=TODAY;Y.rut=ORD[0].rut;
+}
 
 const diasHabiles=(y,m)=>Array.from({length:new Date(y,m,0).getDate()},(_,i)=>{const d=i+1,f=iso(y,m,d);return{d,f,w:new Date(y,m-1,d).getDay(),fer:FER.has(f)}}).filter(x=>x.w>0&&x.w<6);
 const lectivos=m=>diasHabiles(2026,m).filter(d=>!d.fer&&d.f<=TODAY);
@@ -444,7 +446,6 @@ const chip=(k,t)=>'<span class="chip s-'+k+'">'+t+'</span>';
 const mono=t=>'<span class="mono">'+t+'</span>';
 const opts=(list,sel)=>list.map(([v,l])=>'<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+l+'</option>').join('');
 const sel=(id,label,list,val,style)=>'<div'+(style?' style="'+style+'"':'')+'><label for="'+id+'">'+label+'</label><select id="'+id+'">'+opts(list,val)+'</select></div>';
-const CURSO_OPT=CURSOS.map(c=>[c,c]),TODOS=[['','Todos los cursos'],...CURSO_OPT];
 const tabla=(cols,rows,pie)=>'<table><thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody>'+(pie||'')+'</table>';
 const barra=v=>'<div class="bar'+(v!=null&&v<85?' low':'')+'" role="img" aria-label="'+(v==null?'Sin datos':Math.round(v)+' por ciento')+'"><i style="width:'+(v||0)+'%"></i></div>';
 // Une cada control (por su id) con una propiedad del estado de la vista y vuelve a dibujar la tabla.
@@ -462,7 +463,7 @@ function vInicio(){
 }
 
 // Asistencia por clase: el estado de cada alumno se puede cambiar tocándolo.
-const C={curso:'7°A',fecha:TODAY,bloque:'1',ov:{}};
+const C={curso:'',fecha:'',bloque:'1',ov:{}};
 const claveC=a=>[C.curso,C.fecha||TODAY,C.bloque,a.rut].join('|');
 const estadoC=a=>{const f=C.fecha||TODAY;return C.ov[claveC(a)]??(f>TODAY?null:claseEstado(a.rut,f,+C.bloque))};
 function vClase(){
@@ -517,7 +518,7 @@ function vLista(id){
 }
 
 // Asistencia mensual por curso: lista de cursos y meses, y el detalle de cada uno.
-const M={curso:'',det:null};
+const M={curso:'',mes:'',etapa:'',det:null};
 const DOT='<span class="dot" role="img" aria-label="Presente"></span>';
 const DOT_T='<span class="dot" role="img" aria-label="Presente (llegó atrasado)" title="Llegó atrasado"></span>';
 const EQUIS='<svg class="xx" viewBox="0 0 12 12" role="img" aria-label="Ausente"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
@@ -529,17 +530,19 @@ function baja(nombreArchivo,bytes,tipo){
 }
 function vMensual(){
   if(M.det)return vDetalle();
-  W(head('mensual')+'<div class="filters">'+sel('mCurso','Curso',TODOS,M.curso)+'</div>'+
+  W(head('mensual')+'<div class="filters">'+sel('mCurso','Curso',TODOS,M.curso)+
+    sel('mMes','Mes',[['','Todos los meses'],...MES_LECT.map(m=>[m,cap(MESES[m-1])])],M.mes)+
+    sel('mEtapa','Etapa',[['','Todas'],['Abierta','Abierta'],['Cerrada','Cerrada']],M.etapa)+'</div>'+
     '<p class="count" id="cnt"></p><div class="tw" id="tbl"></div>'+
     '<p class="note">Un mes queda cerrado cuando termina. Los meses en curso y los futuros siguen abiertos.</p>');
   redraw=()=>{
-    const rows=(M.curso?[M.curso]:CURSOS).flatMap(c=>MES_LECT.map(m=>[c,cap(MESES[m-1]),
+    const rows=(M.curso?[M.curso]:CURSOS).flatMap(c=>MES_LECT.filter(m=>(!M.mes||m===+M.mes)&&(!M.etapa||(cerrado(m)?'Cerrada':'Abierta')===M.etapa)).map(m=>[c,cap(MESES[m-1]),
       chip(cerrado(m)?'N':'P',cerrado(m)?'Cerrada':'Abierta'),
       '<button type="button" class="btn sm" data-curso="'+c+'" data-mes="'+m+'" aria-label="Ver detalle de '+c+', '+MESES[m-1]+'">Ver detalle</button>']));
-    $('#cnt').textContent=rows.length+' filas';
-    $('#tbl').innerHTML=tabla(['Curso','Mes','Etapa','Detalle'],rows);
+    $('#cnt').textContent=rows.length+(rows.length===1?' fila':' filas');
+    $('#tbl').innerHTML=rows.length?tabla(['Curso','Mes','Etapa','Detalle'],rows):'<p class="empty">No hay filas con estos filtros.</p>';
   };
-  ligar(M,{mCurso:'curso'});
+  ligar(M,{mCurso:'curso',mMes:'mes',mEtapa:'etapa'});
   $('#tbl').onclick=e=>{
     const b=e.target.closest('[data-mes]');if(!b)return;
     M.det={curso:b.dataset.curso,mes:+b.dataset.mes};
@@ -570,7 +573,7 @@ function vDetalle(){
 }
 
 // Asistencia anual por alumno
-const Y={rut:ORD[0].rut};
+const Y={rut:''};
 function vAnual(){
   W(head('anual')+'<div class="filters">'+sel('yAl','Alumno',ORD.map(a=>[a.rut,nombre(a)+' · '+a.curso]),Y.rut,'max-width:380px')+'</div>'+
     '<div id="sum"></div><div class="tw" id="tbl"></div>'+
@@ -631,11 +634,16 @@ $('#loginForm').addEventListener('submit',e=>{
   const u=$('#user').value.trim(),p=$('#pass').value;
   if(!u||!p)return error('Ingresa tu usuario y tu contraseña.');
   if(u.toLowerCase()!=='inspector'||p!=='inspectoria'){error('Usuario o contraseña incorrectos. Revisa los datos de acceso de prueba.');return $('#pass').select()}
-  err.hidden=true;$('#pass').value='';
-  $('#login').hidden=true;$('#app').hidden=false;
-  let inicio='inicio';
-  try{const k=location.hash.slice(1);if(BYID[k]&&!BYID[k].children)inicio=k}catch(x){}
-  go(inicio);
+  err.hidden=true;
+  const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;
+  cargar().then(()=>{
+    $('#pass').value='';
+    $('#login').hidden=true;$('#app').hidden=false;
+    let inicio='inicio';
+    try{const k=location.hash.slice(1);if(BYID[k]&&!BYID[k].children)inicio=k}catch(x){}
+    go(inicio);
+  }).catch(()=>error('No se pudieron cargar los datos. Abre la página desde el servidor (npm start) y revisa que esté encendido.'))
+    .finally(()=>{btn.disabled=false});
 });
 $('#logout').addEventListener('click',()=>{
   setDrawer(false);
