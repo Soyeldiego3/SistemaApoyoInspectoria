@@ -13,5 +13,10 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
 
 3. Iniciar el servidor web:
    ```bash
-   npm start o node index.js
+   npm start  
+
+   o
+
+   ```bash
+   node index.js
 
