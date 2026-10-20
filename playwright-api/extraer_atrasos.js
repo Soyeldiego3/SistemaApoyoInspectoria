@@ -1,4 +1,4 @@
-const { irAMenu } = require('./sesion_portal');
+const { irAMenu } = require('./sesion_portal.js');
 
 /** Lee la tabla de la ventana "Atrasos" para un curso específico. Devuelve lo que espera parsearAtrasos(). */
 async function extraerTablaAtrasos(page, curso) {

@@ -1,4 +1,4 @@
-const { irAMenu } = require('./sesion_portal');
+const { irAMenu } = require('./sesion_portal.js');
 
 /** Descarga el Excel mensual de un curso y lo devuelve como Buffer (sin tocar el disco). */
 async function descargarAsistencia(page, curso, mes) {

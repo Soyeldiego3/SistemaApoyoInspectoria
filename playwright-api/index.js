@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { abrirSesion } = require('./sesion_portal');
+const { abrirSesion } = require('./sesion_portal.js');
 const { descargarAsistencia } = require('./extraer_asistencia');
 const { extraerTablaAtrasos } = require('./extraer_atrasos');
 const { parsearAsistencia, abrirDb, guardar } = require('./asistencia');

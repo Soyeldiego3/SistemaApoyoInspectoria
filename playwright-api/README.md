@@ -5,6 +5,13 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
 ## Instalación
 
 1. Clona el repositorio.
+
 2. Instala las dependencias necesarias:
    ```bash
    npm install
+   npx playwright install chromium
+
+3. Iniciar el servidor web:
+   ```bash
+   npm start o node index.js
+
