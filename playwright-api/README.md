@@ -15,8 +15,3 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
    ```bash
    npm start  
 
-   o
-
-   ```bash
-   node index.js
-
