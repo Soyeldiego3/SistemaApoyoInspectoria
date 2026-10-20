@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const { chromium } = require('playwright');
-const xlsx = require('xlsx');
+const { parsearAsistencia, abrirDb, guardar } = require('./limpiar_asistencia');
 
 const app = express();
 app.use(express.json()); 
+
+const db = abrirDb('asistencia.db');
 
 app.post('/api/descargar-e-importar', async (req, res) => {
   // 1. EXTRAER LAS VARIABLES DEL POST
@@ -17,12 +19,13 @@ app.post('/api/descargar-e-importar', async (req, res) => {
 
   console.log(`Petición recibida. Curso: ${curso}, Mes: ${mes}`);
 
-  const browser = await chromium.launch({ headless: false });
-  const page = await browser.newPage();
+  let browser;
 
   try {
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
     // --- LOGIN ---
-    await page.goto('http://127.0.0.1:3000');
+    await page.goto('http://127.0.0.1:3000'); // Pagina de login url temporal para pruebas
     await page.locator('#user').fill(process.env.USUARIO);
     await page.locator('#pass').fill(process.env.PASS);
     await page.locator('#loginForm > button').click();
@@ -43,33 +46,30 @@ app.post('/api/descargar-e-importar', async (req, res) => {
     // filtrar por curso y mes
     await page.locator('#mCurso').selectOption({ label: curso });
     await page.locator('#mMes').selectOption({ label: mes });
-    await page.waitForTimeout(500);
+    await page.locator('#tbl table').waitFor();
 
     // Ir a Asistencia Mensual por Curso
     await page.locator('#tbl > table > tbody > tr > td:nth-child(4) > button').click();
 
-    // TODO: Modificar para que guarde guarde en memoria ram y lea directamente desde ahí, sin necesidad de guardar en disco
 
-    // --- Descargar asistencia como exel ---
+    // --- Descargar asistencia como excel (en memoria, sin guardar en disco) ---
     const downloadPromise = page.waitForEvent('download');
     await page.locator('#xls').click();
-    
     const download = await downloadPromise;
-    const rutaGuardado = './Archivos/asistencia_' + curso + '_' + mes + '.xlsx';
-    await download.saveAs(rutaGuardado);
+ 
+    const stream = await download.createReadStream();
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const buffer = Buffer.concat(chunks);
 
-    // --- LEER EXCEL ---
-    const workbook = xlsx.readFile(rutaGuardado); 
-    const sheetName = workbook.SheetNames[0];
-    let dataExcel = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-    // --- BASE DE DATOS ---
-    await mandar_todo_al_back(dataExcel);
+    // --- PARSEAR Y GUARDAR EN SQLITE ---
+    const data = parsearAsistencia(buffer);
+    const filasInsertadas = guardar(db, data);
 
     res.status(200).json({ 
       mensaje: 'Proceso completado', 
       filtrosAplicados: { curso, mes },
-      totalRegistrosProcesados: dataExcel.length 
+      totalRegistrosProcesados: filasInsertadas
     });
 
   } catch (error) {
