@@ -41,7 +41,7 @@ function parsearAtrasos({ headers, filas, totalDeclarado = null }) {
 
 /**
  * La tabla del portal no trae un id estable, así que se REEMPLAZA el alcance pedido
- * (rango de fechas, y opcionalmente un curso) en una sola transacción. Es idempotente.
+ * (rango de fechas, y opcionalmente un curso) en una sola transacción.
  */
 function guardarAtrasos(db, atrasos, { desde, hasta, curso = null }) {
   const cursoN = curso ? normalizarCurso(curso) : null;

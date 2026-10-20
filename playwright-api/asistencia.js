@@ -165,7 +165,6 @@ function abrirDb(ruta = 'asistencia.db') {
   return db;
 }
 
-/** Idempotente: importar el mismo mes N veces no duplica nada. */
 function guardar(db, data) {
   const upCurso = db.prepare(`INSERT INTO curso (nombre) VALUES (?) ON CONFLICT(nombre) DO NOTHING`);
   const getCurso = db.prepare(`SELECT id_curso FROM curso WHERE nombre = ?`);

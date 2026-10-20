@@ -5,6 +5,11 @@ node_modules/
 .env
 .env.*
 
+# Base de datos SQLite y archivos temporales de transacciones
+*.db
+*.db-shm
+*.db-wal
+
 # Logs
 *.log
 npm-debug.log*
