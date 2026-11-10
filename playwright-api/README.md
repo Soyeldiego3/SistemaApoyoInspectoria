@@ -12,6 +12,7 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
    npx playwright install chromium
 
 3. Crear archivo .env
+
    USUARIO=
    PASS=
 
@@ -19,3 +20,15 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
    ```bash
    npm start  
 
+
+## Como usar la API
+
+1. Conectarse a esta url
+   .../api/descargar-e-importar
+
+2. usar la siguiente estructura en el body de la consulta tipo post
+
+   {
+    "curso": "1°M A",
+    "mes": "Octubre"
+   }
