@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const URL_PORTAL = process.env.PORTAL_URL || 'http://127.0.0.1:3000';
+const URL_PORTAL = process.env.PORTAL_URL || 'http://50.19.6.170:8080';
 
 // Prefijo del grupo "Asistencia" en el menú
 const MENU_ASISTENCIA = '#nav > ul > li:nth-child(2) > div > ul > li:nth-child(1)';

@@ -11,7 +11,11 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
    npm install
    npx playwright install chromium
 
-3. Iniciar el servidor web:
+3. Crear archivo .env
+   USUARIO=
+   PASS=
+
+4. Iniciar el servidor web:
    ```bash
    npm start  
 
