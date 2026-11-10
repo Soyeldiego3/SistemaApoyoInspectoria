@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const { DatabaseSync } = require('node:sqlite');
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'inspectoria.sqlite');
 
