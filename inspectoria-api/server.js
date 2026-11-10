@@ -4,7 +4,7 @@ const express = require('express');
 const { DatabaseSync } = require('node:sqlite');
 
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'inspectoria.sqlite');
 
 const db = new DatabaseSync(DB_FILE, { readOnly: true });   // solo lectura: la página no modifica nada
