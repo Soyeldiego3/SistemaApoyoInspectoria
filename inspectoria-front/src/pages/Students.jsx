@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
@@ -22,7 +22,20 @@ export default function Students() {
   const [q, setQ] = useState('');
   const [filtro, setFiltro] = useState('todos');
   const [curso, setCurso] = useState('');
-  const [alumnos] = useState([]); // TODO: cargar desde la API una vez; el filtrado es en el navegador
+  const [alumnos, setAlumnos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/alumnos')
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudieron cargar los alumnos.');
+        setAlumnos(data.alumnos);
+      })
+      .catch((e) => setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message))
+      .finally(() => setCargando(false));
+  }, []);
 
   const cursos = useMemo(() => [...new Set(alumnos.map((a) => a.curso))].sort(), [alumnos]);
 
@@ -60,7 +73,7 @@ export default function Students() {
       </div>
 
       {lista.length === 0
-        ? <EmptyState texto={alumnos.length ? 'Ningún alumno coincide con los filtros.' : 'Aquí aparecerán los alumnos para buscar y justificar.'} />
+        ? <EmptyState texto={error || (cargando ? 'Cargando alumnos…' : alumnos.length ? 'Ningún alumno coincide con los filtros.' : 'Aún no hay alumnos. Sincroniza un curso primero.')} />
         : <div className="list cols">{lista.map((a) => (
             <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`} className="item">
               <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>

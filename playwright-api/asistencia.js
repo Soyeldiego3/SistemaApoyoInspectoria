@@ -46,11 +46,12 @@ function parsearAsistencia(buffer) {
     const f = filas[i];
     if (!f[0] || !f[1]) break; // fin de la tabla (después vienen leyenda y notas)
     const rut = normalizarRut(f[1]);
-    const registros = dias.map(({ col, dia }) => {
-      const raw = String(f[col] ?? '').trim();
+    const registros = dias.flatMap(({ col, dia }) => {
+      const raw = String(f[col] ?? '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+      if (raw === '') return []; // día sin clases o sin registro: no se guarda
       const estado = ESTADOS[raw];
-      if (!estado) throw new Error(`Símbolo desconocido "${raw}" (${f[0]}, día ${dia})`);
-      return { fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`, estado };
+      if (!estado) throw new Error(`Simbolo desconocido "${raw}" (${f[0]}, día ${dia})`);
+      return [{ fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`, estado }];
     });
     // Control de integridad contra los totales del propio reporte
     const p = registros.filter(r => r.estado === 'P').length;
