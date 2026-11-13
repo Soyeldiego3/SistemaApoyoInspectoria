@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
+import { getAlumnos } from '../api.js';
 
 // Forma esperada de cada alumno (la API la entregará):
 // { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
@@ -27,10 +28,8 @@ export default function Students() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('/api/alumnos')
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No se pudieron cargar los alumnos.');
+    getAlumnos()
+      .then((data) => {
         setAlumnos(data.alumnos);
       })
       .catch((e) => setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message))

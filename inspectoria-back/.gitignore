@@ -9,6 +9,8 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+data/*.db*
+!data/.gitkeep
 
 # Logs
 *.log

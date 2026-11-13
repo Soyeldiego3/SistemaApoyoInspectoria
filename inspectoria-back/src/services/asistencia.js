@@ -1,5 +1,6 @@
 const xlsx = require('xlsx');
-const { DatabaseSync } = require('node:sqlite'); // SQLite integrado en Node: no requiere compilar nada
+const path = require('path');
+const Database = require('better-sqlite3');
 
 const MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
   agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
@@ -76,8 +77,8 @@ function transaccion(db, fn) {
   }
 }
 
-function abrirDb(ruta = 'asistencia.db') {
-  const db = new DatabaseSync(ruta);
+function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'asistencia.db')) {
+  const db = new Database(ruta);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(`

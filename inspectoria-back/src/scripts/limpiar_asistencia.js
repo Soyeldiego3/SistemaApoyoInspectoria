@@ -1,4 +1,5 @@
 const xlsx = require('xlsx');
+const path = require('path');
 const Database = require('better-sqlite3');
 
 const MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
@@ -54,7 +55,7 @@ function parsearAsistencia(buffer) {
   return { curso, anio: +anio, mes, etapa: etapa?.trim() ?? null, alumnos };
 }
 
-function abrirDb(ruta = 'asistencia.db') {
+function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'asistencia.db')) {
   const db = new Database(ruta);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');

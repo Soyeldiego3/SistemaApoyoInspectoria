@@ -1,37 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { RefreshCw, FileUp } from 'lucide-react';
-
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+import { iniciarSync } from '../api.js';
 
 // RF-01: obtener asistencia por extracción automática (Playwright) o importando CSV/Excel
 export default function Sync() {
   const [estado, setEstado] = useState('inactivo'); // inactivo | cargando | ok | error
   const [archivo, setArchivo] = useState('');
-  const [cursos, setCursos] = useState([]);
-  const [curso, setCurso] = useState('');
-  const [mes, setMes] = useState(MESES[new Date().getMonth()]);
   const [mensaje, setMensaje] = useState('');
-
-  useEffect(() => {
-    fetch('/api/cursos')
-      .then((r) => r.json())
-      .then((d) => setCursos(d.cursos || []))
-      .catch(() => {}); // sin conexión con la API: el selector queda vacío
-  }, []);
 
   const extraer = async () => {
     setEstado('cargando');
     setMensaje('');
     try {
-      const r = await fetch('/api/descargar-e-importar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, mes }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No se pudo sincronizar.');
-      setMensaje(`Asistencia actualizada: ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.`);
-      setEstado('ok');
+      const data = await iniciarSync();
+      const errores = data.errores?.length || 0;
+      const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
+      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleErrores}`);
+      setEstado(errores ? 'error' : 'ok');
     } catch (e) {
       // TypeError = fetch no pudo conectar con la API
       setMensaje(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message);
@@ -59,21 +44,11 @@ export default function Sync() {
       <div className="cols2">
         <section className="card">
           <h2>Extracción automática</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Vuelve a descargar la asistencia de un curso desde el portal.</p>
+          <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes actual.</p>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <select value={curso} onChange={(e) => setCurso(e.target.value)} style={{ flex: 1 }}>
-              <option value="" disabled>{cursos.length ? 'Elige un curso' : 'Cargando cursos…'}</option>
-              {cursos.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-              <select value={mes} onChange={(e) => setMes(e.target.value)}>
-                {MESES.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-          </div>
-
-          <button className="btn" onClick={extraer} disabled={estado === 'cargando' || !curso}>
+          <button className="btn" onClick={extraer} disabled={estado === 'cargando'}>
             <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />
-            {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar ahora'}
+            {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
           </button>
         </section>
 
