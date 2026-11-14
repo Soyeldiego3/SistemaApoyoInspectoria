@@ -1,5 +1,6 @@
-// Autenticación usuario/contraseña (informe 5.2): contraseña con scrypt y sesión con token firmado (HMAC-SHA256).
+// Autenticación usuario/contraseña (informe 5.2): usuarios en SQLite, contraseña con scrypt y sesión con token firmado (HMAC-SHA256).
 const crypto = require('crypto');
+const usuarios = require('../db/usuarios');
 
 const DURACION_MS = 8 * 60 * 60 * 1000; // la sesión dura una jornada
 const MAX_FALLOS = 5;                   // intentos fallidos seguidos por IP
@@ -25,12 +26,14 @@ function passwordValida(password, guardado) {
   return crypto.timingSafeEqual(obtenido, esperado);
 }
 
-function credencialesValidas(usuario, password) {
-  const { AUTH_USER, AUTH_PASSWORD_HASH } = process.env;
-  const mismoUsuario = typeof usuario === 'string' && usuario.trim().toLowerCase() === String(AUTH_USER || '').toLowerCase();
-  // Se calcula el hash aunque el usuario no exista, para que la respuesta tarde lo mismo.
-  const okPassword = passwordValida(String(password), AUTH_PASSWORD_HASH);
-  return mismoUsuario && okPassword;
+// Hash de relleno: si el usuario no existe igual se calcula un scrypt, para que la respuesta tarde lo mismo.
+const HASH_FALSO = hashearPassword('relleno');
+
+// Devuelve el usuario si el nombre y la contraseña son correctos y la cuenta está activa; si no, null.
+function verificarCredenciales(nombre, password) {
+  const u = usuarios.buscar(nombre);
+  const ok = passwordValida(String(password), u ? u.password_hash : HASH_FALSO);
+  return u && u.activo && ok ? { id: u.id, nombre: u.nombre } : null;
 }
 
 function crearToken(usuario) {
@@ -60,4 +63,4 @@ function registrarFallo(ip) {
 }
 const limpiarFallos = (ip) => fallos.delete(ip);
 
-module.exports = { hashearPassword, credencialesValidas, crearToken, leerToken, bloqueado, registrarFallo, limpiarFallos, DURACION_MS };
+module.exports = { hashearPassword, verificarCredenciales, crearToken, leerToken, bloqueado, registrarFallo, limpiarFallos, DURACION_MS };
