@@ -4,6 +4,7 @@ node_modules/
 # Variables de entorno y credenciales
 .env
 .env.*
+!.env.example
 
 # Base de datos SQLite y archivos temporales de transacciones
 *.db

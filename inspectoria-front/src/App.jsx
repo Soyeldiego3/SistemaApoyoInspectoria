@@ -6,9 +6,10 @@ import Audit from './pages/Audit.jsx';
 import Students from './pages/Students.jsx';
 import StudentDetail from './pages/StudentDetail.jsx';
 import Sync from './pages/Sync.jsx';
+import { getToken } from './api.js';
 
 function Protected({ children }) {
-  return localStorage.getItem('auth') ? children : <Navigate to="/login" replace />;
+  return getToken() ? children : <Navigate to="/login" replace />;
 }
 
 export default function App() {

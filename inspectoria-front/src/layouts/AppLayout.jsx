@@ -1,11 +1,12 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import BottomNav from '../components/BottomNav.jsx';
+import { cerrarSesion } from '../api.js';
 
 // Marco común: cabecera + contenido (Outlet) + menú
 export default function AppLayout() {
   const nav = useNavigate();
-  const salir = () => { localStorage.removeItem('auth'); nav('/login', { replace: true }); };
+  const salir = () => { cerrarSesion(); nav('/login', { replace: true }); };
   return (
     <div className="app">
       <header className="topbar">
