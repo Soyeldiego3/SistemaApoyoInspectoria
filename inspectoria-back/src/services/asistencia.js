@@ -77,7 +77,7 @@ function transaccion(db, fn) {
   }
 }
 
-function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'asistencia.db')) {
+function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'inspectoria.db')) {
   const db = new Database(ruta);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
@@ -177,8 +177,19 @@ function guardar(db, data) {
   const getMat = db.prepare(`SELECT id_matricula FROM matricula WHERE rut_alumno = ? AND id_curso = ? AND anio = ?`);
   const upAsis = db.prepare(`INSERT INTO asistencia (id_matricula, fecha, estado) VALUES (?, ?, ?)
     ON CONFLICT(id_matricula, fecha) DO UPDATE SET estado = excluded.estado`);
+  const desde = `${data.anio}-${String(data.mes).padStart(2, '0')}-01`;
+  const hasta = `${data.anio}-${String(data.mes).padStart(2, '0')}-${new Date(data.anio, data.mes, 0).getDate()}`;
+  const borrar = db.prepare(`DELETE FROM asistencia
+    WHERE fecha BETWEEN ? AND ? AND id_matricula IN (
+      SELECT m.id_matricula FROM matricula m
+      JOIN curso c ON c.id_curso = m.id_curso
+      WHERE c.nombre = ? AND m.anio = ?
+    )`);
 
   return transaccion(db, () => {
+    // El reporte mensual es la fuente completa del alcance: elimina días
+    // que ya no aparecen antes de insertar la versión actual.
+    borrar.run(desde, hasta, data.curso, data.anio);
     upCurso.run(data.curso);
     const { id_curso } = getCurso.get(data.curso);
     let n = 0;

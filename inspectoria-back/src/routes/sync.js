@@ -56,12 +56,14 @@ router.post('/descargar-e-importar', async (req, res) => {
         filasAsistencia += guardar(db, data);
         totalAlumnos += data.alumnos.length;
 
+        const atrasos = parsearAtrasos(await extraerTablaAtrasos(sesion.page, curso));
+        const fechasAtrasos = atrasos.map((atraso) => atraso.fecha);
         const mm = String(data.mes).padStart(2, '0');
         const ultimoDia = new Date(data.anio, data.mes, 0).getDate();
-        const atrasos = parsearAtrasos(await extraerTablaAtrasos(sesion.page, curso));
         filasAtrasos += guardarAtrasos(db, atrasos, {
-          desde: `${data.anio}-${mm}-01`,
-          hasta: `${data.anio}-${mm}-${ultimoDia}`,
+          // Atrasos es una ventana móvil del portal, no el mes del Excel.
+          desde: fechasAtrasos.length ? fechasAtrasos.reduce((min, fecha) => fecha < min ? fecha : min) : `${data.anio}-${mm}-01`,
+          hasta: fechasAtrasos.length ? fechasAtrasos.reduce((max, fecha) => fecha > max ? fecha : max) : `${data.anio}-${mm}-${ultimoDia}`,
           curso: data.curso,
         });
         cursosProcesados++;

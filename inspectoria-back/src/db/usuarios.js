@@ -7,7 +7,7 @@ const Database = require('better-sqlite3');
 const carpeta = path.join(__dirname, '..', '..', 'data');
 fs.mkdirSync(carpeta, { recursive: true });
 
-const db = new Database(path.join(carpeta, 'asistencia.db'));
+const db = new Database(path.join(carpeta, 'inspectoria.db'));
 db.exec('PRAGMA journal_mode = WAL'); // el mismo modo que usa abrirDb(), para que las conexiones convivan sin bloquearse
 db.exec(`
   CREATE TABLE IF NOT EXISTS usuario (

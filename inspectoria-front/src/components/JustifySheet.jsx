@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Panel inferior: se abre sobre la misma pantalla, así no hay que cambiar de ventana.
 export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', hasta = '', onGuardar }) {
   const [tipo, setTipo] = useState('Certificado médico');
   const [fechas, setFechas] = useState({ desde, hasta });
+  useEffect(() => {
+    if (abierto) setFechas({ desde, hasta });
+  }, [abierto, desde, hasta]);
   if (!abierto) return null;
   const mal = fechas.desde && fechas.hasta && fechas.hasta < fechas.desde;
   const ok = fechas.desde && fechas.hasta && !mal;

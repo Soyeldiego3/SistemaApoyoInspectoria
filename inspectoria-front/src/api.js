@@ -50,6 +50,17 @@ export function getAlumnos() {
   return request('/asistencia/alumnos');
 }
 
+export function getAlumno(rut) {
+  return request(`/asistencia/alumnos/${encodeURIComponent(rut)}`);
+}
+
+export function crearJustificativo(rut, datos) {
+  return request(`/asistencia/alumnos/${encodeURIComponent(rut)}/justificativos`, {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
 export function getCursos() {
   return request('/sync/cursos');
 }

@@ -8,7 +8,9 @@ async function extraerTablaAtrasos(page, curso) {
   await etiqueta.waitFor();
 
   // 1. Primero seleccionamos el curso en el selector
-  await page.locator('#fCurso').selectOption({ label: curso });
+  const selectorCurso = page.locator('#fCurso');
+  await selectorCurso.locator('option').filter({ hasText: curso }).waitFor({ state: 'attached' });
+  await selectorCurso.selectOption({ label: curso });
 
   // 2. Esperamos a que la aplicación actualice los datos de la tabla (ajustable según tu backend)
   await page.waitForLoadState('networkidle');
