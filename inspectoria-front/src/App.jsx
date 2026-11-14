@@ -6,6 +6,7 @@ import Audit from './pages/Audit.jsx';
 import Students from './pages/Students.jsx';
 import StudentDetail from './pages/StudentDetail.jsx';
 import Sync from './pages/Sync.jsx';
+import Users from './pages/Users.jsx';
 import { getToken } from './api.js';
 
 function Protected({ children }) {
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="alumnos" element={<Students />} />
         <Route path="alumnos/:rut" element={<StudentDetail />} />
         <Route path="datos" element={<Sync />} />
+        <Route path="usuarios" element={<Users />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

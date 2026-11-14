@@ -59,3 +59,14 @@ export function iniciarSync() {
     method: 'POST',
   });
 }
+
+export function getUsuarios() {
+  return request('/usuarios');
+}
+
+export function crearUsuario(nombre, password) {
+  return request('/usuarios', {
+    method: 'POST',
+    body: JSON.stringify({ nombre, password }),
+  });
+}

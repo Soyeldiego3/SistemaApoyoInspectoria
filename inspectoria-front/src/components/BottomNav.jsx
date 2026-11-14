@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutGrid, ClipboardCheck, Users, Database } from 'lucide-react';
+import { LayoutGrid, ClipboardCheck, Users, Database, UserPlus } from 'lucide-react';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
   { to: '/auditar', label: 'Auditar', Icon: ClipboardCheck },
   { to: '/alumnos', label: 'Alumnos', Icon: Users },
   { to: '/datos', label: 'Datos', Icon: Database },
+  { to: '/usuarios', label: 'Usuarios', Icon: UserPlus },
 ];
 
 export default function BottomNav() {
