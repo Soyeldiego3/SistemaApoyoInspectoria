@@ -1,20 +1,148 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Copy, RefreshCw } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
+import { getCredencialesPortal, getRedInfo, iniciarSync, setRedEnabled } from '../api.js';
 
-// Todo en null/[] hasta conectar la API
+let sincronizacionAutomaticaEjecutada = false;
+
 export default function Dashboard() {
+  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  const [red, setRed] = useState(null);
+  const [redCargando, setRedCargando] = useState(false);
+  const [syncEstado, setSyncEstado] = useState('cargando');
+  const [syncMensaje, setSyncMensaje] = useState('');
+
+  useEffect(() => {
+    if (!esPc || sincronizacionAutomaticaEjecutada) {
+      if (!esPc) setSyncEstado('sinDatos');
+      return undefined;
+    }
+    sincronizacionAutomaticaEjecutada = true;
+    let activo = true;
+    const sincronizarAutomaticamente = async () => {
+      try {
+        const credenciales = await getCredencialesPortal();
+        if (!activo) return;
+        if (!credenciales.guardadas || credenciales.invalidas) {
+          setSyncEstado('requiere');
+          if (credenciales.invalidas) {
+            setSyncMensaje('Las credenciales guardadas están inválidas. Actualízalas para sincronizar.');
+          }
+          return;
+        }
+        await iniciarSync();
+        if (activo) {
+          setSyncEstado('ok');
+          setSyncMensaje('Datos sincronizados correctamente.');
+        }
+      } catch (error) {
+        if (!activo) return;
+        if (error.code === 'CREDENCIALES_REQUERIDAS' || error.code === 'LOGIN_RECHAZADO') {
+          setSyncEstado('error');
+          setSyncMensaje(error.message || 'No se pudo iniciar sesión en el portal.');
+        } else {
+          setSyncEstado('error');
+          setSyncMensaje(error.message || 'No se pudo sincronizar. Puedes reintentar desde Datos.');
+        }
+      }
+    };
+    sincronizarAutomaticamente();
+    return () => { activo = false; };
+  }, [esPc]);
+
+  useEffect(() => {
+    if (!esPc) return undefined;
+    let activo = true;
+    getRedInfo()
+      .then((info) => { if (activo) setRed(info); })
+      .catch((error) => {
+        if (activo) setSyncMensaje(error.message || 'No se pudo consultar el acceso en red.');
+      });
+    return () => { activo = false; };
+  }, [esPc]);
+
+  const cambiarRed = async (habilitada) => {
+    setRedCargando(true);
+    try {
+      const info = await setRedEnabled(habilitada);
+      setRed(info);
+    } catch (error) {
+      setSyncMensaje(error.message || 'No se pudo cambiar el acceso en red.');
+      setSyncEstado('error');
+    } finally {
+      setRedCargando(false);
+    }
+  };
+
+  const copiarUrl = async () => {
+    if (!red?.principal) return;
+    try {
+      await navigator.clipboard.writeText(red.principal);
+      setSyncMensaje('URL copiada.');
+    } catch {
+      setSyncMensaje('No se pudo copiar la URL. Cópiala manualmente.');
+    }
+  };
+
   return (
     <div className="dash">
+      {esPc && (
+        <section className="card">
+          <div className="row">
+            <div>
+              <h2>Conectar desde el teléfono</h2>
+              <p className="muted">El PC y el teléfono deben estar en la misma red.</p>
+            </div>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={Boolean(red?.habilitada)} disabled={redCargando || !red}
+                onChange={(e) => cambiarRed(e.target.checked)} />
+              Acceso en red
+            </label>
+          </div>
+          {red?.habilitada && red.principal ? (
+            <div className="row" style={{ alignItems: 'center', marginTop: 16 }}>
+              <div>
+                <p className="big" style={{ fontSize: '1.2rem', margin: 0 }}>{red.principal}</p>
+                <button className="btn ghost" onClick={copiarUrl} style={{ marginTop: 10 }}>
+                  <Copy size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Copiar URL
+                </button>
+              </div>
+              <QRCodeCanvas value={red.principal} size={140} includeMargin />
+            </div>
+          ) : red ? (
+            <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar una URL y un código QR.</p>
+          ) : (
+            <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
+          )}
+        </section>
+      )}
+
       <section className="card blue">
         <p className="muted">Hoy</p>
         <div className="big" style={{ margin: '14px 0' }}>—<small>inasistencias</small></div>
         <div className="row">
-          <p className="muted">Sin sincronizar todavía</p>
-          <Link to="/datos" className="btn dark" style={{ width: 'auto' }}>Sincronizar</Link>
+          <p className="muted">
+            {syncEstado === 'cargando' ? 'Sincronizando…' :
+              syncEstado === 'ok' ? syncMensaje :
+              !esPc ? 'Los datos se sincronizan desde el PC' :
+              syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
+              'Sin datos sincronizados todavía'}
+          </p>
+          <Link to="/datos" state={{ abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error' }}
+            className="btn dark" style={{ width: 'auto' }}>
+            {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />Reintentar</> :
+              syncEstado === 'requiere' ? 'Configurar credenciales' : 'Sincronizar'}
+          </Link>
         </div>
       </section>
+      {syncEstado === 'requiere' && syncMensaje && (
+        <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>
+      )}
+      {syncEstado === 'error' && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>}
 
       <div className="kpis">
         <KpiCard sigla="TSE" nombre="Sincronización exitosa" ayuda="Meta ≥ 95%" />

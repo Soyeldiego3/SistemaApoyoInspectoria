@@ -1,13 +1,9 @@
 // Usuarios de la plataforma. Van en su propia base (data/usuarios.db), aparte de asistencia.db,
 // porque esa se abre en solo lectura y esta sí se modifica.
-const fs = require('fs');
-const path = require('path');
 const Database = require('better-sqlite3');
+const { DB_PATH } = require('./ruta');
 
-const carpeta = path.join(__dirname, '..', '..', 'data');
-fs.mkdirSync(carpeta, { recursive: true });
-
-const db = new Database(path.join(carpeta, 'inspectoria.db'));
+const db = new Database(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL'); // el mismo modo que usa abrirDb(), para que las conexiones convivan sin bloquearse
 db.exec(`
   CREATE TABLE IF NOT EXISTS usuario (

@@ -43,7 +43,7 @@ function parsearAtrasos({ headers, filas, totalDeclarado = null }) {
  * La tabla del portal no trae un id estable, así que se REEMPLAZA el alcance pedido
  * (rango de fechas, y opcionalmente un curso) en una sola transacción.
  */
-function guardarAtrasos(db, atrasos, { desde, hasta, curso = null }) {
+function guardarAtrasos(db, atrasos, { desde, hasta, curso = null, transaccionar = true }) {
   const cursoN = curso ? normalizarCurso(curso) : null;
   const enAlcance = atrasos.filter(a =>
     a.fecha >= desde && a.fecha <= hasta && (!cursoN || a.curso === cursoN));
@@ -63,7 +63,7 @@ function guardarAtrasos(db, atrasos, { desde, hasta, curso = null }) {
     VALUES (?, ?, ?, ?)
     ON CONFLICT(id_matricula, fecha, hora_llegada) DO UPDATE SET justificado_portal = excluded.justificado_portal`);
 
-  return transaccion(db, () => {
+  const ejecutar = () => {
     cursoN ? borrar.run(desde, hasta, cursoN) : borrar.run(desde, hasta);
     for (const a of enAlcance) {
       upCurso.run(a.curso);
@@ -75,7 +75,8 @@ function guardarAtrasos(db, atrasos, { desde, hasta, curso = null }) {
       ins.run(id_matricula, a.fecha, a.hora_llegada, a.justificado_portal);
     }
     return enAlcance.length;
-  });
+  };
+  return transaccionar ? transaccion(db, ejecutar) : ejecutar();
 }
 
 module.exports = { parsearAtrasos, guardarAtrasos };

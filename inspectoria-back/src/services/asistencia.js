@@ -1,6 +1,6 @@
 const xlsx = require('xlsx');
-const path = require('path');
 const Database = require('better-sqlite3');
+const { DB_PATH } = require('../db/ruta');
 
 const MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
   agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
@@ -77,7 +77,7 @@ function transaccion(db, fn) {
   }
 }
 
-function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'inspectoria.db')) {
+function abrirDb(ruta = DB_PATH) {
   const db = new Database(ruta);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
@@ -167,7 +167,7 @@ function abrirDb(ruta = path.join(__dirname, '..', '..', 'data', 'inspectoria.db
   return db;
 }
 
-function guardar(db, data) {
+function guardar(db, data, { transaccionar = true } = {}) {
   const upCurso = db.prepare(`INSERT INTO curso (nombre) VALUES (?) ON CONFLICT(nombre) DO NOTHING`);
   const getCurso = db.prepare(`SELECT id_curso FROM curso WHERE nombre = ?`);
   const upAlumno = db.prepare(`INSERT INTO alumno (rut, nombres, apellidos) VALUES (@rut, @nombres, @apellidos)
@@ -186,7 +186,7 @@ function guardar(db, data) {
       WHERE c.nombre = ? AND m.anio = ?
     )`);
 
-  return transaccion(db, () => {
+  const ejecutar = () => {
     // El reporte mensual es la fuente completa del alcance: elimina días
     // que ya no aparecen antes de insertar la versión actual.
     borrar.run(desde, hasta, data.curso, data.anio);
@@ -200,7 +200,8 @@ function guardar(db, data) {
       for (const r of al.registros) { upAsis.run(id_matricula, r.fecha, r.estado); n++; }
     }
     return n;
-  });
+  };
+  return transaccionar ? transaccion(db, ejecutar) : ejecutar();
 }
 
 module.exports = { parsearAsistencia, abrirDb, guardar, transaccion, normalizarRut, normalizarCurso, separarNombre };

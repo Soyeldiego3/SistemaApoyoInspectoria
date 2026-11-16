@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+const API_URL = window.location.protocol === 'file:' ? 'http://localhost:3005' : window.location.origin;
 
 // Sesión: el token que entrega el login se guarda en el navegador y se envía en cada petición.
 export const getToken = () => localStorage.getItem('token');
@@ -6,7 +7,7 @@ export const cerrarSesion = () => localStorage.removeItem('token');
 
 async function request(path, options = {}) {
   const token = getToken();
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_URL}${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -18,7 +19,7 @@ async function request(path, options = {}) {
   // Sesión vencida o inválida: se limpia y se vuelve al login (salvo en el propio login, que muestra su error).
   if (response.status === 401 && path !== '/auth/login') {
     cerrarSesion();
-    window.location.assign('/login');
+    window.location.hash = '#/login';
     throw new Error('Tu sesión venció. Inicia sesión de nuevo.');
   }
 
@@ -28,10 +29,12 @@ async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
-    const message = typeof data === 'object' && data?.error
-      ? data.error
+    const message = typeof data === 'object' && (data?.mensaje || data?.error)
+      ? data.mensaje || data.error
       : `Error de API (${response.status})`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = typeof data === 'object' ? (data?.codigo || data?.code) : undefined;
+    throw error;
   }
 
   return data;
@@ -65,9 +68,43 @@ export function getCursos() {
   return request('/sync/cursos');
 }
 
-export function iniciarSync() {
+export function iniciarSync(credenciales) {
   return request('/sync/descargar-e-importar', {
     method: 'POST',
+    body: JSON.stringify(credenciales || {}),
+  });
+}
+
+export function getCredencialesPortal() {
+  return request('/portal/credenciales');
+}
+
+export function olvidarCredencialesPortal() {
+  return request('/portal/credenciales', { method: 'DELETE' });
+}
+
+export function guardarCredencialesPortal(credenciales) {
+  return request('/portal/credenciales', {
+    method: 'PUT',
+    body: JSON.stringify(credenciales),
+  });
+}
+
+export function probarCredencialesPortal(credenciales) {
+  return request('/portal/probar', {
+    method: 'POST',
+    body: JSON.stringify(credenciales || {}),
+  });
+}
+
+export function getRedInfo() {
+  return request('/red/info');
+}
+
+export function setRedEnabled(habilitada) {
+  return request('/red/config', {
+    method: 'PUT',
+    body: JSON.stringify({ habilitada }),
   });
 }
 

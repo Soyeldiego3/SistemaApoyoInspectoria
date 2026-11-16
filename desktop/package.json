@@ -1,0 +1,30 @@
+{
+  "name": "apoyo-inspectoria",
+  "version": "1.0.0",
+  "description": "Sistema de Apoyo Inspectoría",
+  "main": "main.js",
+  "author": "Tu nombre",
+  "scripts": {
+    "start": "electron .",
+    "build:front": "npm --prefix ../inspectoria-front run build",
+    "prepare:back": "node scripts/prepare-back.js",
+    "pack": "npm run build:front && npm run prepare:back && electron-builder --dir",
+    "dist": "npm run build:front && npm run prepare:back && electron-builder"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "electron": "45.3.2",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "cl.inacap.apoyoinspectoria",
+    "productName": "Apoyo Inspectoria",
+    "directories": { "output": "release" },
+    "files": ["main.js"],
+    "extraResources": [
+      { "from": "back-build", "to": "inspectoria-back" },
+      { "from": "front-dist", "to": "front-dist" }
+    ],
+    "win": { "target": "nsis" }
+  }
+}

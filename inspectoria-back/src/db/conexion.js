@@ -1,7 +1,6 @@
-const path = require('path');
 const Database = require('better-sqlite3');
+const { DB_PATH } = require('./ruta');
 
-const rutaBaseDatos = path.join(__dirname, '..', '..', 'data', 'inspectoria.db');
-const db = new Database(rutaBaseDatos, { readonly: true });
+const db = new Database(DB_PATH, { readonly: true });
 
 module.exports = db;

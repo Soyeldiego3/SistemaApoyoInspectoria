@@ -1,16 +1,14 @@
 // Autenticación usuario/contraseña (informe 5.2): usuarios en SQLite, contraseña con scrypt y sesión con token firmado (HMAC-SHA256).
 const crypto = require('crypto');
 const usuarios = require('../db/usuarios');
+const { obtenerSecreto } = require('./secreto');
 
 const DURACION_MS = 8 * 60 * 60 * 1000; // la sesión dura una jornada
 const MAX_FALLOS = 5;                   // intentos fallidos seguidos por IP
 const BLOQUEO_MS = 15 * 60 * 1000;
 
-let secretoAleatorio; // si no hay AUTH_SECRET en .env, las sesiones se invalidan al reiniciar el servidor
-const secreto = () => process.env.AUTH_SECRET || (secretoAleatorio ||= crypto.randomBytes(32).toString('hex'));
-
 const b64 = (b) => Buffer.from(b).toString('base64url');
-const firmar = (texto) => crypto.createHmac('sha256', secreto()).update(texto).digest('base64url');
+const firmar = (texto) => crypto.createHmac('sha256', obtenerSecreto()).update(texto).digest('base64url');
 
 // Formato guardado: scrypt$<sal en hex>$<hash en hex>
 function hashearPassword(password) {

@@ -12,6 +12,9 @@ node_modules/
 *.db-wal
 data/*.db*
 !data/.gitkeep
+secret.key
+portal.cred.json
+app.config.json
 
 # Logs
 *.log
