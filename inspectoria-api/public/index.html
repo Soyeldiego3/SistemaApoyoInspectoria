@@ -243,7 +243,7 @@ function detalleMes(curso,m){
   const dias=diasHabiles(2026,m),lm=lectivos(m).length;
   const anio=MES_LECT.flatMap(k=>lectivos(k).map(d=>d.f));
   const alumnos=ORD.filter(a=>a.curso===curso).map(a=>{
-    const cells=dias.map(d=>d.fer?'F':d.f>TODAY?null:estado(a.rut,d.f));
+    const cells=dias.map(d=>d.fer?'F':d.f>TODAY?null:(estado(a.rut,d.f)||'A'));
     const aus=cells.filter(c=>c==='A').length;
     const ausA=anio.filter(f=>estado(a.rut,f)==='A').length;
     return{a,cells,pres:lm-aus,aus,pm:lm?(lm-aus)/lm*100:null,pa:anio.length?(anio.length-ausA)/anio.length*100:null};
@@ -582,7 +582,7 @@ function vAnual(){
     const a=AL.find(x=>x.rut===Y.rut),t={n:0,P:0,A:0,T:0};
     const rows=MES_LECT.map(m=>{
       const ds=lectivos(m),c={P:0,A:0,T:0};
-      ds.forEach(d=>c[estado(a.rut,d.f)]++);
+      ds.forEach(d=>c[estado(a.rut,d.f)||'A']++);
       t.n+=ds.length;['P','A','T'].forEach(k=>{t[k]+=c[k]});
       const v=ds.length?(c.P+c.T)/ds.length*100:null,x=z=>ds.length?z:'–';
       return [cap(MESES[m-1]),x(ds.length),x(c.P),x(c.A),x(c.T),pct(v),barra(v)];
