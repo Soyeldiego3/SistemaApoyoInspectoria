@@ -19,13 +19,15 @@ router.get('/alumnos', (req, res) => {
             AND t.justificado_portal = 0
             AND NOT EXISTS (SELECT 1 FROM justificativo j
                             WHERE j.rut_alumno = a.rut
+                              AND j.estado_documento = 'APROBADO'
                               AND t.fecha BETWEEN j.fecha_inicio AND j.fecha_fin)
         ) AS atrasos,
         (SELECT COUNT(*) FROM asistencia s
           WHERE s.id_matricula = m.id_matricula
-            AND s.estado = 'A'
+            AND s.estado IN ('A', 'F')
             AND NOT EXISTS (SELECT 1 FROM justificativo j
                             WHERE j.rut_alumno = a.rut
+                              AND j.estado_documento = 'APROBADO'
                               AND s.fecha BETWEEN j.fecha_inicio AND j.fecha_fin)
         ) AS pendientes
       FROM alumno a

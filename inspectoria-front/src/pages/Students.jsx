@@ -10,6 +10,7 @@ import { getAlumnos } from '../api.js';
 //   atrasos    = atrasos acumulados sin justificar
 //   pendientes = inasistencias sin justificar
 const FILTROS = [
+  // Estados de asistencia entregados por la API: presente, ausente y atraso.
   { id: 'todos', label: 'Todos' },
   { id: 'sin', label: 'Sin justificar' },
   { id: 'reinc', label: '3+ atrasos' },
@@ -44,7 +45,10 @@ export default function Students() {
     return alumnos.filter((a) =>
       (!t || limpiar(`${a.rut} ${a.nombres} ${a.apellidos} ${a.curso}`).includes(t)) &&
       (!curso || a.curso === curso) &&
-      (filtro === 'todos' || (filtro === 'sin' && a.pendientes > 0) || (filtro === 'reinc' && a.atrasos >= 3) || (filtro === 'ok' && a.pendientes === 0)));
+      (filtro === 'todos' ||
+        (filtro === 'sin' && (a.pendientes > 0 || a.atrasos > 0)) ||
+        (filtro === 'reinc' && a.atrasos >= 3) ||
+        (filtro === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
   }, [alumnos, q, filtro, curso]);
 
   const hayFiltros = q || curso || filtro !== 'todos';
@@ -77,8 +81,9 @@ export default function Students() {
             <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`} className="item">
               <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
               <div className="tags">
-                {a.atrasos >= 3 && <span className="tag bad">{a.atrasos} atrasos</span>}
-                {a.pendientes > 0 ? <span className="tag warn">{a.pendientes} sin justificar</span> : <span className="tag ok">Al día</span>}
+                {a.atrasos > 0 && <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`}>{a.atrasos} atrasos sin justificar</span>}
+                {a.pendientes > 0 && <span className="tag warn">{a.pendientes} inasistencias sin justificar</span>}
+                {a.pendientes === 0 && a.atrasos === 0 && <span className="tag ok">Al día</span>}
               </div>
             </Link>))}</div>}
     </>
