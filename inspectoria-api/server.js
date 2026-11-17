@@ -4,8 +4,8 @@ const express = require('express');
 const { DatabaseSync } = require('node:sqlite');
 const { createAdminRouter } = require('./admin-routes');
 
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const PORT = Number(process.env.PORT) || 8080;  // mantener puerto e ip para funcionar en aws
+const HOST = process.env.HOST || '0.0.0.0';
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'inspectoria.sqlite');
 
 const db = new DatabaseSync(DB_FILE);

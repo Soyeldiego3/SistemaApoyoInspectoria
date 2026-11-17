@@ -388,6 +388,107 @@ function createAdminRouter(db) {
     })));
   };
 
+  const shuffled = (items, random) => items.slice().sort(() => random() - 0.5);
+
+  const integratedGeneration = (body, random) => {
+    const options = body.options || {};
+    const start = options.desde;
+    const end = options.hasta;
+    if (!start || !end || datesBetween(start, end).length === 0) {
+      throw Object.assign(new Error('La generación integrada requiere un rango de fechas válido.'), { statusCode: 400 });
+    }
+
+    const allDates = datesBetween(start, end);
+    const feriados = new Set(db.prepare('SELECT fecha FROM feriados').all().map(row => row.fecha));
+    const dates = allDates.filter(date => {
+      const weekday = new Date(`${date}T00:00:00`).getDay();
+      return !options.saltarNoLectivos || (weekday !== 0 && weekday !== 6 && !feriados.has(date));
+    });
+    if (!dates.length) {
+      throw Object.assign(new Error('El rango no contiene días hábiles para generar datos.'), { statusCode: 400 });
+    }
+
+    const positiveCount = (value, fallback, maximum) => Math.max(0, Math.min(maximum, Number.parseInt(value, 10) || fallback));
+    const newStudents = positiveCount(options.nuevosAlumnos, 0, 500);
+    const attendanceDays = positiveCount(options.asistenciasPorAlumno, Math.min(40, dates.length), dates.length);
+    const lateEvents = positiveCount(options.atrasosPorAlumno, 3, dates.length);
+    const withdrawalEvents = positiveCount(options.retirosPorAlumno, 2, dates.length);
+    const reentryEvents = positiveCount(options.reingresosPorAlumno, 2, dates.length);
+    const courses = db.prepare('SELECT id FROM cursos').all().map(row => row.id);
+    if (!courses.length) {
+      throw Object.assign(new Error('No hay cursos disponibles para asignar alumnos.'), { statusCode: 400 });
+    }
+
+    const report = {
+      alumnos: { generated: newStudents, inserted: 0 },
+      asistencia: { generated: 0, inserted: 0 },
+      atrasos: { generated: 0, inserted: 0 },
+      retiros: { generated: 0, inserted: 0 },
+      reingresos: { generated: 0, inserted: 0 }
+    };
+    const insert = (table, row) => {
+      const names = Object.keys(row);
+      const result = db.prepare(`INSERT OR IGNORE INTO ${quoteIdentifier(table)} (${names.map(quoteIdentifier).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`).run(...names.map(name => row[name]));
+      if (Number(result.changes)) report[table].inserted += 1;
+    };
+
+    const alumnos = db.prepare('SELECT id FROM alumnos').all().map(row => row.id);
+    for (let index = 0; index < newStudents; index += 1) {
+      const rut = `99.${String(Date.now()).slice(-3)}.${String(index).padStart(3, '0')}-${Math.floor(random() * 10)}`;
+      const result = db.prepare('INSERT INTO alumnos (rut, nombres, apellidos, curso_id) VALUES (?, ?, ?, ?)').run(
+        rut,
+        randomItem(generationNames.nombres, random),
+        `${randomItem(generationNames.apellidos, random)} ${randomItem(generationNames.apellidos, random)}`,
+        randomItem(courses, random)
+      );
+      alumnos.push(Number(result.lastInsertRowid));
+    }
+    report.alumnos.inserted = newStudents;
+
+    const weightedState = () => {
+      const point = random();
+      if (point < 0.45) return 'A';
+      if (point < 0.85) return 'P';
+      return 'T';
+    };
+    for (const alumnoId of alumnos) {
+      for (const date of shuffled(dates, random).slice(0, attendanceDays)) {
+        report.asistencia.generated += 1;
+        insert('asistencia', { alumno_id: alumnoId, fecha: date, estado: weightedState() });
+      }
+      for (const date of shuffled(dates, random).slice(0, lateEvents)) {
+        report.atrasos.generated += 1;
+        insert('atrasos', { alumno_id: alumnoId, fecha: date, hora_llegada: randomTime(random), justificado: random() < 0.2 ? 1 : 0 });
+      }
+      for (const date of shuffled(dates, random).slice(0, withdrawalEvents)) {
+        report.retiros.generated += 1;
+        insert('retiros', { alumno_id: alumnoId, fecha: date, hora_retiro: randomTime(random), retira: 'Apoderado', motivo: 'Actividad generada para pruebas' });
+      }
+      for (const date of shuffled(dates, random).slice(0, reentryEvents)) {
+        report.reingresos.generated += 1;
+        insert('reingresos', { alumno_id: alumnoId, fecha: date, hora_reingreso: randomTime(random), motivo: 'Actividad generada para pruebas' });
+      }
+    }
+    return report;
+  };
+
+  router.post('/generar-datos-integrados', (req, res) => {
+    try {
+      const random = seededRandom(req.body && req.body.seed);
+      db.prepare('BEGIN').run();
+      try {
+        const report = integratedGeneration(req.body || {}, random);
+        db.prepare('COMMIT').run();
+        res.json(report);
+      } catch (error) {
+        db.prepare('ROLLBACK').run();
+        throw error;
+      }
+    } catch (error) {
+      sendError(res, sqliteError(error));
+    }
+  });
+
   router.post('/tablas/:tabla/masivo', (req, res) => {
     try {
       const table = getTable(req.params.tabla);

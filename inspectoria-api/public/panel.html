@@ -10,7 +10,7 @@
 button,input{font:inherit}button{cursor:pointer}.layout{min-height:100vh;display:grid;grid-template-columns:260px 1fr}
 aside{padding:24px 16px;background:var(--side);color:#fff}aside h1{margin:0 4px 4px;font-size:1.2rem}aside p{margin:0 4px 20px;color:#b8c5d1;font-size:.85rem}
 .tables{display:grid;gap:6px}.table-btn{display:flex;justify-content:space-between;width:100%;padding:10px 12px;border:0;border-radius:6px;background:transparent;color:#fff;text-align:left}.table-btn:hover,.table-btn.active{background:#18293f}.table-btn span{color:#b8c5d1}
-main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}.top h2{margin:0;font-size:1.6rem}.top p{margin:4px 0;color:var(--muted)}
+main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}.top h2{margin:0;font-size:1.6rem}.top p{margin:4px 0;color:var(--muted)}.top-actions{display:flex;align-items:center;gap:12px}
 .link{color:var(--accent);font-weight:600;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px}
 .filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}.field{min-width:180px;flex:1}.field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}
 .btn{padding:9px 14px;border:0;border-radius:5px;background:var(--accent);color:#fff;font-weight:600}.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
@@ -23,13 +23,14 @@ main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items
 <div class="layout">
 <aside><h1>Panel de Inspectoría</h1><p>Lectura de inspectoria.sqlite</p><nav class="tables" id="tables" aria-label="Tablas"></nav></aside>
 <main>
-  <div class="top"><div><h2 id="title">Selecciona una tabla</h2><p id="subtitle">Consulta los registros actuales de la base de datos.</p></div><a class="link" href="index.html" target="_blank" rel="noopener">Ver página scrapeable ↗</a></div>
+  <div class="top"><div><h2 id="title">Selecciona una tabla</h2><p id="subtitle">Consulta los registros actuales de la base de datos.</p></div><div class="top-actions"><button class="btn" id="generateIntegrated">Generar datos integrados</button><a class="link" href="index.html" target="_blank" rel="noopener">Ver página scrapeable ↗</a></div></div>
   <section class="card" id="content"><div class="empty">Cargando tablas…</div></section>
 </main>
 </div>
 <script>
 (() => {
   const state = { table: null, schema: null, page: 1, limit: 25, q: '', order: '', dir: 'asc', selected: new Set() };
+  let rowsRequest = 0;
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const get = async url => { const response = await fetch(url); if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`); return response.json(); };
@@ -38,20 +39,55 @@ main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items
   const keyOf = row => JSON.stringify((state.schema.primaryKey || []).length ? state.schema.primaryKey.map(name => row[name]) : [row.__rowid]);
   const keyObject = row => (state.schema.primaryKey || []).length ? Object.fromEntries(state.schema.primaryKey.map(name => [name, row[name]])) : {__rowid: row.__rowid};
   const isPk = name => (state.schema.primaryKey || []).includes(name);
+  const saveView = () => {
+    const params = new URLSearchParams({ tabla: state.table || '', pagina: state.page, q: state.q, orden: state.order, dir: state.dir });
+    history.replaceState(null, '', `${location.pathname}?${params}`);
+  };
+  const restoreView = () => {
+    const params = new URLSearchParams(location.search);
+    return { table: params.get('tabla'), page: Math.max(1, Number(params.get('pagina')) || 1), q: params.get('q') || '', order: params.get('orden') || '', dir: params.get('dir') === 'desc' ? 'desc' : 'asc' };
+  };
 
   async function loadTables() {
     const tables = await get('/admin/api/tablas');
     $('#tables').innerHTML = tables.map(item => `<button class="table-btn" data-table="${esc(item.name)}">${esc(item.name)} <span>${item.count}</span></button>`).join('');
-    $('#tables').addEventListener('click', event => { const button = event.target.closest('[data-table]'); if (button) selectTable(button.dataset.table); });
-    if (tables.length) await selectTable(tables[0].name);
+    if (tables.length) {
+      const saved = restoreView();
+      await selectTable(tables.some(item => item.name === saved.table) ? saved.table : tables[0].name, saved);
+    }
   }
 
-  async function selectTable(table) {
+  async function selectTable(table, saved = {}) {
     state.table = table; state.schema = await get(`/admin/api/tablas/${encodeURIComponent(table)}/esquema`);
-    state.page = 1; state.q = ''; state.order = state.schema.columns[0]?.name || ''; state.dir = 'asc'; state.selected.clear();
+    state.page = saved.page || 1; state.q = saved.q || ''; state.order = saved.order || state.schema.columns[0]?.name || ''; state.dir = saved.dir || 'asc'; state.selected.clear();
     document.querySelectorAll('.table-btn').forEach(button => button.classList.toggle('active', button.dataset.table === table));
     $('#title').textContent = table; $('#subtitle').textContent = 'Administra los registros almacenados en esta tabla.';
     await loadRows();
+  }
+
+  async function openIntegratedGenerator() {
+    const today = new Date();
+    const end = today.toISOString().slice(0, 10);
+    today.setDate(today.getDate() - 60);
+    const start = today.toISOString().slice(0, 10);
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<form class="modal" id="integratedForm"><h3>Generar datos integrados</h3><p>Genera alumnos y registros relacionados. No modifica cursos, meses ni feriados.</p><div class="modal-grid"><div class="modal-field"><label>Nuevos alumnos</label><input name="nuevosAlumnos" type="number" min="0" max="500" value="10"></div><div class="modal-field"><label>Semilla opcional</label><input name="seed" type="number"></div><div class="modal-field"><label>Desde</label><input name="desde" type="date" value="${start}" required></div><div class="modal-field"><label>Hasta</label><input name="hasta" type="date" value="${end}" required></div><div class="modal-field"><label>Asistencias por alumno</label><input name="asistenciasPorAlumno" type="number" min="1" max="10000" value="40" required></div><div class="modal-field"><label>Atrasos por alumno</label><input name="atrasosPorAlumno" type="number" min="1" max="100" value="3" required></div><div class="modal-field"><label>Retiros por alumno</label><input name="retirosPorAlumno" type="number" min="1" max="100" value="2" required></div><div class="modal-field"><label>Reingresos por alumno</label><input name="reingresosPorAlumno" type="number" min="1" max="100" value="2" required></div><div class="modal-field" style="grid-column:1/-1"><label><input name="saltarNoLectivos" type="checkbox" checked> Saltar fines de semana y feriados</label></div></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelIntegrated">Cancelar</button><button class="btn">Generar datos</button></div></form>`;
+    document.body.appendChild(backdrop);
+    $('#cancelIntegrated').addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
+    $('#integratedForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const options = Object.fromEntries(['nuevosAlumnos', 'asistenciasPorAlumno', 'atrasosPorAlumno', 'retirosPorAlumno', 'reingresosPorAlumno'].map(name => [name, Number(data[name])]));
+      options.desde = data.desde; options.hasta = data.hasta; options.saltarNoLectivos = Boolean(data.saltarNoLectivos);
+      try {
+        const result = await send('/admin/api/generar-datos-integrados', { method: 'POST', body: JSON.stringify({ seed: data.seed, options }) });
+        const summary = Object.entries(result).map(([table, report]) => `${table}: ${report.inserted} insertados`).join('\n');
+        alert(`Generación completada.\n${summary}`);
+        backdrop.remove(); await loadTables(); await loadRows();
+      } catch (error) { alert(error.message); }
+    });
   }
 
   function fieldType(column) {
@@ -166,22 +202,27 @@ main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items
 
   async function loadRows() {
     try {
+      const request = ++rowsRequest;
       const params = new URLSearchParams({ page: state.page, limit: state.limit, q: state.q, orden: state.order, dir: state.dir });
       const data = await get(`/admin/api/tablas/${encodeURIComponent(state.table)}?${params}`);
+      if (request !== rowsRequest) return;
       const headers = `<th><input class="check" id="selectAll" type="checkbox" title="Seleccionar página"></th>${data.columns.map(column => `<th><button data-order="${esc(column.name)}">${esc(column.name)}${state.order === column.name ? (state.dir === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`).join('')}<th>Acciones</th>`;
       const rows = data.rows.map(row => { const key = keyOf(row); return `<tr><td><input class="check select-row" data-key="${esc(key)}" type="checkbox" ${state.selected.has(key) ? 'checked' : ''}></td>${data.columns.map(column => `<td>${esc(row[column.name])}</td>`).join('')}<td><div class="row-actions"><button class="edit-row" data-key="${esc(key)}">Editar</button><button class="danger delete-row" data-key="${esc(key)}">Eliminar</button></div></td></tr>`; }).join('');
       $('#content').innerHTML = `<div class="filters"><div class="field"><label for="search">Buscar</label><input id="search" value="${esc(state.q)}" placeholder="Texto en cualquier columna"></div><button class="btn secondary" id="clear">Limpiar</button><button class="btn" id="newRow">Nuevo registro</button><button class="btn secondary" id="deleteSelected">Eliminar seleccionados</button><button class="btn secondary" id="generateRows">Generar registros</button><button class="btn secondary" id="importCsv">Importar CSV</button></div><div class="table-wrap"><table><thead><tr>${headers}</tr></thead><tbody>${rows || `<tr><td colspan="${data.columns.length + 2}" class="empty">No hay registros para mostrar.</td></tr>`}</tbody></table></div><div class="pager"><span>${data.total} registro(s) · página ${data.page} de ${data.pages}</span><div class="buttons"><button id="prev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button><button id="next" ${data.page >= data.pages ? 'disabled' : ''}>Siguiente</button></div></div>`;
-      $('#search').addEventListener('input', event => { state.q = event.target.value; state.page = 1; loadRows(); });
-      $('#clear').addEventListener('click', () => { state.q = ''; state.page = 1; loadRows(); }); $('#newRow').addEventListener('click', () => openForm().catch(notifyError)); $('#deleteSelected').addEventListener('click', removeSelected); $('#generateRows').addEventListener('click', () => openGenerator().catch(notifyError)); $('#importCsv').addEventListener('click', openCsvImport);
-      $('#prev').addEventListener('click', () => { state.page--; loadRows(); }); $('#next').addEventListener('click', () => { state.page++; loadRows(); });
+      $('#search').addEventListener('input', event => { state.q = event.target.value; state.page = 1; saveView(); loadRows(); });
+      $('#clear').addEventListener('click', () => { state.q = ''; state.page = 1; saveView(); loadRows(); }); $('#newRow').addEventListener('click', () => openForm().catch(notifyError)); $('#deleteSelected').addEventListener('click', removeSelected); $('#generateRows').addEventListener('click', () => openGenerator().catch(notifyError)); $('#importCsv').addEventListener('click', openCsvImport);
+      $('#prev').addEventListener('click', () => { state.page--; saveView(); loadRows(); }); $('#next').addEventListener('click', () => { state.page++; saveView(); loadRows(); });
       $('#selectAll').addEventListener('change', event => { data.rows.forEach(row => event.target.checked ? state.selected.add(keyOf(row)) : state.selected.delete(keyOf(row))); loadRows(); });
       document.querySelectorAll('.select-row').forEach(input => input.addEventListener('change', event => { const key = event.target.dataset.key; event.target.checked ? state.selected.add(key) : state.selected.delete(key); }));
       document.querySelectorAll('.edit-row').forEach(button => button.addEventListener('click', () => openForm(data.rows.find(row => keyOf(row) === button.dataset.key)).catch(notifyError)));
       document.querySelectorAll('.delete-row').forEach(button => button.addEventListener('click', () => removeRow(data.rows.find(row => keyOf(row) === button.dataset.key))));
-      document.querySelectorAll('[data-order]').forEach(button => button.addEventListener('click', () => { const order = button.dataset.order; state.dir = state.order === order && state.dir === 'asc' ? 'desc' : 'asc'; state.order = order; state.page = 1; loadRows(); }));
+      document.querySelectorAll('[data-order]').forEach(button => button.addEventListener('click', () => { const order = button.dataset.order; state.dir = state.order === order && state.dir === 'asc' ? 'desc' : 'asc'; state.order = order; state.page = 1; saveView(); loadRows(); }));
+      saveView();
     } catch (error) { notifyError(error); }
   }
 
+  $('#tables').addEventListener('click', event => { const button = event.target.closest('[data-table]'); if (button) selectTable(button.dataset.table).catch(notifyError); });
+  $('#generateIntegrated').addEventListener('click', () => openIntegratedGenerator().catch(notifyError));
   loadTables().catch(notifyError);
 })();
 </script>
