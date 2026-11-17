@@ -8,6 +8,7 @@ const syncRouter = require('./routes/sync');
 const portalRouter = require('./routes/portal');
 const redRouter = require('./routes/red');
 const usuariosRouter = require('./routes/usuarios');
+const auditoriaRouter = require('./routes/auditoria');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { origenPermitido } = require('./services/red');
@@ -38,6 +39,23 @@ app.use('/api/sync', requerirSesion, syncRouter);
 app.use('/api/portal', requerirSesion, portalRouter);
 app.use('/api/red', requerirSesion, redRouter);
 app.use('/api/usuarios', requerirSesion, usuariosRouter);
+app.use('/api/auditoria', requerirSesion, auditoriaRouter);
+app.get('/api/cursos', requerirSesion, (req, res) => {
+  try {
+    const cursos = require('./db/conexion').prepare(`
+      SELECT c.nombre AS curso, COUNT(DISTINCT m.rut_alumno) AS alumnos
+      FROM curso c
+      JOIN matricula m ON m.id_curso = c.id_curso
+      WHERE m.anio = (SELECT MAX(anio) FROM matricula)
+      GROUP BY c.id_curso, c.nombre
+      ORDER BY c.nombre
+    `).all();
+    res.json({ cursos });
+  } catch (error) {
+    console.error('Error al consultar cursos:', error.message);
+    res.status(500).json({ error: 'No se pudieron cargar los cursos.' });
+  }
+});
 
 app.use(express.static(FRONT_DIR));
 

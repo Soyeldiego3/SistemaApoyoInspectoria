@@ -53,6 +53,18 @@ export function getAlumnos() {
   return request('/asistencia/alumnos');
 }
 
+export function getCursos() {
+  return request('/cursos');
+}
+
+export function getAuditoriaPrioridad(params = {}) {
+  return request(`/auditoria/prioridad?${new URLSearchParams(params)}`);
+}
+
+export function getAuditoriaCursos(params = {}) {
+  return request(`/auditoria/cursos?${new URLSearchParams(params)}`);
+}
+
 export function getAlumno(rut) {
   return request(`/asistencia/alumnos/${encodeURIComponent(rut)}`);
 }
@@ -62,10 +74,6 @@ export function crearJustificativo(rut, datos) {
     method: 'POST',
     body: JSON.stringify(datos),
   });
-}
-
-export function getCursos() {
-  return request('/sync/cursos');
 }
 
 export function iniciarSync(credenciales) {
