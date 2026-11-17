@@ -5,7 +5,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
-import { getCredencialesPortal, getRedInfo, iniciarSync, setRedEnabled } from '../api.js';
+import { getCredencialesPortal, getDashboard, getRedInfo, iniciarSync, setRedEnabled } from '../api.js';
 
 let sincronizacionAutomaticaEjecutada = false;
 
@@ -15,6 +15,26 @@ export default function Dashboard() {
   const [redCargando, setRedCargando] = useState(false);
   const [syncEstado, setSyncEstado] = useState('cargando');
   const [syncMensaje, setSyncMensaje] = useState('');
+  const [datosDashboard, setDatosDashboard] = useState(null);
+  const [errorDashboard, setErrorDashboard] = useState('');
+
+  const cargarDashboard = async (estaActivo = () => true) => {
+    try {
+      const datos = await getDashboard();
+      if (estaActivo()) {
+        setDatosDashboard(datos);
+        setErrorDashboard('');
+      }
+    } catch (error) {
+      if (estaActivo()) setErrorDashboard(error.message || 'No se pudieron cargar los gráficos.');
+    }
+  };
+
+  useEffect(() => {
+    let activo = true;
+    cargarDashboard(() => activo);
+    return () => { activo = false; };
+  }, []);
 
   useEffect(() => {
     if (!esPc || sincronizacionAutomaticaEjecutada) {
@@ -38,6 +58,7 @@ export default function Dashboard() {
         if (activo) {
           setSyncEstado('ok');
           setSyncMensaje('Datos sincronizados correctamente.');
+          await cargarDashboard(() => activo);
         }
       } catch (error) {
         if (!activo) return;
@@ -48,6 +69,7 @@ export default function Dashboard() {
           setSyncEstado('error');
           setSyncMensaje(error.message || 'No se pudo sincronizar. Puedes reintentar desde Datos.');
         }
+        await cargarDashboard(() => activo);
       }
     };
     sincronizarAutomaticamente();
@@ -122,8 +144,10 @@ export default function Dashboard() {
       )}
 
       <section className="card blue">
-        <p className="muted">Hoy</p>
-        <div className="big" style={{ margin: '14px 0' }}>—<small>inasistencias</small></div>
+        <p className="muted">Esta semana</p>
+        <div className="big" style={{ margin: '14px 0' }}>
+          {datosDashboard?.inasistenciasSemana ?? '—'}<small>inasistencias</small>
+        </div>
         <div className="row">
           <p className="muted">
             {syncEstado === 'cargando' ? 'Sincronizando…' :
@@ -143,22 +167,29 @@ export default function Dashboard() {
         <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>
       )}
       {syncEstado === 'error' && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>}
+      {errorDashboard && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{errorDashboard}</p>}
 
       <div className="kpis">
-        <KpiCard sigla="TSE" nombre="Sincronización exitosa" ayuda="Meta ≥ 95%" />
-        <KpiCard sigla="TADR" nombre="Detección de reincidencias" ayuda="Meta 100%" />
-        <KpiCard sigla="RTO" nombre="Tiempo por justificativo" unidad=" s" ayuda="Meta < 10 s" />
+        <KpiCard sigla="TSE" nombre="Sincronización exitosa"
+          valor={datosDashboard?.kpis?.tse.valor ?? null} pct={datosDashboard?.kpis?.tse.valor ?? 0}
+          ayuda={datosDashboard?.kpis?.tse.ayuda || 'Meta ≥ 95%'} />
+        <KpiCard sigla="TADR" nombre="Detección de reincidencias"
+          valor={datosDashboard?.kpis?.tadr.valor ?? null} pct={datosDashboard?.kpis?.tadr.valor ?? 0}
+          ayuda={datosDashboard?.kpis?.tadr.ayuda || 'Meta 100%'} />
+        <KpiCard sigla="RTO" nombre="Tiempo por justificativo" unidad=" s"
+          valor={datosDashboard?.kpis?.rto.valor ?? null} pct={datosDashboard?.kpis?.rto.pct ?? 0}
+          ayuda={datosDashboard?.kpis?.rto.ayuda || 'Meta < 10 s'} />
       </div>
 
       <Link to="/auditar" className="card row">
         <div><h2>Reincidencias</h2><p className="muted">Alumnos con 3 o más atrasos sin justificar</p></div>
-        <span className="tag">—</span>
+        <span className="tag">{datosDashboard?.reincidencias ?? '—'}</span>
       </Link>
 
       <div className="charts">
-        <section className="card"><h2>Estado de inasistencias</h2><p className="muted" style={{ marginBottom: 8 }}>Hoy</p><DonutChart /></section>
-        <section className="card"><h2>Atrasos por día</h2><p className="muted" style={{ marginBottom: 8 }}>Semana actual</p><BarsChart /></section>
-        <section className="card"><h2>Sincronización diaria</h2><p className="muted" style={{ marginBottom: 8 }}>% de ejecuciones sin errores</p><BarsChart dataKey="tse" color="#30d19b" /></section>
+        <section className="card"><h2>Estado de inasistencias</h2><p className="muted" style={{ marginBottom: 8 }}>Hoy</p><DonutChart data={datosDashboard?.inasistencias || []} /></section>
+        <section className="card"><h2>Atrasos por día</h2><p className="muted" style={{ marginBottom: 8 }}>Semana actual</p><BarsChart data={datosDashboard?.atrasos || []} /></section>
+        <section className="card"><h2>Sincronización diaria</h2><p className="muted" style={{ marginBottom: 8 }}>% de ejecuciones sin errores</p><BarsChart data={datosDashboard?.sincronizaciones || []} dataKey="tse" color="#30d19b" /></section>
       </div>
     </div>
   );

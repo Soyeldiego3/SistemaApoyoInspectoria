@@ -120,6 +120,8 @@ function abrirDb(ruta = DB_PATH) {
       fecha_fin        TEXT NOT NULL,
       estado_documento TEXT NOT NULL DEFAULT 'PENDIENTE'
         CHECK (estado_documento IN ('PENDIENTE','APROBADO','RECHAZADO')),
+      duracion_ms      INTEGER,
+      creado_en        TEXT,
       CHECK (fecha_fin >= fecha_inicio)
     );
     CREATE INDEX IF NOT EXISTS idx_just_alumno ON justificativo(rut_alumno, fecha_inicio, fecha_fin);
@@ -149,6 +151,13 @@ function abrirDb(ruta = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS idx_atraso_fecha ON atraso(fecha);
 
+    CREATE TABLE IF NOT EXISTS sync_ejecucion (
+      id_ejecucion INTEGER PRIMARY KEY,
+      fecha        TEXT    NOT NULL,
+      exitosa      INTEGER NOT NULL CHECK (exitosa IN (0,1))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_ejecucion_fecha ON sync_ejecucion(fecha);
+
     -- Cada atraso con: estado de asistencia ese día, justificado según el portal
     -- y justificado según TUS justificativos aprobados (para detectar desacuerdos)
     CREATE VIEW IF NOT EXISTS v_atraso AS
@@ -164,6 +173,13 @@ function abrirDb(ruta = DB_PATH) {
     JOIN alumno al   ON al.rut = m.rut_alumno
     JOIN curso c     ON c.id_curso = m.id_curso;
   `);
+  const columnasJustificativo = db.pragma('table_info(justificativo)');
+  if (!columnasJustificativo.some((columna) => columna.name === 'duracion_ms')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN duracion_ms INTEGER');
+  }
+  if (!columnasJustificativo.some((columna) => columna.name === 'creado_en')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN creado_en TEXT');
+  }
   return db;
 }
 

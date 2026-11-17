@@ -53,6 +53,10 @@ export function getAlumnos() {
   return request('/asistencia/alumnos');
 }
 
+export function getDashboard() {
+  return request('/dashboard');
+}
+
 export function getCursos() {
   return request('/cursos');
 }
