@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
@@ -13,17 +13,30 @@ const FILTROS = [
   // Estados de asistencia entregados por la API: presente, ausente y atraso.
   { id: 'todos', label: 'Todos' },
   { id: 'sin', label: 'Sin justificar' },
-  { id: 'reinc', label: '3+ atrasos' },
+  { id: 'reinc', label: '+3 Sin justificar' },
   { id: 'ok', label: 'Al día' },
 ];
+
+const CURSO_STORAGE_KEY = 'inspectoria.alumnos.curso';
+const FILTRO_STORAGE_KEY = 'inspectoria.alumnos.filtro';
 
 // Ignora tildes, mayúsculas, puntos y guion del RUT
 const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toLowerCase();
 
 export default function Students() {
+  const location = useLocation();
+  const parametros = new URLSearchParams(location.search);
   const [q, setQ] = useState('');
-  const [filtro, setFiltro] = useState('todos');
-  const [curso, setCurso] = useState('');
+  const [filtro, setFiltro] = useState(() => (
+    parametros.get('filtro')
+    || sessionStorage.getItem(FILTRO_STORAGE_KEY)
+    || 'todos'
+  ));
+  const [curso, setCurso] = useState(() => (
+    parametros.get('curso')
+    || sessionStorage.getItem(CURSO_STORAGE_KEY)
+    || ''
+  ));
   const [alumnos, setAlumnos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -38,6 +51,23 @@ export default function Students() {
   }, []);
 
   const cursos = useMemo(() => [...new Set(alumnos.map((a) => a.curso))].sort(), [alumnos]);
+
+  useEffect(() => {
+    if (curso) sessionStorage.setItem(CURSO_STORAGE_KEY, curso);
+    else sessionStorage.removeItem(CURSO_STORAGE_KEY);
+  }, [curso]);
+
+  useEffect(() => {
+    if (filtro !== 'todos') sessionStorage.setItem(FILTRO_STORAGE_KEY, filtro);
+    else sessionStorage.removeItem(FILTRO_STORAGE_KEY);
+  }, [filtro]);
+
+  const rutaRetorno = useMemo(() => {
+    const retorno = new URLSearchParams();
+    if (curso) retorno.set('curso', curso);
+    if (filtro !== 'todos') retorno.set('filtro', filtro);
+    return retorno.toString() ? `/alumnos?${retorno}` : '/alumnos';
+  }, [curso, filtro]);
 
   // Se recalcula en cada tecla; no necesita ir al back
   const lista = useMemo(() => {
@@ -78,7 +108,9 @@ export default function Students() {
       {lista.length === 0
         ? <EmptyState texto={error || (cargando ? 'Cargando alumnos…' : alumnos.length ? 'Ningún alumno coincide con los filtros.' : 'Aún no hay alumnos. Sincroniza un curso primero.')} />
         : <div className="list cols">{lista.map((a) => (
-            <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`} className="item">
+            <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`}
+              state={{ returnTo: rutaRetorno }}
+              className="item">
               <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
               <div className="tags">
                 {a.atrasos > 0 && <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`}>{a.atrasos} atrasos sin justificar</span>}

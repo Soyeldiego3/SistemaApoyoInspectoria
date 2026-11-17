@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import AttendanceRow from '../components/AttendanceRow.jsx';
 import JustifySheet from '../components/JustifySheet.jsx';
@@ -10,6 +10,7 @@ import { crearJustificativo, getAlumno } from '../api.js';
 // Marcas los días ausentes y justificas el rango con un solo panel.
 export default function StudentDetail() {
   const { rut } = useParams();
+  const location = useLocation();
   const [alumno, setAlumno] = useState(null);
   const [dias, setDias] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -48,7 +49,7 @@ export default function StudentDetail() {
 
   return (
     <>
-      <Link to="/alumnos" className="muted row" style={{ justifyContent: 'flex-start', gap: 4 }}><ChevronLeft size={16} />Alumnos</Link>
+      <Link to={location.state?.returnTo || '/alumnos'} className="muted row" style={{ justifyContent: 'flex-start', gap: 4 }}><ChevronLeft size={16} />Alumnos</Link>
       <section className="card">
         <h2>{alumno ? `${alumno.nombres} ${alumno.apellidos}` : 'Alumno'}</h2>
         <p className="muted">{alumno ? `${alumno.curso} · ${alumno.rut}` : decodeURIComponent(rut)}</p>
