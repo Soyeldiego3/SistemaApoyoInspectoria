@@ -39,4 +39,8 @@ execSync(`npx @electron/rebuild -f -w better-sqlite3 -v ${electronVersion} -m "$
   stdio: 'inherit',
 });
 
+// electron-builder excluye node_modules cuando está en la raíz del recurso.
+// En src sí se conserva y Node lo resuelve desde index.js.
+fs.renameSync(path.join(dest, 'node_modules'), path.join(dest, 'src', 'node_modules'));
+
 console.log('Backend listo en', dest);

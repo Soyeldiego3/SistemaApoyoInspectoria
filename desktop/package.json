@@ -14,17 +14,41 @@
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
     "electron": "45.3.2",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^26.18.0"
   },
   "build": {
     "appId": "cl.inacap.apoyoinspectoria",
     "productName": "Apoyo Inspectoria",
-    "directories": { "output": "release" },
-    "files": ["main.js"],
-    "extraResources": [
-      { "from": "back-build", "to": "inspectoria-back" },
-      { "from": "front-dist", "to": "front-dist" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js"
     ],
-    "win": { "target": "nsis" }
+    "extraResources": [
+      {
+        "from": "back-build",
+        "to": "inspectoria-back",
+        "filter": [
+          "**/*",
+          "node_modules/**/*",
+          "!src/node_modules/**/*"
+        ]
+      },
+      {
+        "from": "back-build/src/node_modules",
+        "to": "inspectoria-back/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "front-dist",
+        "to": "front-dist"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    }
   }
 }

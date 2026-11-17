@@ -15,3 +15,10 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
    ```bash
    npm start  
 
+
+# crear usuario en la bd
+
+1. crear archivo ./inspectoria-back/data/inspectoria.db
+
+2. crear usuario usando el comando dentro de ./inspectoria-back/ 
+```bash npm run usuario -- crear <usuario>

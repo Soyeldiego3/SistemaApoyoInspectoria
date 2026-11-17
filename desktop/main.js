@@ -23,7 +23,7 @@ function startBackend() {
   delete backendEnv.PASS;
   delete backendEnv.AUTH_SECRET;
 
-  backend = fork(path.join(backendDir, 'src', 'index.js'), [], {
+  const proceso = fork(path.join(backendDir, 'src', 'index.js'), [], {
     cwd: backendDir,
     silent: true,
     env: {
@@ -34,10 +34,15 @@ function startBackend() {
       NODE_ENV: 'production',
     },
   });
+  backend = proceso;
 
-  backend.stdout.on('data', (d) => console.log('[back]', d.toString()));
-  backend.stderr.on('data', (d) => console.error('[back]', d.toString()));
-  backend.on('exit', (code) => console.log('Backend terminó con código', code));
+  proceso.stdout.on('data', (d) => console.log('[back]', d.toString()));
+  proceso.stderr.on('data', (d) => console.error('[back]', d.toString()));
+  proceso.on('error', (error) => console.error('Error del backend:', error.message));
+  proceso.on('exit', (code) => {
+    console.log('Backend terminó con código', code);
+    backend = null;
+  });
 }
 
 // Espera a que el backend responda antes de abrir la ventana
@@ -105,24 +110,47 @@ function limpiarAlCerrarHabilitado() {
 }
 
 app.on('before-quit', (event) => {
-  if (!backend || cleanupStarted || !limpiarAlCerrarHabilitado()) {
-    if (backend && !cleanupStarted) backend.kill();
+  if (cleanupStarted) return;
+  const proceso = backend;
+  if (!proceso) return;
+
+  if (!limpiarAlCerrarHabilitado()) {
+    cleanupStarted = true;
+    proceso.kill();
     return;
   }
+
   event.preventDefault();
   cleanupStarted = true;
+  let terminado = false;
   const terminar = () => {
-    if (backend) backend.kill();
+    if (terminado) return;
+    terminado = true;
+    if (!proceso.killed) proceso.kill();
     app.quit();
   };
   const timeout = setTimeout(terminar, 2000);
-  backend.once('message', (message) => {
-    if (message?.type !== 'limpiar-datos:ok' && message?.type !== 'limpiar-datos:error') return;
+  const recibirResultado = (message) => {
+    if (message?.type !== 'limpiar-datos:ok' && message?.type !== 'limpiar-datos:error') {
+      return;
+    }
+    proceso.removeListener('message', recibirResultado);
     clearTimeout(timeout);
     terminar();
-  });
+  };
+  proceso.on('message', recibirResultado);
+
+  if (!proceso.connected) {
+    terminar();
+    return;
+  }
+
   try {
-    backend.send({ type: 'limpiar-datos' });
+    proceso.send({ type: 'limpiar-datos' }, (error) => {
+      if (!error) return;
+      console.error('No se pudo solicitar la limpieza al cerrar:', error.message);
+      terminar();
+    });
   } catch (error) {
     clearTimeout(timeout);
     console.error('No se pudo solicitar la limpieza al cerrar:', error.message);
