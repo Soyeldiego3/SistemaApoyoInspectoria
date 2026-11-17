@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de datos - Inspectoría</title>
+<style>
+:root{color-scheme:light;--bg:#f4f7f9;--card:#fff;--ink:#14212e;--muted:#5e6d78;--line:#d6dee4;--accent:#1f4e8c;--side:#0b1626;--ok:#1c7a46;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input{font:inherit}button{cursor:pointer}.layout{min-height:100vh;display:grid;grid-template-columns:260px 1fr}
+aside{padding:24px 16px;background:var(--side);color:#fff}aside h1{margin:0 4px 4px;font-size:1.2rem}aside p{margin:0 4px 20px;color:#b8c5d1;font-size:.85rem}
+.tables{display:grid;gap:6px}.table-btn{display:flex;justify-content:space-between;width:100%;padding:10px 12px;border:0;border-radius:6px;background:transparent;color:#fff;text-align:left}.table-btn:hover,.table-btn.active{background:#18293f}.table-btn span{color:#b8c5d1}
+main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}.top h2{margin:0;font-size:1.6rem}.top p{margin:4px 0;color:var(--muted)}
+.link{color:var(--accent);font-weight:600;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px}
+.filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}.field{min-width:180px;flex:1}.field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}
+.btn{padding:9px 14px;border:0;border-radius:5px;background:var(--accent);color:#fff;font-weight:600}.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:6px}table{width:100%;border-collapse:collapse;min-width:620px}th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{background:#f4f7f9;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}th button{border:0;background:none;color:inherit;font-weight:700;text-transform:inherit;letter-spacing:inherit;padding:0}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:var(--muted);font-size:.9rem}.pager .buttons{display:flex;gap:8px}.pager button{padding:6px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}.pager button:disabled{opacity:.45;cursor:default}
+.empty{padding:32px;text-align:center;color:var(--muted)}.error{padding:12px;margin-bottom:14px;border-radius:6px;background:#fbe6e4;color:var(--bad)}.success{padding:12px;margin-bottom:14px;border-radius:6px;background:#e1f2e8;color:var(--ok)}.row-actions{display:flex;gap:6px}.row-actions button{padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}.row-actions .danger{color:var(--bad)}.check{width:16px;height:16px}.modal-backdrop{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:#0b162699}.modal{width:min(620px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;padding:22px;box-shadow:0 12px 40px #0005}.modal h3{margin:0 0 16px}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.modal-field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.modal-field input,.modal-field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}@media(max-width:720px){.layout{grid-template-columns:1fr}aside{padding:16px}.tables{display:flex;overflow:auto}.table-btn{min-width:140px}.top{display:block}.top .link{display:inline-block;margin-top:12px}.modal-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside><h1>Panel de Inspectoría</h1><p>Lectura de inspectoria.sqlite</p><nav class="tables" id="tables" aria-label="Tablas"></nav></aside>
+<main>
+  <div class="top"><div><h2 id="title">Selecciona una tabla</h2><p id="subtitle">Consulta los registros actuales de la base de datos.</p></div><a class="link" href="index.html" target="_blank" rel="noopener">Ver página scrapeable ↗</a></div>
+  <section class="card" id="content"><div class="empty">Cargando tablas…</div></section>
+</main>
+</div>
+<script>
+(() => {
+  const state = { table: null, schema: null, page: 1, limit: 25, q: '', order: '', dir: 'asc', selected: new Set() };
+  const $ = selector => document.querySelector(selector);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const get = async url => { const response = await fetch(url); if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`); return response.json(); };
+  const send = async (url, options) => { const response = await fetch(url, { headers: {'Content-Type':'application/json'}, ...options }); if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`); return response.json(); };
+  const notifyError = error => { $('#content').innerHTML = `<div class="error">${esc(error.message)}</div>`; };
+  const keyOf = row => JSON.stringify((state.schema.primaryKey || []).length ? state.schema.primaryKey.map(name => row[name]) : [row.__rowid]);
+  const keyObject = row => (state.schema.primaryKey || []).length ? Object.fromEntries(state.schema.primaryKey.map(name => [name, row[name]])) : {__rowid: row.__rowid};
+  const isPk = name => (state.schema.primaryKey || []).includes(name);
+
+  async function loadTables() {
+    const tables = await get('/admin/api/tablas');
+    $('#tables').innerHTML = tables.map(item => `<button class="table-btn" data-table="${esc(item.name)}">${esc(item.name)} <span>${item.count}</span></button>`).join('');
+    $('#tables').addEventListener('click', event => { const button = event.target.closest('[data-table]'); if (button) selectTable(button.dataset.table); });
+    if (tables.length) await selectTable(tables[0].name);
+  }
+
+  async function selectTable(table) {
+    state.table = table; state.schema = await get(`/admin/api/tablas/${encodeURIComponent(table)}/esquema`);
+    state.page = 1; state.q = ''; state.order = state.schema.columns[0]?.name || ''; state.dir = 'asc'; state.selected.clear();
+    document.querySelectorAll('.table-btn').forEach(button => button.classList.toggle('active', button.dataset.table === table));
+    $('#title').textContent = table; $('#subtitle').textContent = 'Administra los registros almacenados en esta tabla.';
+    await loadRows();
+  }
+
+  function fieldType(column) {
+    if (column.name.toLowerCase().startsWith('fecha')) return 'date';
+    if (/INT/i.test(column.type)) return 'number';
+    return 'text';
+  }
+
+  async function foreignOptions(column) {
+    const relation = state.schema.foreignKeys.find(fk => fk.from === column.name);
+    if (!relation) return null;
+    const data = await get(`/admin/api/tablas/${encodeURIComponent(relation.table)}?limit=100&orden=${encodeURIComponent(relation.to)}`);
+    return data.rows.map(row => {
+      const label = row.nombres && row.apellidos ? `${row.nombres} ${row.apellidos}` : (row.nombre || row[relation.to]);
+      return `<option value="${esc(row[relation.to])}">${esc(label)}</option>`;
+    }).join('');
+  }
+
+  async function distinctOptions(column) {
+    if (state.table !== 'asistencia' || column.name !== 'estado') return null;
+    const data = await get(`/admin/api/tablas/${encodeURIComponent(state.table)}/columna/${encodeURIComponent(column.name)}/valores`);
+    return data.values.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('');
+  }
+
+  async function openForm(row = null) {
+    const edit = Boolean(row);
+    const fields = await Promise.all(state.schema.columns.map(async column => {
+      const disabled = '';
+      const required = column.notnull ? 'required' : '';
+      const value = row ? row[column.name] : '';
+      const options = await foreignOptions(column);
+      if (options !== null) return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><select name="${esc(column.name)}" ${required} ${disabled}><option value="">Selecciona…</option>${options}</select></div>`;
+      const distinct = await distinctOptions(column);
+      if (distinct !== null) return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><select name="${esc(column.name)}" ${required} ${disabled}><option value="">Selecciona…</option>${distinct}</select></div>`;
+      return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><input name="${esc(column.name)}" type="${fieldType(column)}" value="${esc(value)}" ${required} ${disabled}></div>`;
+    }));
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<form class="modal" id="recordForm"><h3>${edit ? 'Editar' : 'Nuevo'} registro: ${esc(state.table)}</h3><div class="modal-grid">${fields.join('')}</div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelForm">Cancelar</button><button class="btn">${edit ? 'Guardar cambios' : 'Crear registro'}</button></div></form>`;
+    document.body.appendChild(backdrop);
+    state.schema.columns.forEach(column => { if (row) backdrop.querySelector(`[name="${CSS.escape(column.name)}"]`).value = row[column.name] ?? ''; });
+    $('#cancelForm').addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
+    $('#recordForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      state.schema.columns.filter(column => /INT/i.test(column.type) && data[column.name] !== '').forEach(column => { data[column.name] = Number(data[column.name]); });
+      try {
+        await send(`/admin/api/tablas/${encodeURIComponent(state.table)}`, { method: edit ? 'PUT' : 'POST', body: JSON.stringify(edit ? { pk: keyObject(row), data } : { data }) });
+        backdrop.remove(); await loadTables(); await loadRows();
+      } catch (error) { alert(error.message); }
+    });
+  }
+
+  async function removeRow(row) {
+    if (!confirm(`¿Eliminar este registro de ${state.table}?`)) return;
+    try { await send(`/admin/api/tablas/${encodeURIComponent(state.table)}`, { method: 'DELETE', body: JSON.stringify({ pk: keyObject(row) }) }); state.selected.delete(keyOf(row)); await loadTables(); await loadRows(); }
+    catch (error) { alert(error.message); }
+  }
+
+  async function removeSelected() {
+    const keys = [...state.selected].map(value => JSON.parse(value));
+    if (!keys.length) return alert('Selecciona al menos un registro.');
+    if (!confirm(`¿Eliminar ${keys.length} registro(s) de ${state.table}? Esta acción no se puede deshacer.`)) return;
+    try { await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/eliminar-multiple`, { method: 'POST', body: JSON.stringify({ keys }) }); state.selected.clear(); await loadTables(); await loadRows(); }
+    catch (error) { alert(error.message); }
+  }
+
+  function generatorFields() {
+    const special = ['asistencia', 'atrasos', 'retiros', 'reingresos'].includes(state.table);
+    return `<div class="modal-field"><label>Cantidad</label><input name="count" type="number" min="1" max="10000" value="30" required></div><div class="modal-field"><label>Semilla opcional</label><input name="seed" type="number" placeholder="Reproducible"></div>${special ? `<div class="modal-field"><label>Alumnos (IDs separados por coma)</label><input name="alumnoIds" placeholder="1,2,3"></div><div class="modal-field"><label>Desde</label><input name="desde" type="date" required></div><div class="modal-field"><label>Hasta</label><input name="hasta" type="date" required></div>` : ''}${state.table === 'asistencia' ? `<div class="modal-field"><label>Estado fijo</label><select name="estado"><option value="P">P - Presente</option><option value="T">T - Tardanza</option><option value="A">A - Ausente</option></select></div><div class="modal-field"><label>Distribución opcional (%)</label><input name="distribucion" placeholder="P:80,T:15,A:5"></div><div class="modal-field"><label><input name="saltarNoLectivos" type="checkbox"> Saltar fines de semana y feriados</label></div><div class="modal-field"><label>Duplicados</label><select name="duplicateMode"><option value="ignore">Ignorar</option><option value="overwrite">Sobrescribir</option></select></div>` : ''}${state.table === 'alumnos' ? `<div class="modal-field"><label>Curso ID (vacío = aleatorio)</label><input name="cursoId" type="number"></div>` : ''}${!special && state.table !== 'alumnos' ? `<div class="modal-field" style="grid-column:1/-1"><label>Valores por columna (JSON)</label><textarea name="valores" rows="4" placeholder='{"nombre":"Dato de prueba"}'></textarea></div>` : ''}`;
+  }
+
+  function parseDistribution(value) {
+    return Object.fromEntries(value.split(',').map(item => item.trim().split(':')).filter(item => item.length === 2).map(([key, amount]) => [key.trim(), Number(amount)]));
+  }
+
+  async function openGenerator() {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<form class="modal" id="generatorForm"><h3>Generar registros: ${esc(state.table)}</h3><div class="modal-grid">${generatorFields()}</div><pre id="preview" class="empty">Pulsa «Vista previa» antes de generar.</pre><div class="modal-actions"><button type="button" class="btn secondary" id="cancelGenerator">Cancelar</button><button type="button" class="btn secondary" id="previewGenerator">Vista previa</button><button class="btn">Generar registros</button></div></form>`;
+    document.body.appendChild(backdrop);
+    $('#cancelGenerator').addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
+    const readBody = preview => {
+      const form = $('#generatorForm');
+      const data = Object.fromEntries(new FormData(form).entries());
+      const body = { count: Number(data.count), seed: data.seed, preview, options: {} };
+      if (data.alumnoIds) body.options.alumnoIds = data.alumnoIds.split(',').map(value => Number(value.trim())).filter(Boolean);
+      if (data.desde) body.options.desde = data.desde;
+      if (data.hasta) body.options.hasta = data.hasta;
+      if (data.estado) body.options.estado = data.estado;
+      if (data.distribucion) body.options.distribucion = parseDistribution(data.distribucion);
+      if (data.saltarNoLectivos) body.options.saltarNoLectivos = true;
+      if (data.duplicateMode) body.duplicateMode = data.duplicateMode;
+      if (data.cursoId) body.options.cursoId = Number(data.cursoId);
+      if (data.valores) body.options.valores = JSON.parse(data.valores);
+      return body;
+    };
+    $('#previewGenerator').addEventListener('click', async () => { try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/masivo`, { method: 'POST', body: JSON.stringify(readBody(true)) }); $('#preview').textContent = JSON.stringify(result.preview, null, 2); } catch (error) { alert(error.message); } });
+    $('#generatorForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/masivo`, { method: 'POST', body: JSON.stringify(readBody(false)) }); alert(`Generados: ${result.generated}. Insertados: ${result.inserted}. Omitidos: ${result.omitted}.`); backdrop.remove(); await loadTables(); await loadRows(); } catch (error) { alert(error.message); } });
+  }
+
+  function openCsvImport() {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<form class="modal" id="csvForm"><h3>Importar CSV: ${esc(state.table)}</h3><p class="note">La primera fila debe contener los nombres exactos de las columnas.</p><textarea name="csv" rows="12" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:5px" placeholder="columna1,columna2&#10;valor1,valor2" required></textarea><p><label><input name="duplicateMode" type="checkbox"> Ignorar duplicados</label></p><div class="modal-actions"><button type="button" class="btn secondary" id="cancelCsv">Cancelar</button><button class="btn">Importar CSV</button></div></form>`;
+    document.body.appendChild(backdrop);
+    $('#cancelCsv').addEventListener('click', () => backdrop.remove());
+    $('#csvForm').addEventListener('submit', async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/importar-csv`, { method: 'POST', body: JSON.stringify({ csv: data.csv, duplicateMode: data.duplicateMode ? 'ignore' : 'error' }) }); alert(`Filas: ${result.generated}. Insertadas: ${result.inserted}. Omitidas: ${result.omitted}.`); backdrop.remove(); await loadTables(); await loadRows(); } catch (error) { alert(error.message); } });
+  }
+
+  async function loadRows() {
+    try {
+      const params = new URLSearchParams({ page: state.page, limit: state.limit, q: state.q, orden: state.order, dir: state.dir });
+      const data = await get(`/admin/api/tablas/${encodeURIComponent(state.table)}?${params}`);
+      const headers = `<th><input class="check" id="selectAll" type="checkbox" title="Seleccionar página"></th>${data.columns.map(column => `<th><button data-order="${esc(column.name)}">${esc(column.name)}${state.order === column.name ? (state.dir === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`).join('')}<th>Acciones</th>`;
+      const rows = data.rows.map(row => { const key = keyOf(row); return `<tr><td><input class="check select-row" data-key="${esc(key)}" type="checkbox" ${state.selected.has(key) ? 'checked' : ''}></td>${data.columns.map(column => `<td>${esc(row[column.name])}</td>`).join('')}<td><div class="row-actions"><button class="edit-row" data-key="${esc(key)}">Editar</button><button class="danger delete-row" data-key="${esc(key)}">Eliminar</button></div></td></tr>`; }).join('');
+      $('#content').innerHTML = `<div class="filters"><div class="field"><label for="search">Buscar</label><input id="search" value="${esc(state.q)}" placeholder="Texto en cualquier columna"></div><button class="btn secondary" id="clear">Limpiar</button><button class="btn" id="newRow">Nuevo registro</button><button class="btn secondary" id="deleteSelected">Eliminar seleccionados</button><button class="btn secondary" id="generateRows">Generar registros</button><button class="btn secondary" id="importCsv">Importar CSV</button></div><div class="table-wrap"><table><thead><tr>${headers}</tr></thead><tbody>${rows || `<tr><td colspan="${data.columns.length + 2}" class="empty">No hay registros para mostrar.</td></tr>`}</tbody></table></div><div class="pager"><span>${data.total} registro(s) · página ${data.page} de ${data.pages}</span><div class="buttons"><button id="prev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button><button id="next" ${data.page >= data.pages ? 'disabled' : ''}>Siguiente</button></div></div>`;
+      $('#search').addEventListener('input', event => { state.q = event.target.value; state.page = 1; loadRows(); });
+      $('#clear').addEventListener('click', () => { state.q = ''; state.page = 1; loadRows(); }); $('#newRow').addEventListener('click', () => openForm().catch(notifyError)); $('#deleteSelected').addEventListener('click', removeSelected); $('#generateRows').addEventListener('click', () => openGenerator().catch(notifyError)); $('#importCsv').addEventListener('click', openCsvImport);
+      $('#prev').addEventListener('click', () => { state.page--; loadRows(); }); $('#next').addEventListener('click', () => { state.page++; loadRows(); });
+      $('#selectAll').addEventListener('change', event => { data.rows.forEach(row => event.target.checked ? state.selected.add(keyOf(row)) : state.selected.delete(keyOf(row))); loadRows(); });
+      document.querySelectorAll('.select-row').forEach(input => input.addEventListener('change', event => { const key = event.target.dataset.key; event.target.checked ? state.selected.add(key) : state.selected.delete(key); }));
+      document.querySelectorAll('.edit-row').forEach(button => button.addEventListener('click', () => openForm(data.rows.find(row => keyOf(row) === button.dataset.key)).catch(notifyError)));
+      document.querySelectorAll('.delete-row').forEach(button => button.addEventListener('click', () => removeRow(data.rows.find(row => keyOf(row) === button.dataset.key))));
+      document.querySelectorAll('[data-order]').forEach(button => button.addEventListener('click', () => { const order = button.dataset.order; state.dir = state.order === order && state.dir === 'asc' ? 'desc' : 'asc'; state.order = order; state.page = 1; loadRows(); }));
+    } catch (error) { notifyError(error); }
+  }
+
+  loadTables().catch(notifyError);
+})();
+</script>
+</body>
+</html>

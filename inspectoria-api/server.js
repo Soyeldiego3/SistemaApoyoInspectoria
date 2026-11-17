@@ -2,15 +2,18 @@
 const path = require('path');
 const express = require('express');
 const { DatabaseSync } = require('node:sqlite');
+const { createAdminRouter } = require('./admin-routes');
 
-const PORT = Number(process.env.PORT) || 8080;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'inspectoria.sqlite');
 
-const db = new DatabaseSync(DB_FILE, { readOnly: true });   // solo lectura: la página no modifica nada
+const db = new DatabaseSync(DB_FILE);
+db.exec('PRAGMA foreign_keys = ON');
 const todas = sql => db.prepare(sql).all();
 
 const app = express();
+app.use(express.json({ limit: '1mb' }));
 
 // Cursos, alumnos, feriados, meses y la fecha "de hoy" (último día con asistencia registrada).
 app.get('/api/base', (req, res) => {
@@ -42,6 +45,7 @@ app.get('/api/reingresos', (req, res) => {
                   FROM reingresos t JOIN alumnos a ON a.id = t.alumno_id`));
 });
 
+app.use('/admin/api', createAdminRouter(db));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, HOST, () => console.log(`Inspectoría en http://${HOST}:${PORT}  (base: ${DB_FILE})`));
