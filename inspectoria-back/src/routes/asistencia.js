@@ -115,11 +115,14 @@ router.get('/alumnos/:rut', (req, res) => {
 
 router.post('/alumnos/:rut/justificativos', (req, res) => {
   try {
-    const { tipo, desde, hasta } = req.body ?? {};
+    const { tipo, desde, hasta, duracionMs } = req.body ?? {};
     if (typeof tipo !== 'string' || !tipo.trim() ||
       !/^\d{4}-\d{2}-\d{2}$/.test(desde) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < desde) {
       return res.status(400).json({ error: 'Tipo y rango de fechas inválidos.' });
+    }
+    if (duracionMs !== undefined && (!Number.isSafeInteger(duracionMs) || duracionMs < 0)) {
+      return res.status(400).json({ error: 'La duración del registro no es válida.' });
     }
 
     const alumno = db.prepare('SELECT rut FROM alumno WHERE rut = ?').get(req.params.rut);
@@ -127,10 +130,10 @@ router.post('/alumnos/:rut/justificativos', (req, res) => {
 
     const insert = obtenerDbWritable().prepare(`
       INSERT INTO justificativo
-        (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento)
-      VALUES (?, ?, ?, ?, 'APROBADO')
+        (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento, duracion_ms, creado_en)
+      VALUES (?, ?, ?, ?, 'APROBADO', ?, ?)
     `);
-    const resultado = insert.run(alumno.rut, tipo.trim(), desde, hasta);
+    const resultado = insert.run(alumno.rut, tipo.trim(), desde, hasta, duracionMs ?? null, new Date().toISOString());
     res.status(201).json({ id: resultado.lastInsertRowid });
   } catch (error) {
     console.error('Error al crear justificativo:', error.message);

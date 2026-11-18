@@ -9,6 +9,7 @@ const portalRouter = require('./routes/portal');
 const redRouter = require('./routes/red');
 const usuariosRouter = require('./routes/usuarios');
 const auditoriaRouter = require('./routes/auditoria');
+const dashboardRouter = require('./routes/dashboard');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { origenPermitido } = require('./services/red');
@@ -40,6 +41,7 @@ app.use('/api/portal', requerirSesion, portalRouter);
 app.use('/api/red', requerirSesion, redRouter);
 app.use('/api/usuarios', requerirSesion, usuariosRouter);
 app.use('/api/auditoria', requerirSesion, auditoriaRouter);
+app.use('/api/dashboard', requerirSesion, dashboardRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {
     const cursos = require('./db/conexion').prepare(`

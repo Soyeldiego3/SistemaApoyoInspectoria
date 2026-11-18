@@ -20,6 +20,15 @@ function obtenerDbWritable() {
   return dbWritable;
 }
 
+function registrarEjecucion(exitosa) {
+  const ahora = new Date();
+  const fecha = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+  obtenerDbWritable().prepare(`
+    INSERT INTO sync_ejecucion (fecha, exitosa)
+    VALUES (?, ?)
+  `).run(fecha, exitosa ? 1 : 0);
+}
+
 router.get('/cursos', (req, res) => {
   try {
     const cursos = dbReadOnly
@@ -38,13 +47,21 @@ router.post('/descargar-e-importar', async (req, res) => {
   let sesion;
   let credencialesGuardadas = false;
   let credencialesUsadas;
+  const responder = (estado, datos, exitosa = false) => {
+    try {
+      registrarEjecucion(exitosa);
+    } catch (error) {
+      console.error('Error al registrar la ejecución de sincronización:', error.message);
+    }
+    return res.status(estado).json(datos);
+  };
   try {
     const { usuario, pass, recordar, enMemoria, urlPortal } = req.body ?? {};
     const tieneCredencialesBody = typeof usuario === 'string' && usuario.trim()
       && typeof pass === 'string' && pass;
     if (usuario !== undefined || pass !== undefined) {
       if (!tieneCredencialesBody) {
-        return res.status(400).json({
+        return responder(400, {
           ok: false,
           codigo: 'CREDENCIALES_REQUERIDAS',
           mensaje: 'Usuario y contraseña del portal son obligatorios.',
@@ -58,14 +75,14 @@ router.post('/descargar-e-importar', async (req, res) => {
       : credencialesPortal.leerDisponibles();
     credencialesUsadas = credenciales;
     if (!credenciales) {
-      return res.status(400).json({
+      return responder(400, {
         ok: false,
         codigo: 'CREDENCIALES_REQUERIDAS',
         mensaje: 'Ingresa o actualiza las credenciales del portal para sincronizar.',
       });
     }
     if (credencialesGuardadas && credenciales.invalidas) {
-      return res.status(400).json({
+      return responder(400, {
         ok: false,
         codigo: 'CREDENCIALES_REQUERIDAS',
         mensaje: 'Las credenciales guardadas son inválidas. Actualízalas para sincronizar.',
@@ -81,7 +98,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     else if (enMemoria) credencialesPortal.guardarEnMemoria(credenciales);
     const cursos = await extraerCursos(sesion.page);
     if (!cursos.length) {
-      return res.status(404).json({
+      return responder(404, {
         ok: false,
         codigo: 'ESTRUCTURA_CAMBIADA',
         mensaje: 'El portal cambió y no se encontraron cursos.',
@@ -129,7 +146,7 @@ router.post('/descargar-e-importar', async (req, res) => {
       }
     });
 
-    res.status(200).json({
+    responder(200, {
       mensaje: 'Proceso completado',
       mes,
       totalCursos: cursos.length,
@@ -138,11 +155,11 @@ router.post('/descargar-e-importar', async (req, res) => {
       filasAsistencia,
       filasAtrasos,
       errores: [],
-    });
+    }, true);
   } catch (error) {
     if (error.code === 'LOGIN_RECHAZADO') {
       if (credencialesGuardadas && credencialesUsadas) credencialesPortal.registrarFallo(credencialesUsadas);
-      return res.status(401).json({
+      return responder(401, {
         ok: false,
         codigo: 'LOGIN_RECHAZADO',
         mensaje: 'El portal rechazó las credenciales.',
@@ -154,18 +171,18 @@ router.post('/descargar-e-importar', async (req, res) => {
         NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge disponible.',
         ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
       };
-      return res.status(502).json({ ok: false, codigo: error.code, mensaje: mensajes[error.code] });
+      return responder(502, { ok: false, codigo: error.code, mensaje: mensajes[error.code] });
     }
     if (error.code === 'SYNC_FAILED') {
       console.error('Error de extracción:', error.cause?.message || error.message);
-      return res.status(502).json({
+      return responder(502, {
         ok: false,
         codigo: 'SYNC_FAILED',
         mensaje: 'La sincronización falló y se conservaron los datos anteriores.',
       });
     }
     console.error('Error en sincronización:', error.message);
-    res.status(500).json({
+    responder(500, {
       ok: false,
       codigo: 'SYNC_FAILED',
       mensaje: 'No se pudo completar la sincronización.',

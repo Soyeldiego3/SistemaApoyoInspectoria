@@ -35,9 +35,9 @@ export default function StudentDetail() {
 
   const alternar = (f) => setSel((s) => (s.includes(f) ? s.filter((x) => x !== f) : [...s, f]));
   const ordenadas = [...sel].sort();
-  const guardar = ({ tipo, desde, hasta }) => {
+  const guardar = ({ tipo, desde, hasta, duracionMs }) => {
     setError('');
-    return crearJustificativo(decodeURIComponent(rut), { tipo, desde, hasta })
+    return crearJustificativo(decodeURIComponent(rut), { tipo, desde, hasta, duracionMs })
       .then(() => cargar())
       .then(() => {
         setMensaje('Justificativo guardado correctamente.');

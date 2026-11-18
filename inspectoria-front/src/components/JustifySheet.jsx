@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Panel inferior: se abre sobre la misma pantalla, así no hay que cambiar de ventana.
 export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', hasta = '', onGuardar }) {
   const [tipo, setTipo] = useState('Certificado médico');
   const [fechas, setFechas] = useState({ desde, hasta });
+  const inicioRegistro = useRef(null);
   useEffect(() => {
-    if (abierto) setFechas({ desde, hasta });
+    if (abierto) {
+      setFechas({ desde, hasta });
+      inicioRegistro.current = performance.now();
+    } else {
+      inicioRegistro.current = null;
+    }
   }, [abierto, desde, hasta]);
   if (!abierto) return null;
   const mal = fechas.desde && fechas.hasta && fechas.hasta < fechas.desde;
@@ -14,7 +20,15 @@ export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', h
   return (
     <div className="overlay" onClick={onCerrar}>
       <form className="sheet" onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => { e.preventDefault(); if (ok) onGuardar?.({ tipo, ...fechas }); }}>
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ok) {
+            const duracionMs = inicioRegistro.current == null
+              ? null
+              : Math.round(performance.now() - inicioRegistro.current);
+            onGuardar?.({ tipo, ...fechas, duracionMs });
+          }
+        }}>
         <div className="grab" />
         <h2>Nuevo justificativo</h2>
         {resumen && <p className="muted">{resumen}</p>}
