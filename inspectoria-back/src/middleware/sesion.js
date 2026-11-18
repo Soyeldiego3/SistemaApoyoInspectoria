@@ -8,7 +8,7 @@ function requerirSesion(req, res, next) {
   // Además de la firma del token, la cuenta debe seguir existiendo y activa (así se puede dar de baja a alguien).
   const u = sesion && usuarios.buscar(sesion.usuario);
   if (!u || !u.activo) return res.status(401).json({ error: 'Sesión no iniciada o vencida.' });
-  req.usuario = u.nombre;
+  req.usuario = { id: u.id, nombre: u.nombre, rol: u.rol, activo: !!u.activo };
   next();
 }
 

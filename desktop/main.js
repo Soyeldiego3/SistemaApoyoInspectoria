@@ -75,9 +75,22 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: !app.isPackaged,
     },
   });
 
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    try {
+      const destino = new URL(url);
+      const permitido = destino.protocol === 'http:' &&
+        destino.hostname === '127.0.0.1' &&
+        destino.port === String(PORT);
+      if (!permitido) event.preventDefault();
+    } catch {
+      event.preventDefault();
+    }
+  });
   mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
   // mainWindow.webContents.openDevTools(); // solo para depurar
 

@@ -10,8 +10,12 @@ const redRouter = require('./routes/red');
 const usuariosRouter = require('./routes/usuarios');
 const auditoriaRouter = require('./routes/auditoria');
 const dashboardRouter = require('./routes/dashboard');
+const setupRouter = require('./routes/setup');
+const cuentaRouter = require('./routes/cuenta');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
+const { requerirRol } = require('./middleware/roles');
+const { requerirLoopback } = require('./middleware/loopback');
 const { origenPermitido } = require('./services/red');
 const path = require('path');
 const { abrirDb } = require('./services/asistencia');
@@ -26,7 +30,21 @@ try {
 const app = express();
 const FRONT_DIR = process.env.FRONT_DIR || path.join(__dirname, '..', '..', 'desktop', 'front-dist');
 
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", 'http://127.0.0.1:3005'],
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
 app.use(cors({ origin: (origin, callback) => callback(null, origenPermitido(origin)) }));
 app.use(express.json());
 app.use('/api', requerirRedLocal);
@@ -43,11 +61,13 @@ const loginRateLimit = rateLimit({
 });
 
 app.use('/api/auth', loginRateLimit, authRouter);
+app.use('/api/setup', requerirLoopback, setupRouter);
 app.use('/api/asistencia', requerirSesion, asistenciaRouter);
 app.use('/api/sync', requerirSesion, syncRouter);
-app.use('/api/portal', requerirSesion, portalRouter);
+app.use('/api/portal', requerirSesion, requerirLoopback, portalRouter);
 app.use('/api/red', requerirSesion, redRouter);
-app.use('/api/usuarios', requerirSesion, usuariosRouter);
+app.use('/api/cuenta', requerirSesion, cuentaRouter);
+app.use('/api/usuarios', requerirSesion, requerirRol('admin'), usuariosRouter);
 app.use('/api/auditoria', requerirSesion, auditoriaRouter);
 app.use('/api/dashboard', requerirSesion, dashboardRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {

@@ -8,9 +8,17 @@ import StudentDetail from './pages/StudentDetail.jsx';
 import Sync from './pages/Sync.jsx';
 import Users from './pages/Users.jsx';
 import { getToken } from './api.js';
+import { useAuth } from './auth.jsx';
 
 function Protected({ children }) {
+  const { cargando } = useAuth();
+  if (cargando) return null;
   return getToken() ? children : <Navigate to="/login" replace />;
+}
+
+function AdminGuard({ children }) {
+  const { esAdmin } = useAuth();
+  return esAdmin ? children : <Navigate to="/" replace state={{ aviso: 'No tienes permiso para esta acción.' }} />;
 }
 
 export default function App() {
@@ -23,7 +31,7 @@ export default function App() {
         <Route path="alumnos" element={<Students />} />
         <Route path="alumnos/:rut" element={<StudentDetail />} />
         <Route path="datos" element={<Sync />} />
-        <Route path="usuarios" element={<Users />} />
+        <Route path="usuarios" element={<AdminGuard><Users /></AdminGuard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

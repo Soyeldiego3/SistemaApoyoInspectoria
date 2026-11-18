@@ -51,6 +51,28 @@ export async function login(usuario, password) {
   return data;
 }
 
+export function getSetupEstado() {
+  return request('/setup/estado');
+}
+
+export function crearAdministrador(datos) {
+  return request('/setup/admin', {
+    method: 'POST',
+    body: JSON.stringify(datos),
+  });
+}
+
+export function getCuenta() {
+  return request('/cuenta');
+}
+
+export function cambiarPasswordCuenta(actual, nueva) {
+  return request('/cuenta/password', {
+    method: 'PUT',
+    body: JSON.stringify({ actual, nueva }),
+  });
+}
+
 export function getAlumnos() {
   return request('/asistencia/alumnos');
 }
@@ -133,9 +155,22 @@ export function getUsuarios() {
   return request('/usuarios');
 }
 
-export function crearUsuario(nombre, password) {
+export function crearUsuario(nombre, password, rol = 'inspector', activo = true) {
   return request('/usuarios', {
     method: 'POST',
-    body: JSON.stringify({ nombre, password }),
+    body: JSON.stringify({ nombre, password, rol, activo }),
+  });
+}
+
+export function editarUsuario(nombre, cambios) {
+  return request(`/usuarios/${encodeURIComponent(nombre)}`, {
+    method: 'PUT',
+    body: JSON.stringify(cambios),
+  });
+}
+
+export function eliminarUsuario(nombre) {
+  return request(`/usuarios/${encodeURIComponent(nombre)}`, {
+    method: 'DELETE',
   });
 }

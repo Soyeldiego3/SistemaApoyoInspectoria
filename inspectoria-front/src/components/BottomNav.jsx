@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { LayoutGrid, ClipboardCheck, Users, Database, UserPlus } from 'lucide-react';
+import { useAuth } from '../auth.jsx';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
@@ -10,9 +11,11 @@ const tabs = [
 ];
 
 export default function BottomNav() {
+  const { esAdmin } = useAuth();
+  const visibleTabs = tabs.filter((tab) => tab.to !== '/usuarios' || esAdmin);
   return (
     <nav className="nav" aria-label="Navegación principal">
-      {tabs.map(({ to, label, Icon, end }) => (
+      {visibleTabs.map(({ to, label, Icon, end }) => (
         <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? 'active' : '')}>
           <Icon size={22} /><span>{label}</span>
         </NavLink>

@@ -1,5 +1,5 @@
 // Administra los usuarios de la plataforma (guardados en data/usuarios.db).
-//   npm run usuario -- crear <nombre> [contraseña]
+//   npm run usuario -- crear <nombre> [contraseña] [admin|inspector]
 //   npm run usuario -- clave <nombre> [contraseña]
 //   npm run usuario -- desactivar <nombre>     |  activar <nombre>
 //   npm run usuario -- eliminar <nombre>
@@ -9,7 +9,8 @@ const readline = require('readline');
 const usuarios = require('../db/usuarios');
 const { hashearPassword } = require('../services/auth');
 
-const [, , accion, nombre, claveArg] = process.argv;
+//   npm run usuario -- rol <nombre> <admin|inspector>
+const [, , accion, nombre, claveArg, rolArg] = process.argv;
 const MIN = 8;
 
 function pedirClave() {
@@ -33,8 +34,24 @@ async function claveValida() {
     case 'crear': {
       necesitaNombre();
       if (usuarios.buscar(nombre)) falla(`El usuario "${nombre}" ya existe.`);
-      usuarios.crear(nombre, hashearPassword(await claveValida()));
-      console.log(`Usuario "${nombre}" creado.`);
+      const rol = rolArg || 'inspector';
+      if (!['admin', 'inspector'].includes(rol)) falla('El rol debe ser admin o inspector.');
+      usuarios.crear(nombre, hashearPassword(await claveValida()), rol);
+      console.log(`Usuario "${nombre}" creado con rol "${rol}".`);
+      break;
+    }
+    case 'rol': {
+      necesitaNombre();
+      const nuevoRol = rolArg || claveArg;
+      if (!nuevoRol || !['admin', 'inspector'].includes(nuevoRol)) falla('Indica el rol: admin o inspector.');
+      const usuario = usuarios.buscar(nombre);
+      if (!usuario) falla(`El usuario "${nombre}" no existe.`);
+      if (usuario.activo && usuario.rol === 'admin' && nuevoRol === 'inspector'
+        && usuarios.cantidadAdminsActivos() <= 1) {
+        falla('No puedes degradar al último administrador activo.');
+      }
+      if (!usuarios.cambiarRol(nombre, nuevoRol)) falla(`El usuario "${nombre}" no existe.`);
+      console.log(`Usuario "${nombre}" ahora tiene rol "${nuevoRol}".`);
       break;
     }
     case 'clave': {
@@ -47,12 +64,24 @@ async function claveValida() {
     case 'activar':
     case 'desactivar': {
       necesitaNombre();
+      const usuario = usuarios.buscar(nombre);
+      if (!usuario) falla(`El usuario "${nombre}" no existe.`);
+      if (usuario.activo && usuario.rol === 'admin' && accion === 'desactivar'
+        && usuarios.cantidadAdminsActivos() <= 1) {
+        falla('No puedes desactivar al último administrador activo.');
+      }
       if (!usuarios.activar(nombre, accion === 'activar')) falla(`El usuario "${nombre}" no existe.`);
       console.log(`Usuario "${nombre}" ${accion === 'activar' ? 'activado' : 'desactivado'}.`);
       break;
     }
     case 'eliminar': {
       necesitaNombre();
+      const usuario = usuarios.buscar(nombre);
+      if (!usuario) falla(`El usuario "${nombre}" no existe.`);
+      if (usuario.activo && usuario.rol === 'admin'
+        && usuarios.cantidadAdminsActivos() <= 1) {
+        falla('No puedes eliminar al último administrador activo.');
+      }
       if (!usuarios.eliminar(nombre)) falla(`El usuario "${nombre}" no existe.`);
       console.log(`Usuario "${nombre}" eliminado.`);
       break;
@@ -60,10 +89,10 @@ async function claveValida() {
     case 'listar': {
       const l = usuarios.listar();
       if (!l.length) console.log('No hay usuarios.');
-      l.forEach((u) => console.log(`${u.nombre.padEnd(20)} ${u.activo ? 'activo' : 'desactivado'}  creado ${u.creado_en}`));
+      l.forEach((u) => console.log(`${u.nombre.padEnd(20)} ${u.rol.padEnd(10)} ${u.activo ? 'activo' : 'desactivado'}  creado ${u.creado_en}`));
       break;
     }
     default:
-      falla('Uso: npm run usuario -- <crear|clave|activar|desactivar|eliminar|listar> [nombre] [contraseña]');
+      falla('Uso: npm run usuario -- <crear|clave|activar|desactivar|eliminar|listar|rol> [nombre] [contraseña|rol]');
   }
 })();

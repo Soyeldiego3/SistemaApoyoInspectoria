@@ -31,7 +31,7 @@ const HASH_FALSO = hashearPassword('relleno');
 function verificarCredenciales(nombre, password) {
   const u = usuarios.buscar(nombre);
   const ok = passwordValida(String(password), u ? u.password_hash : HASH_FALSO);
-  return u && u.activo && ok ? { id: u.id, nombre: u.nombre } : null;
+  return u && u.activo && ok ? { id: u.id, nombre: u.nombre, rol: u.rol } : null;
 }
 
 function crearToken(usuario) {
@@ -61,4 +61,14 @@ function registrarFallo(ip) {
 }
 const limpiarFallos = (ip) => fallos.delete(ip);
 
-module.exports = { hashearPassword, verificarCredenciales, crearToken, leerToken, bloqueado, registrarFallo, limpiarFallos, DURACION_MS };
+module.exports = {
+  hashearPassword,
+  passwordValida,
+  verificarCredenciales,
+  crearToken,
+  leerToken,
+  bloqueado,
+  registrarFallo,
+  limpiarFallos,
+  DURACION_MS,
+};

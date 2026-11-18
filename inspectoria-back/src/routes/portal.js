@@ -1,7 +1,7 @@
 const express = require('express');
 const credenciales = require('../services/credenciales_portal');
 const { probarConexion } = require('../extractores/sesion_portal');
-const { esLoopback } = require('../services/red');
+const auditoria = require('../services/auditoria_sistema');
 
 const router = express.Router();
 const CODIGOS_PORTAL = new Set([
@@ -26,17 +26,6 @@ function respuestaError(res, error) {
   return res.status(estado)
     .json({ ok: false, codigo, mensaje: mensajes[codigo] });
 }
-
-router.use((req, res, next) => {
-  if (!esLoopback(req.socket.remoteAddress)) {
-    return res.status(403).json({
-      ok: false,
-      codigo: 'ACCESO_DENEGADO',
-      mensaje: 'Las credenciales del portal solo se administran desde el PC.',
-    });
-  }
-  next();
-});
 
 router.get('/credenciales', (req, res) => {
   try {
@@ -103,6 +92,7 @@ router.put('/credenciales', async (req, res) => {
   try {
     await probarConexion({ usuario: usuario.trim(), pass, urlPortal });
     credenciales.guardar({ usuario: usuario.trim(), pass, urlPortal });
+    auditoria.registrar('portal.credenciales_modificadas', req.usuario.nombre, {});
     return res.json({ ok: true, mensaje: 'Credenciales guardadas.' });
   } catch (error) {
     return respuestaError(res, error);
@@ -112,6 +102,7 @@ router.put('/credenciales', async (req, res) => {
 router.delete('/credenciales', (req, res) => {
   try {
     credenciales.borrar();
+    auditoria.registrar('portal.credenciales_eliminadas', req.usuario.nombre, {});
     res.json({ ok: true, mensaje: 'Credenciales eliminadas.' });
   } catch (error) {
     console.error('Error al borrar credenciales del portal:', error.message);

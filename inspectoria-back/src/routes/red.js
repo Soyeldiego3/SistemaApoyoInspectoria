@@ -1,6 +1,8 @@
 const express = require('express');
-const { esLoopback, obtenerInfo, cambiarRed } = require('../services/red');
+const { obtenerInfo, cambiarRed } = require('../services/red');
 const { reiniciarServidor } = require('../services/servidor');
+const { requerirLoopback } = require('../middleware/loopback');
+const auditoria = require('../services/auditoria_sistema');
 
 const router = express.Router();
 
@@ -13,16 +15,14 @@ router.get('/info', (req, res) => {
   }
 });
 
-router.put('/config', (req, res) => {
-  if (!esLoopback(req.socket.remoteAddress)) {
-    return res.status(403).json({ error: 'Esta configuración solo puede cambiarse desde el PC.' });
-  }
+router.put('/config', requerirLoopback, (req, res) => {
   if (typeof req.body?.habilitada !== 'boolean') {
     return res.status(400).json({ error: 'La configuración de red es inválida.' });
   }
 
   try {
     const info = cambiarRed(req.body.habilitada);
+    auditoria.registrar('red.acceso_modificado', req.usuario.nombre, { habilitada: req.body.habilitada });
     res.json(info);
     setImmediate(() => reiniciarServidor().catch((error) => {
       console.error('Error al reiniciar el servidor de red:', error.message);

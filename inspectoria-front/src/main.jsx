@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 //import { BrowserRouter } from 'react-router-dom';
 import { HashRouter } from 'react-router-dom';
 import App from './App.jsx';
+import { AuthProvider } from './auth.jsx';
 import './index.css';
 
 class ErrorBoundary extends React.Component {
@@ -35,8 +36,10 @@ class ErrorBoundary extends React.Component {
 
 createRoot(document.getElementById('root')).render(
   <HashRouter>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <AuthProvider>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </AuthProvider>
   </HashRouter>
 );

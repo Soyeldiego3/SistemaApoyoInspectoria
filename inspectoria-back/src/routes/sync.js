@@ -13,6 +13,7 @@ const configuracion = require('../services/configuracion');
 const router = express.Router();
 const URL_PORTAL_CONFIGURADA = process.env.PORTAL_URL;
 let dbWritable;
+let sincronizacionEnCurso = false;
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -45,6 +46,14 @@ router.get('/cursos', (req, res) => {
 });
 
 router.post('/descargar-e-importar', async (req, res) => {
+  if (sincronizacionEnCurso) {
+    return res.status(409).json({
+      ok: false,
+      codigo: 'SINCRONIZACION_EN_CURSO',
+      mensaje: 'Ya hay una sincronización en curso.',
+    });
+  }
+  sincronizacionEnCurso = true;
   let sesion;
   let credencialesGuardadas = false;
   let credencialesUsadas;
@@ -193,6 +202,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     });
   } finally {
     await sesion?.cerrar();
+    sincronizacionEnCurso = false;
   }
 });
 
