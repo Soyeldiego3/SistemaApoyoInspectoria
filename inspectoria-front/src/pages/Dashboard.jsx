@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [redCargando, setRedCargando] = useState(false);
   const [syncEstado, setSyncEstado] = useState('cargando');
   const [syncMensaje, setSyncMensaje] = useState('');
+  const [syncCodigo, setSyncCodigo] = useState('');
   const [datosDashboard, setDatosDashboard] = useState(null);
   const [errorDashboard, setErrorDashboard] = useState('');
 
@@ -56,12 +57,14 @@ export default function Dashboard() {
         }
         await iniciarSync();
         if (activo) {
+          setSyncCodigo('');
           setSyncEstado('ok');
           setSyncMensaje('Datos sincronizados correctamente.');
           await cargarDashboard(() => activo);
         }
       } catch (error) {
         if (!activo) return;
+        setSyncCodigo(error.code || '');
         if (error.code === 'CREDENCIALES_REQUERIDAS' || error.code === 'LOGIN_RECHAZADO') {
           setSyncEstado('error');
           setSyncMensaje(error.message || 'No se pudo iniciar sesión en el portal.');
@@ -156,9 +159,15 @@ export default function Dashboard() {
               syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
               'Sin datos sincronizados todavía'}
           </p>
-          <Link to="/datos" state={{ abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error' }}
+          <Link to="/datos" state={{
+            abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error',
+            accionModal: syncEstado === 'error' ? 'guardar' : 'sync',
+            mensaje: syncEstado === 'error' ? syncMensaje : '',
+          }}
             className="btn dark" style={{ width: 'auto' }}>
-            {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />Reintentar</> :
+            {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />
+              {syncCodigo === 'LOGIN_RECHAZADO' || syncCodigo === 'CREDENCIALES_REQUERIDAS'
+                ? 'Actualizar credenciales' : 'Reintentar'}</> :
               syncEstado === 'requiere' ? 'Configurar credenciales' : 'Sincronizar'}
           </Link>
         </div>

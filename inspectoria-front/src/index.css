@@ -107,6 +107,8 @@ a { color: inherit; text-decoration: none; }
   .content > input.input { max-width: 480px; }
   .content > .seg { max-width: 420px; }
   .actionbar { bottom: 16px; justify-self: end; width: 320px; }
+  .audit-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .audit-filter-grid select:last-child { grid-column: auto; }
 
   /* El panel de justificativo es un cajón lateral: la lista sigue visible */
   .overlay { align-items: stretch; justify-content: flex-end; }
@@ -126,4 +128,16 @@ a { color: inherit; text-decoration: none; }
 .curso { padding: 10px 14px; }
 .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .iconbtn { border: 0; cursor: pointer; color: var(--muted); }
+.audit-header { display: flex; align-items: center; justify-content: space-between; }
+.audit-header h2 { font-size: 1.05rem; }
+.audit-sync { width: 44px; height: 44px; border-radius: 14px; background: var(--card-2); display: grid; place-items: center; }
+.audit-spin { animation: audit-spin .8s linear infinite; }
+@keyframes audit-spin { to { transform: rotate(360deg); } }
+.audit-filters { display: grid; gap: 10px; padding: 12px; }
+.audit-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.audit-filter-grid select { min-width: 0; padding: 11px 8px; border-radius: 12px; font-size: .82rem; }
+.audit-filter-grid select:last-child { grid-column: 1 / -1; }
+.audit-custom-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.audit-custom-dates .input { min-width: 0; padding: 10px 8px; }
+.audit-last-sync { text-align: right; }
 @media (min-width: 900px) { .filterbar { grid-template-columns: 1fr 220px; align-items: center; } }

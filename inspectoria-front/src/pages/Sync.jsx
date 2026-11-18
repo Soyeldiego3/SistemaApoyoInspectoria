@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, FileUp, RefreshCw } from 'lucide-react';
 import {
@@ -10,9 +10,9 @@ import {
 } from '../api.js';
 
 const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó las credenciales.',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal.',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge. Instálalo o verifica que esté disponible.',
+  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
+  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
+  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
   ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
   CREDENCIALES_REQUERIDAS: 'Las credenciales del portal son necesarias para sincronizar.',
 };
@@ -31,6 +31,11 @@ export default function Sync() {
   const [estadoPortal, setEstadoPortal] = useState('cargando');
   const [portal, setPortal] = useState(null);
   const [accionModal, setAccionModal] = useState('sync'); // sync | probar | guardar
+  const [procesando, setProcesando] = useState(false);
+  const [mensajeModal, setMensajeModal] = useState('');
+  const passRef = useRef(null);
+  const controllerRef = useRef(null);
+  const timeoutRef = useRef(null);
   const [credenciales, setCredenciales] = useState({
     usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false,
   });
@@ -60,21 +65,32 @@ export default function Sync() {
   useEffect(() => {
     if (location.state?.abrirCredenciales) {
       setMostrarCredenciales(true);
+      if (location.state.accionModal) setAccionModal(location.state.accionModal);
       if (location.state.mensaje) {
         setMensaje(location.state.mensaje);
         setEstado('error');
+        setMensajeModal(location.state.mensaje);
       }
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [location.pathname, location.state, navigate]);
 
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    controllerRef.current?.abort();
+  }, []);
+
   const mostrarError = (e) => {
     const codigo = e.code;
-    const mensaje = !esPc && MENSAJES_PORTAL[codigo]
-      ? 'No se pudo sincronizar. Intenta nuevamente desde el PC.'
-      : (MENSAJES_PORTAL[codigo] || (e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message));
+    const mensaje = MENSAJES_PORTAL[codigo]
+      || (e instanceof TypeError ? 'No hay conexión con el servidor local.' : (e.message || 'Ocurrió un error inesperado.'));
     setMensaje(mensaje);
     setEstado('error');
+    setMensajeModal(mensaje);
+    setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+    if (mostrarCredenciales) {
+      setTimeout(() => passRef.current?.focus(), 0);
+    }
   };
 
   const abrirModal = (accion) => {
@@ -82,6 +98,8 @@ export default function Sync() {
     setMostrarCredenciales(true);
     setMostrarPass(false);
     setMensaje('');
+    setMensajeModal('');
+    setProcesando(false);
     setCredenciales((actuales) => ({
       ...actuales,
       usuario: portal?.usuario || actuales.usuario,
@@ -92,9 +110,21 @@ export default function Sync() {
 
   const sincronizar = async (datos) => {
     setEstado('cargando');
+    setProcesando(true);
     setMensaje('');
+    setMensajeModal('');
+    controllerRef.current?.abort();
+    controllerRef.current = new AbortController();
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      controllerRef.current?.abort();
+      setProcesando(false);
+      setEstado('error');
+      setMensaje('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
+      setMensajeModal('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
+    }, 45000);
     try {
-      const data = await iniciarSync(datos);
+      const data = await iniciarSync(datos, { signal: controllerRef.current.signal });
       const errores = data.errores?.length || 0;
       const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
       setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleErrores}`);
@@ -102,12 +132,22 @@ export default function Sync() {
       setMostrarCredenciales(false);
       if (datos?.recordar) setGuardadas(true);
     } catch (e) {
-      if (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO') {
-        if (esPc) abrirModal('sync');
+      if (controllerRef.current?.signal.aborted) {
+        setMensajeModal('Operación cancelada o detenida por timeout.');
+        setMensaje('Operación cancelada o detenida por timeout.');
+        setEstado('error');
         setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+      } else {
+        if (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO') {
+          if (esPc) abrirModal('sync');
+          setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+        }
+        mostrarError(e);
       }
-      mostrarError(e);
     } finally {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      setProcesando(false);
       setEstado((actual) => actual === 'cargando' ? 'inactivo' : actual);
     }
   };
@@ -144,6 +184,7 @@ export default function Sync() {
     if (!credenciales.usuario.trim() || !credenciales.pass) {
       setMensaje('Ingresa el usuario y la contraseña del portal.');
       setEstado('error');
+      setMensajeModal('Ingresa el usuario y la contraseña del portal.');
       return;
     }
     const datos = {
@@ -153,25 +194,65 @@ export default function Sync() {
     };
     if (accionModal === 'probar') {
       setEstado('cargando');
+      setProcesando(true);
+      setMensajeModal('');
+      controllerRef.current?.abort();
+      controllerRef.current = new AbortController();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        controllerRef.current?.abort();
+      }, 45000);
       try {
-        await probarCredencialesPortal(datos);
+        await probarCredencialesPortal(datos, { signal: controllerRef.current.signal });
         setMensaje('Conexión al portal verificada.');
         setEstado('ok');
+        setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
       } catch (error) {
-        mostrarError(error);
+        if (controllerRef.current?.signal.aborted) {
+          setMensajeModal('Operación cancelada o detenida por timeout.');
+          setMensaje('Operación cancelada o detenida por timeout.');
+          setEstado('error');
+        } else {
+          mostrarError(error);
+        }
+      } finally {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        setProcesando(false);
+        setCredenciales((actuales) => ({ ...actuales, pass: '' }));
       }
     } else if (accionModal === 'guardar') {
       setEstado('cargando');
+      setProcesando(true);
+      setMensajeModal('');
+      controllerRef.current?.abort();
+      controllerRef.current = new AbortController();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        controllerRef.current?.abort();
+      }, 45000);
       try {
-        await guardarCredencialesPortal(datos);
+        await guardarCredencialesPortal(datos, { signal: controllerRef.current.signal });
         setMensaje('Credenciales guardadas y verificadas.');
         setEstado('ok');
+        setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
       } catch (error) {
-        mostrarError(error);
+        if (controllerRef.current?.signal.aborted) {
+          setMensajeModal('Operación cancelada o detenida por timeout.');
+          setMensaje('Operación cancelada o detenida por timeout.');
+          setEstado('error');
+        } else {
+          mostrarError(error);
+        }
+      } finally {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+        setProcesando(false);
+        setCredenciales((actuales) => ({ ...actuales, pass: '' }));
       }
     } else {
       await sincronizar({
@@ -179,8 +260,20 @@ export default function Sync() {
         recordar: credenciales.recordar,
         enMemoria: credenciales.enMemoria,
       });
+      setCredenciales((actuales) => ({ ...actuales, pass: '' }));
     }
+  };
+
+  const cancelarOperacion = () => {
+    controllerRef.current?.abort();
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setProcesando(false);
+    setEstado('error');
+    setMensajeModal('Operación cancelada.');
+    setMensaje('Operación cancelada.');
     setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+    setTimeout(() => passRef.current?.focus(), 0);
   };
 
   const olvidar = async () => {
@@ -279,7 +372,10 @@ export default function Sync() {
             <div className="grab" />
             <div className="row">
               <h2 id="portal-title">Credenciales del portal</h2>
-              <button type="button" className="iconbtn" onClick={() => setMostrarCredenciales(false)} aria-label="Cerrar">×</button>
+              <button type="button" className="iconbtn" onClick={() => {
+                if (procesando) cancelarOperacion();
+                setMostrarCredenciales(false);
+              }} aria-label="Cerrar">×</button>
             </div>
             <p className="muted">
               {accionModal === 'probar' ? 'Comprueba el acceso sin guardar cambios.' :
@@ -297,6 +393,7 @@ export default function Sync() {
               <div style={{ position: 'relative' }}>
                 <input id="portal-pass" className="input" type={mostrarPass ? 'text' : 'password'}
                   value={credenciales.pass}
+                  ref={passRef}
                   onChange={(e) => setCredenciales({ ...credenciales, pass: e.target.value })}
                   autoComplete="current-password" style={{ paddingRight: 48 }} />
                 <button type="button" className="iconbtn" onClick={() => setMostrarPass(!mostrarPass)}
@@ -328,12 +425,13 @@ export default function Sync() {
                 )}
               </>
             )}
-            {mensaje && estado === 'error' && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{mensaje}</p>}
-            <button className="btn" disabled={estado === 'cargando'}>
-              {estado === 'cargando' ? 'Procesando…' :
+            {mensajeModal && estado === 'error' && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{mensajeModal}</p>}
+            <button className="btn" disabled={procesando}>
+              {procesando ? 'Procesando…' :
                 accionModal === 'probar' ? 'Probar conexión' :
                 accionModal === 'guardar' ? 'Guardar y verificar' : 'Sincronizar'}
             </button>
+            {procesando && <button type="button" className="btn ghost" onClick={cancelarOperacion}>Cancelar</button>}
             {guardadas && <button type="button" className="btn ghost" onClick={olvidar}>Olvidar credenciales guardadas</button>}
           </form>
         </div>

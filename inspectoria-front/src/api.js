@@ -16,17 +16,19 @@ async function request(path, options = {}) {
     },
   });
 
-  // Sesión vencida o inválida: se limpia y se vuelve al login (salvo en el propio login, que muestra su error).
-  if (response.status === 401 && path !== '/auth/login') {
-    cerrarSesion();
-    window.location.hash = '#/login';
-    throw new Error('Tu sesión venció. Inicia sesión de nuevo.');
-  }
-
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json')
     ? await response.json()
     : await response.text();
+
+  // Solo una 401 de una ruta del sistema invalida la sesión.
+  // Las rutas del portal y sincronización pueden reportar 422/502/503/504 sin cerrar sesión.
+  const rutaPortal = path.startsWith('/portal/') || path.startsWith('/sync/');
+  if (response.status === 401 && path !== '/auth/login' && !rutaPortal && !data?.codigo) {
+    cerrarSesion();
+    window.location.hash = '#/login';
+    throw new Error('Tu sesión venció. Inicia sesión de nuevo.');
+  }
 
   if (!response.ok) {
     const message = typeof data === 'object' && (data?.mensaje || data?.error)
@@ -61,12 +63,16 @@ export function getCursos() {
   return request('/cursos');
 }
 
-export function getAuditoriaPrioridad(params = {}) {
-  return request(`/auditoria/prioridad?${new URLSearchParams(params)}`);
+export function getAuditoriaEstado(options = {}) {
+  return request('/auditoria/estado', { signal: options.signal });
 }
 
-export function getAuditoriaCursos(params = {}) {
-  return request(`/auditoria/cursos?${new URLSearchParams(params)}`);
+export function getAuditoriaPrioridad(params = {}, options = {}) {
+  return request(`/auditoria/prioridad?${new URLSearchParams(params)}`, { signal: options.signal });
+}
+
+export function getAuditoriaCursos(params = {}, options = {}) {
+  return request(`/auditoria/cursos?${new URLSearchParams(params)}`, { signal: options.signal });
 }
 
 export function getAlumno(rut) {
@@ -80,10 +86,11 @@ export function crearJustificativo(rut, datos) {
   });
 }
 
-export function iniciarSync(credenciales) {
+export function iniciarSync(credenciales, options = {}) {
   return request('/sync/descargar-e-importar', {
     method: 'POST',
     body: JSON.stringify(credenciales || {}),
+    signal: options.signal,
   });
 }
 
@@ -95,17 +102,19 @@ export function olvidarCredencialesPortal() {
   return request('/portal/credenciales', { method: 'DELETE' });
 }
 
-export function guardarCredencialesPortal(credenciales) {
+export function guardarCredencialesPortal(credenciales, options = {}) {
   return request('/portal/credenciales', {
     method: 'PUT',
     body: JSON.stringify(credenciales),
+    signal: options.signal,
   });
 }
 
-export function probarCredencialesPortal(credenciales) {
+export function probarCredencialesPortal(credenciales, options = {}) {
   return request('/portal/probar', {
     method: 'POST',
     body: JSON.stringify(credenciales || {}),
+    signal: options.signal,
   });
 }
 

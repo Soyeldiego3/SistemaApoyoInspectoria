@@ -5,7 +5,7 @@ const { DB_PATH } = require('../db/ruta');
 const MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
   agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
 // Helpers compartidos con atrasos.js: ambas fuentes deben normalizar IGUAL
-const normalizarRut = r => String(r).replace(/\./g, '').trim();          // 25.534.846-9 -> 25534846-9
+const normalizarRut = r => String(r).replace(/\./g, '').replace(/\s/g, '').trim(); // 25.534.846-9 -> 25534846-9
 const normalizarCurso = c => String(c).replace(/\s+/g, ' ').trim();
 function separarNombre(n) {                                              // "Aravena Ruiz, Trinidad"
   const [apellidos, ...resto] = String(n).split(',');

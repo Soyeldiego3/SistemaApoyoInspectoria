@@ -3,7 +3,11 @@ const path = require('path');
 const { DATA_DIR } = require('../db/ruta');
 
 const FILE_PATH = path.join(DATA_DIR, 'app.config.json');
-const DEFAULTS = { redHabilitada: false, limpiarAlCerrar: true };
+const DEFAULTS = {
+  redHabilitada: false,
+  limpiarAlCerrar: true,
+  ultimaSincronizacionExitosa: null,
+};
 
 function leer() {
   if (!fs.existsSync(FILE_PATH)) return { ...DEFAULTS };

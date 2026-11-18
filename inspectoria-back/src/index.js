@@ -6,6 +6,16 @@ const { leer } = require('./services/configuracion');
 
 iniciarServidor();
 
+process.on('unhandledRejection', (reason) => {
+  const mensaje = reason?.code || reason?.name || 'Rechazo de promesa no manejado';
+  console.error('Promesa no manejada:', mensaje);
+});
+
+process.on('uncaughtException', (error) => {
+  const mensaje = error?.code || error?.name || 'Excepción no controlada';
+  console.error('Excepción no controlada:', mensaje);
+});
+
 process.on('message', (message) => {
   if (message?.type !== 'limpiar-datos') return;
   try {

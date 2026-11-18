@@ -8,6 +8,7 @@ const { parsearAsistencia, abrirDb, guardar, transaccion } = require('../service
 const { parsearAtrasos, guardarAtrasos } = require('../services/atrasos');
 const credencialesPortal = require('../services/credenciales_portal');
 const { borrarDatosSincronizados } = require('../services/limpieza');
+const configuracion = require('../services/configuracion');
 
 const router = express.Router();
 const URL_PORTAL_CONFIGURADA = process.env.PORTAL_URL;
@@ -146,6 +147,7 @@ router.post('/descargar-e-importar', async (req, res) => {
       }
     });
 
+    configuracion.guardar({ ultimaSincronizacionExitosa: new Date().toISOString() });
     responder(200, {
       mensaje: 'Proceso completado',
       mes,
@@ -158,8 +160,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     }, true);
   } catch (error) {
     if (error.code === 'LOGIN_RECHAZADO') {
-      if (credencialesGuardadas && credencialesUsadas) credencialesPortal.registrarFallo(credencialesUsadas);
-      return responder(401, {
+      return responder(422, {
         ok: false,
         codigo: 'LOGIN_RECHAZADO',
         mensaje: 'El portal rechazó las credenciales.',
@@ -171,7 +172,10 @@ router.post('/descargar-e-importar', async (req, res) => {
         NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge disponible.',
         ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
       };
-      return responder(502, { ok: false, codigo: error.code, mensaje: mensajes[error.code] });
+      const estado = error.code === 'NAVEGADOR_NO_DISPONIBLE' ? 503
+        : error.code === 'ESTRUCTURA_CAMBIADA' ? 502
+        : 502;
+      return responder(estado, { ok: false, codigo: error.code, mensaje: mensajes[error.code] });
     }
     if (error.code === 'SYNC_FAILED') {
       console.error('Error de extracción:', error.cause?.message || error.message);

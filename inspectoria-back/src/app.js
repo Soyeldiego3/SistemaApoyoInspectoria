@@ -14,6 +14,14 @@ const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { origenPermitido } = require('./services/red');
 const path = require('path');
+const { abrirDb } = require('./services/asistencia');
+
+try {
+  const dbInicial = abrirDb();
+  dbInicial.close();
+} catch (error) {
+  console.error('No se pudo inicializar la base de datos:', error.message);
+}
 
 const app = express();
 const FRONT_DIR = process.env.FRONT_DIR || path.join(__dirname, '..', '..', 'desktop', 'front-dist');

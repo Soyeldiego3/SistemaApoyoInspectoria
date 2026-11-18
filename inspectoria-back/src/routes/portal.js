@@ -16,10 +16,14 @@ function respuestaError(res, error) {
   const mensajes = {
     LOGIN_RECHAZADO: 'El portal rechazó las credenciales.',
     PORTAL_INACCESIBLE: 'No se pudo conectar con el portal.',
-    NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge disponible.',
+    NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge.',
     ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo completar la operación.',
   };
-  return res.status(codigo === 'LOGIN_RECHAZADO' ? 401 : 502)
+  const estado = codigo === 'LOGIN_RECHAZADO' ? 422
+    : codigo === 'NAVEGADOR_NO_DISPONIBLE' ? 503
+    : codigo === 'ESTRUCTURA_CAMBIADA' ? 502
+    : 502;
+  return res.status(estado)
     .json({ ok: false, codigo, mensaje: mensajes[codigo] });
 }
 
@@ -82,12 +86,11 @@ router.post('/probar', async (req, res) => {
     credenciales.registrarExito(datos);
     return res.json({ ok: true, mensaje: 'Conexión al portal verificada.' });
   } catch (error) {
-    if (error.code === 'LOGIN_RECHAZADO' && !proporcionadas) credenciales.registrarFallo(datos);
     return respuestaError(res, error);
   }
 });
 
-router.put('/credenciales', (req, res) => {
+router.put('/credenciales', async (req, res) => {
   const { usuario, pass, urlPortal } = req.body ?? {};
   if (typeof usuario !== 'string' || !usuario.trim() || typeof pass !== 'string' || !pass) {
     return res.status(400).json({
@@ -97,12 +100,13 @@ router.put('/credenciales', (req, res) => {
     });
   }
 
-  probarConexion({ usuario: usuario.trim(), pass, urlPortal })
-    .then(() => {
-      credenciales.guardar({ usuario: usuario.trim(), pass, urlPortal });
-      res.json({ ok: true, mensaje: 'Credenciales guardadas.' });
-    })
-    .catch((error) => respuestaError(res, error));
+  try {
+    await probarConexion({ usuario: usuario.trim(), pass, urlPortal });
+    credenciales.guardar({ usuario: usuario.trim(), pass, urlPortal });
+    return res.json({ ok: true, mensaje: 'Credenciales guardadas.' });
+  } catch (error) {
+    return respuestaError(res, error);
+  }
 });
 
 router.delete('/credenciales', (req, res) => {

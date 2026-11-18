@@ -1,9 +1,16 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { RefreshCw, Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
-import { getAlumnos } from '../api.js';
+import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
+
+const MENSAJES_PORTAL = {
+  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
+  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
+  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
+  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información',
+};
 
 // Forma esperada de cada alumno (la API la entregará):
 // { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
@@ -25,6 +32,8 @@ const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toL
 
 export default function Students() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const parametros = new URLSearchParams(location.search);
   const [q, setQ] = useState('');
   const [filtro, setFiltro] = useState(() => (
@@ -39,16 +48,78 @@ export default function Students() {
   ));
   const [alumnos, setAlumnos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [sincronizando, setSincronizando] = useState(false);
   const [error, setError] = useState('');
 
+  const cargarAlumnos = async () => {
+    setCargando(true);
+    setError('');
+    try {
+      const data = await getAlumnos();
+      setAlumnos(data.alumnos);
+    } catch (e) {
+      setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message);
+    } finally {
+      setCargando(false);
+    }
+  };
+
   useEffect(() => {
-    getAlumnos()
-      .then((data) => {
-        setAlumnos(data.alumnos);
-      })
-      .catch((e) => setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message))
-      .finally(() => setCargando(false));
+    cargarAlumnos();
   }, []);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    setError('');
+    try {
+      if (!esPc) {
+        await iniciarSync();
+        await cargarAlumnos();
+        return;
+      }
+      const credenciales = await getCredencialesPortal();
+      if (!credenciales.guardadas && !credenciales.enMemoria) {
+        navigate('/datos', {
+          replace: false,
+          state: {
+            abrirCredenciales: true,
+            accionModal: 'guardar',
+            mensaje: 'Configura las credenciales del portal para sincronizar.',
+          },
+        });
+        return;
+      }
+      if (credenciales.invalidas) {
+        navigate('/datos', {
+          replace: false,
+          state: {
+            abrirCredenciales: true,
+            accionModal: 'guardar',
+            mensaje: 'Las credenciales guardadas están inválidas. Actualízalas para continuar.',
+          },
+        });
+        return;
+      }
+      await iniciarSync();
+      await cargarAlumnos();
+    } catch (e) {
+      if (!esPc && (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO')) {
+        setError('Sincroniza desde el PC.');
+      } else if (MENSAJES_PORTAL[e.code]) {
+        setError(MENSAJES_PORTAL[e.code]);
+        if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
+          navigate('/datos', {
+            replace: false,
+            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
+          });
+        }
+      } else {
+        setError(e.message || 'Ocurrió un error inesperado.');
+      }
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   const cursos = useMemo(() => [...new Set(alumnos.map((a) => a.curso))].sort(), [alumnos]);
 
@@ -86,6 +157,15 @@ export default function Students() {
 
   return (
     <>
+      <div className="audit-header">
+        <h2>Alumnos</h2>
+        <button type="button" className="iconbtn audit-sync" onClick={sincronizar} disabled={sincronizando}
+          aria-label={sincronizando ? 'Sincronizando datos' : 'Sincronizar datos'} title="Sincronizar">
+          <RefreshCw size={20} className={sincronizando ? 'audit-spin' : ''} />
+        </button>
+      </div>
+
+      {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'rgba(255,90,95,.12)' }}>{error}</p>}
       <div className="searchbox">
         <Search size={18} />
         <input className="input" type="search" placeholder="RUT, nombre o curso" value={q}
@@ -106,7 +186,22 @@ export default function Students() {
       </div>
 
       {lista.length === 0
-        ? <EmptyState texto={error || (cargando ? 'Cargando alumnos…' : alumnos.length ? 'Ningún alumno coincide con los filtros.' : 'Aún no hay alumnos. Sincroniza un curso primero.')} />
+        ? cargando
+          ? <EmptyState texto="Cargando alumnos…" />
+          : !alumnos.length
+            ? (
+              <section className="card" role="status">
+                <h2>Aún no hay alumnos</h2>
+                <p className="muted" style={{ margin: '8px 0 14px' }}>
+                  Sincroniza el portal para cargar los cursos y alumnos.
+                </p>
+                <button className="btn" type="button" onClick={sincronizar} disabled={sincronizando}>
+                  <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />
+                  {sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}
+                </button>
+              </section>
+            )
+            : <EmptyState texto={error || 'Ningún alumno coincide con los filtros.'} filas={3} />
         : <div className="list cols">{lista.map((a) => (
             <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`}
               state={{ returnTo: rutaRetorno }}

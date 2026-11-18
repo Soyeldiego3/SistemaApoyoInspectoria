@@ -14,6 +14,8 @@ const {
   PESO_RACHA_AUSENCIAS,
   PESO_TENDENCIA,
 } = require('../config/auditoria');
+const configuracion = require('../services/configuracion');
+const { obtenerRangosFuentes } = require('../services/incidentes');
 
 const router = express.Router();
 
@@ -60,6 +62,38 @@ function calcularRachaAusencias(registros) {
   }
   return resultado;
 }
+
+router.get('/estado', (req, res) => {
+  try {
+    const rangos = obtenerRangosFuentes(db);
+    let ultimaSincronizacionExitosa = null;
+    try {
+      ultimaSincronizacionExitosa = configuracion.leer().ultimaSincronizacionExitosa || null;
+    } catch (error) {
+      console.error('No se pudo leer la fecha de sincronización:', error.message);
+    }
+
+    if (!ultimaSincronizacionExitosa) {
+      const ultimaExitosa = db.prepare(`
+        SELECT fecha
+        FROM sync_ejecucion
+        WHERE exitosa = 1
+        ORDER BY fecha DESC
+        LIMIT 1
+      `).get();
+      if (ultimaExitosa) ultimaSincronizacionExitosa = `${ultimaExitosa.fecha}T00:00:00.000Z`;
+    }
+
+    res.json({
+      ultimaFechaAsistencia: rangos.asistencia.hasta || null,
+      ultimaFechaAtrasos: rangos.atrasos.hasta || null,
+      ultimaSincronizacionExitosa,
+    });
+  } catch (error) {
+    console.error('Error al consultar estado de auditoría:', error.message);
+    res.status(500).json({ error: 'No se pudo consultar el estado de los datos.' });
+  }
+});
 
 router.get('/prioridad', (req, res) => {
   try {

@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/conexion');
-const { abrirDb } = require('../services/asistencia');
+const { abrirDb, normalizarRut } = require('../services/asistencia');
 
 const router = express.Router();
 let dbWritable;
@@ -46,6 +46,7 @@ router.get('/alumnos', (req, res) => {
 
 router.get('/alumnos/:rut', (req, res) => {
   try {
+    const rut = normalizarRut(req.params.rut);
     const alumno = db.prepare(`
       SELECT a.rut, a.nombres, a.apellidos, c.nombre AS curso, m.anio
       FROM alumno a
@@ -53,7 +54,7 @@ router.get('/alumnos/:rut', (req, res) => {
       JOIN curso c ON c.id_curso = m.id_curso
       WHERE a.rut = ? AND m.anio = (SELECT MAX(anio) FROM matricula)
       LIMIT 1
-    `).get(req.params.rut);
+    `).get(rut);
 
     if (!alumno) return res.status(404).json({ error: 'No se encontró el alumno.' });
 
@@ -125,7 +126,8 @@ router.post('/alumnos/:rut/justificativos', (req, res) => {
       return res.status(400).json({ error: 'La duración del registro no es válida.' });
     }
 
-    const alumno = db.prepare('SELECT rut FROM alumno WHERE rut = ?').get(req.params.rut);
+    const rut = normalizarRut(req.params.rut);
+    const alumno = db.prepare('SELECT rut FROM alumno WHERE rut = ?').get(rut);
     if (!alumno) return res.status(404).json({ error: 'No se encontró el alumno.' });
 
     const insert = obtenerDbWritable().prepare(`
