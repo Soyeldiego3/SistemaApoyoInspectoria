@@ -31,6 +31,7 @@ function startBackend() {
       PORT: String(PORT),
       DATA_DIR: app.getPath('userData'),
       FRONT_DIR: path.join(process.resourcesPath, 'front-dist'),
+      PLAYWRIGHT_BROWSERS_PATH: path.join(process.resourcesPath, 'browsers'), // <- nueva línea
       NODE_ENV: 'production',
     },
   });

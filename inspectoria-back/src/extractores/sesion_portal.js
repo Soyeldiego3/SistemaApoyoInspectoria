@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium, firefox } = require('playwright');
 
 const URL_PORTAL_POR_DEFECTO = 'http://50.19.6.170:8080';
 const TIMEOUT_NAVEGACION = 15000;
@@ -18,37 +18,70 @@ function errorPortal(codigo, mensaje, causa) {
   return error;
 }
 
-async function abrirNavegador() {
+// Lanza un navegador con límite de tiempo. Si vence, lo cierra cuando termine de abrir.
+async function lanzarConTimeout(lanzar, nombre) {
+  let temporizador;
+  let vencido = false;
+
+  const lanzamiento = lanzar();
+  lanzamiento
+    .then((browser) => {
+      if (vencido) {
+        browser.close().catch(() => {
+          browser.process()?.kill();
+        });
+      }
+    })
+    .catch(() => {});
+
+  const timeout = new Promise((_, rechazar) => {
+    temporizador = setTimeout(() => {
+      vencido = true;
+      rechazar(errorPortal(
+        'NAVEGADOR_NO_DISPONIBLE',
+        `${nombre} no respondió al abrirse.`,
+      ));
+    }, TIMEOUT_LAUNCH);
+  });
+
   try {
-    let temporizador;
-    let vencido = false;
-    const lanzamiento = chromium.launch({ channel: 'msedge', headless: true }); //modificar a false para ver el navegador en vivo
-    lanzamiento.then((browser) => {
-      if (vencido) browser.close().catch(() => {
-        browser.process()?.kill();
-      });
-    }).catch(() => {});
-    const timeout = new Promise((_, rechazar) => {
-      temporizador = setTimeout(() => {
-        vencido = true;
-        rechazar(errorPortal(
-          'NAVEGADOR_NO_DISPONIBLE',
-          'No se encontró Microsoft Edge disponible.',
-        ));
-      }, TIMEOUT_LAUNCH);
-    });
-    try {
-      return await Promise.race([lanzamiento, timeout]);
-    } finally {
-      clearTimeout(temporizador);
-    }
-  } catch (error) {
-    throw error.code === 'NAVEGADOR_NO_DISPONIBLE' ? error : errorPortal(
-      'NAVEGADOR_NO_DISPONIBLE',
-      'No se encontró Microsoft Edge disponible para abrir el portal.',
-      error,
-    );
+    return await Promise.race([lanzamiento, timeout]);
+  } finally {
+    clearTimeout(temporizador);
   }
+}
+
+// Lista de navegadores a intentar, en orden de preferencia.
+function candidatosNavegador() {
+  const candidatos = [];
+  // Edge solo se intenta fuera de Linux
+  if (process.platform !== 'linux') {
+    candidatos.push({
+      nombre: 'Microsoft Edge',
+      lanzar: () => chromium.launch({ channel: 'noexiste', headless: false }),
+    });
+  }
+  candidatos.push({
+    nombre: 'Firefox',
+    lanzar: () => firefox.launch({ headless: false }),
+  });
+  return candidatos;
+}
+
+async function abrirNavegador() {
+  const fallos = [];
+  for (const { nombre, lanzar } of candidatosNavegador()) {
+    try {
+      return await lanzarConTimeout(lanzar, nombre);
+    } catch (error) {
+      fallos.push(`${nombre}: ${error.message}`);
+    }
+  }
+  throw errorPortal(
+    'NAVEGADOR_NO_DISPONIBLE',
+    'No se encontró un navegador disponible (Microsoft Edge o Firefox) para abrir el portal.',
+    new Error(fallos.join(' | ')),
+  );
 }
 
 async function cerrarBrowser(browser) {

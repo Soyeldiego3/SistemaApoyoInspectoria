@@ -39,6 +39,14 @@ execSync(`npx @electron/rebuild -f -w better-sqlite3 -v ${electronVersion} -m "$
   stdio: 'inherit',
 });
 
+// 4. Descargar Firefox (respaldo de Edge) preparacion para linux y Windows
+const browsersDir = path.join(root, 'browsers');
+execSync('npx playwright install firefox', {
+  cwd: dest,
+  stdio: 'inherit',
+  env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsersDir },
+});
+
 // electron-builder excluye node_modules cuando está en la raíz del recurso.
 // En src sí se conserva y Node lo resuelve desde index.js.
 fs.renameSync(path.join(dest, 'node_modules'), path.join(dest, 'src', 'node_modules'));

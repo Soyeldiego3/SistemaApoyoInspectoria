@@ -21,4 +21,14 @@ Esta API automatiza el login, la navegación y la extracción de planillas de as
 1. crear archivo ./inspectoria-back/data/inspectoria.db
 
 2. crear usuario usando el comando dentro de ./inspectoria-back/ 
-```bash npm run usuario -- crear <usuario>
+   ```bash 
+   npm run usuario -- crear <usuario>
+
+
+# Modificar moodo headless para Playwright
+
+1. ir a inspectoria-back/src/extractores/
+
+2. modificar en sesion_portal.js 
+   ```bash 
+   const lanzamiento = chromium.launch({ channel: 'msedge', headless: false }); //modificar a false para ver el navegador en vivo, true para ocultarlo y ejecutar en segundo plano

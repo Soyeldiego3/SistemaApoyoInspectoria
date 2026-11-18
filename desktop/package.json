@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Sistema de Apoyo Inspectoría",
   "main": "main.js",
-  "author": "Tu nombre",
+  "author": "Diego Saravia, Victor Jara",
   "scripts": {
     "start": "electron .",
     "build:front": "npm --prefix ../inspectoria-front run build",
@@ -45,10 +45,18 @@
       {
         "from": "front-dist",
         "to": "front-dist"
+      },
+      {
+        "from": "browsers",
+        "to": "browsers"
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "portable"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
     }
   }
 }
