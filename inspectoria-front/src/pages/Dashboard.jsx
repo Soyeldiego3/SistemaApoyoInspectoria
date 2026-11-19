@@ -1,18 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Copy, RefreshCw } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
-import { getCredencialesPortal, getDashboard, getRedInfo, iniciarSync, setRedEnabled } from '../api.js';
+import { getCredencialesPortal, getDashboard, iniciarSync } from '../api.js';
 
 let sincronizacionAutomaticaEjecutada = false;
 
 export default function Dashboard() {
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-  const [red, setRed] = useState(null);
-  const [redCargando, setRedCargando] = useState(false);
   const [syncEstado, setSyncEstado] = useState('cargando');
   const [syncMensaje, setSyncMensaje] = useState('');
   const [syncCodigo, setSyncCodigo] = useState('');
@@ -79,73 +76,8 @@ export default function Dashboard() {
     return () => { activo = false; };
   }, [esPc]);
 
-  useEffect(() => {
-    if (!esPc) return undefined;
-    let activo = true;
-    getRedInfo()
-      .then((info) => { if (activo) setRed(info); })
-      .catch((error) => {
-        if (activo) setSyncMensaje(error.message || 'No se pudo consultar el acceso en red.');
-      });
-    return () => { activo = false; };
-  }, [esPc]);
-
-  const cambiarRed = async (habilitada) => {
-    setRedCargando(true);
-    try {
-      const info = await setRedEnabled(habilitada);
-      setRed(info);
-    } catch (error) {
-      setSyncMensaje(error.message || 'No se pudo cambiar el acceso en red.');
-      setSyncEstado('error');
-    } finally {
-      setRedCargando(false);
-    }
-  };
-
-  const copiarUrl = async () => {
-    if (!red?.principal) return;
-    try {
-      await navigator.clipboard.writeText(red.principal);
-      setSyncMensaje('URL copiada.');
-    } catch {
-      setSyncMensaje('No se pudo copiar la URL. Cópiala manualmente.');
-    }
-  };
-
   return (
     <div className="dash">
-      {esPc && (
-        <section className="card">
-          <div className="row">
-            <div>
-              <h2>Conectar desde el teléfono</h2>
-              <p className="muted">El PC y el teléfono deben estar en la misma red.</p>
-            </div>
-            <label className="row" style={{ gap: 8 }}>
-              <input type="checkbox" checked={Boolean(red?.habilitada)} disabled={redCargando || !red}
-                onChange={(e) => cambiarRed(e.target.checked)} />
-              Acceso en red
-            </label>
-          </div>
-          {red?.habilitada && red.principal ? (
-            <div className="row" style={{ alignItems: 'center', marginTop: 16 }}>
-              <div>
-                <p className="big" style={{ fontSize: '1.2rem', margin: 0 }}>{red.principal}</p>
-                <button className="btn ghost" onClick={copiarUrl} style={{ marginTop: 10 }}>
-                  <Copy size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Copiar URL
-                </button>
-              </div>
-              <QRCodeCanvas value={red.principal} size={140} includeMargin />
-            </div>
-          ) : red ? (
-            <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar una URL y un código QR.</p>
-          ) : (
-            <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
-          )}
-        </section>
-      )}
-
       <section className="card blue">
         <p className="muted">Esta semana</p>
         <div className="big" style={{ margin: '14px 0' }}>

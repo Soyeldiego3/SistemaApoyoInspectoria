@@ -12,6 +12,7 @@ const auditoriaRouter = require('./routes/auditoria');
 const dashboardRouter = require('./routes/dashboard');
 const setupRouter = require('./routes/setup');
 const cuentaRouter = require('./routes/cuenta');
+const ajustesRouter = require('./routes/ajustes');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { requerirRol } = require('./middleware/roles');
@@ -42,8 +43,11 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       frameAncestors: ["'none'"],
+      // La app se sirve solo por http en la red local
+      upgradeInsecureRequests: null,
     },
   },
+  hsts: false,
 }));
 app.use(cors({ origin: (origin, callback) => callback(null, origenPermitido(origin)) }));
 app.use(express.json());
@@ -70,6 +74,7 @@ app.use('/api/cuenta', requerirSesion, cuentaRouter);
 app.use('/api/usuarios', requerirSesion, requerirRol('admin'), usuariosRouter);
 app.use('/api/auditoria', requerirSesion, auditoriaRouter);
 app.use('/api/dashboard', requerirSesion, dashboardRouter);
+app.use('/api/ajustes', requerirSesion, requerirLoopback, requerirRol('admin'), ajustesRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {
     const cursos = require('./db/conexion').prepare(`

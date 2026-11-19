@@ -1,4 +1,5 @@
 const { chromium, firefox } = require('playwright');
+const configuracion = require('../services/configuracion');
 
 const URL_PORTAL_POR_DEFECTO = 'http://50.19.6.170:8080';
 const TIMEOUT_NAVEGACION = 15000;
@@ -51,19 +52,29 @@ async function lanzarConTimeout(lanzar, nombre) {
   }
 }
 
+// Lee el modo headless desde la configuración; si falla, muestra el navegador.
+function modoHeadless() {
+  try {
+    return configuracion.leer().navegadorHeadless === true;
+  } catch {
+    return false;
+  }
+}
+
 // Lista de navegadores a intentar, en orden de preferencia.
 function candidatosNavegador() {
+  const headless = modoHeadless();
   const candidatos = [];
   // Edge solo se intenta fuera de Linux
   if (process.platform !== 'linux') {
     candidatos.push({
       nombre: 'Microsoft Edge',
-      lanzar: () => chromium.launch({ channel: 'msedge', headless: false }),
+      lanzar: () => chromium.launch({ channel: 'msedge', headless }),
     });
   }
   candidatos.push({
     nombre: 'Firefox',
-    lanzar: () => firefox.launch({ headless: false }),
+    lanzar: () => firefox.launch({ headless }),
   });
   return candidatos;
 }

@@ -7,6 +7,7 @@ import Students from './pages/Students.jsx';
 import StudentDetail from './pages/StudentDetail.jsx';
 import Sync from './pages/Sync.jsx';
 import Users from './pages/Users.jsx';
+import Settings from './pages/Settings.jsx';
 import { getToken } from './api.js';
 import { useAuth } from './auth.jsx';
 
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="alumnos/:rut" element={<StudentDetail />} />
         <Route path="datos" element={<Sync />} />
         <Route path="usuarios" element={<AdminGuard><Users /></AdminGuard>} />
+        <Route path="ajustes" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

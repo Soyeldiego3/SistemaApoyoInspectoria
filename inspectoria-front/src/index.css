@@ -70,7 +70,21 @@ a { color: inherit; text-decoration: none; }
 .seg button { flex: 1; border: 0; background: none; padding: 10px 6px; border-radius: 10px; font-size: .85rem; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--card-2); color: var(--text); font-weight: 600; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
-.sheet { width: 100%; max-width: 480px; background: var(--card); border-radius: 26px 26px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+.sheet { width: 100%; max-width: 480px; min-height: 70dvh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; align-content: start; background: var(--card); border-radius: 26px 26px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+/* Selector desplegable propio: los textos largos hacen salto de línea en vez de cortarse */
+.selector { position: relative; }
+.selector-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  text-align: left; line-height: 1.3; cursor: pointer; font: inherit; color: var(--text); }
+.selector-btn svg { flex: none; color: var(--muted); transition: transform .15s; }
+.selector-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.selector-list { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; margin: 0; padding: 6px;
+  list-style: none; background: var(--card-2); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45); max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
+.selector-list li { padding: 10px 12px 10px 30px; border-radius: 10px; font-size: .88rem; line-height: 1.3;
+  cursor: pointer; position: relative; }
+.selector-list li.act { background: rgba(255,255,255,.06); }
+.selector-list li.sel { color: var(--accent); font-weight: 600; }
+.selector-list li.sel::before { content: '✓'; position: absolute; left: 11px; }
 .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--line); justify-self: center; }
 .actionbar { position: fixed; bottom: calc(68px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 0 16px; z-index: 5; }
 
@@ -96,6 +110,7 @@ a { color: inherit; text-decoration: none; }
     flex-direction: column; justify-content: flex-start; gap: 6px; padding: 28px 14px; border-top: 0; border-right: 1px solid var(--line); }
   .nav a { display: flex; align-items: center; gap: 12px; font-size: .95rem; padding: 12px 14px; border-radius: 14px; min-width: 0; }
   .nav a.active { background: var(--card); }
+  .nav a.nav-bottom { margin-top: auto; }
 
   .kpis { grid-template-columns: repeat(3, 1fr); }
   .kpis > :last-child { grid-column: auto; }
@@ -112,7 +127,7 @@ a { color: inherit; text-decoration: none; }
 
   /* El panel de justificativo es un cajón lateral: la lista sigue visible */
   .overlay { align-items: stretch; justify-content: flex-end; }
-  .sheet { max-width: 420px; height: 100%; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
+  .sheet { max-width: 480px; height: 100%; max-height: none; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
   .grab { display: none; }
 }
 

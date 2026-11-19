@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, Menu, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -73,6 +73,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    backgroundColor: '#1c1c1e', // evita el destello blanco al abrir
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -92,6 +93,34 @@ function createWindow() {
       event.preventDefault();
     }
   });
+  // Navegación sin menú: Alt+←/→ y botones laterales del mouse
+  const historial = mainWindow.webContents.navigationHistory;
+  const irAtras = () => { if (historial.canGoBack()) historial.goBack(); };
+  const irAdelante = () => { if (historial.canGoForward()) historial.goForward(); };
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    if (input.alt && input.key === 'ArrowLeft') {
+      irAtras();
+      event.preventDefault();
+    } else if (input.alt && input.key === 'ArrowRight') {
+      irAdelante();
+      event.preventDefault();
+    } else if (!app.isPackaged && input.key === 'F5') {
+      // Solo en desarrollo: recargar y DevTools (el menú ya no los trae)
+      mainWindow.webContents.reload();
+      event.preventDefault();
+    } else if (!app.isPackaged && input.key === 'F12') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.on('app-command', (_event, comando) => {
+    if (comando === 'browser-backward') irAtras();
+    if (comando === 'browser-forward') irAdelante();
+  });
+
   mainWindow.loadURL(`http://127.0.0.1:${PORT}`);
   // mainWindow.webContents.openDevTools(); // solo para depurar
 
@@ -99,6 +128,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null); // quita la barra File/Edit/View/Window
+  nativeTheme.themeSource = 'dark'; // barra de título oscura
   startBackend();
   try {
     await waitForBackend();

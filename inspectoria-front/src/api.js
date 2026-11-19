@@ -151,6 +151,17 @@ export function setRedEnabled(habilitada) {
   });
 }
 
+export function getAjustes() {
+  return request('/ajustes');
+}
+
+export function setNavegadorHeadless(headless) {
+  return request('/ajustes/navegador', {
+    method: 'PUT',
+    body: JSON.stringify({ headless }),
+  });
+}
+
 export function getUsuarios() {
   return request('/usuarios');
 }

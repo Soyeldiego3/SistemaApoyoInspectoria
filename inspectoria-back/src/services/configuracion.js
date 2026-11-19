@@ -7,6 +7,8 @@ const DEFAULTS = {
   redHabilitada: false,
   limpiarAlCerrar: true,
   ultimaSincronizacionExitosa: null,
+  // false = se ve la ventana del navegador (útil para debugging)
+  navegadorHeadless: false,
 };
 
 function leer() {
