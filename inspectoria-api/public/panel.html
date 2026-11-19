@@ -5,89 +5,349 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de datos - Inspectoría</title>
 <style>
-:root{color-scheme:light;--bg:#f4f7f9;--card:#fff;--ink:#14212e;--muted:#5e6d78;--line:#d6dee4;--accent:#1f4e8c;--side:#0b1626;--ok:#1c7a46;--bad:#b3261e}
+:root{color-scheme:light;--bg:#f4f7f9;--card:#fff;--ink:#14212e;--muted:#5e6d78;--line:#d6dee4;--accent:#1f4e8c;--side:#0b1626;--ok:#1c7a46;--ok-soft:#e1f2e8;--bad:#b3261e;--bad-soft:#fbe6e4;--warn:#8f5400;--warn-soft:#fbefd9}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-button,input{font:inherit}button{cursor:pointer}.layout{min-height:100vh;display:grid;grid-template-columns:260px 1fr}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.layout{min-height:100vh;display:grid;grid-template-columns:260px 1fr}
 aside{padding:24px 16px;background:var(--side);color:#fff}aside h1{margin:0 4px 4px;font-size:1.2rem}aside p{margin:0 4px 20px;color:#b8c5d1;font-size:.85rem}
+.nav-label{margin:18px 4px 6px;color:#8fa1b3;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .tables{display:grid;gap:6px}.table-btn{display:flex;justify-content:space-between;width:100%;padding:10px 12px;border:0;border-radius:6px;background:transparent;color:#fff;text-align:left}.table-btn:hover,.table-btn.active{background:#18293f}.table-btn span{color:#b8c5d1}
-main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}.top h2{margin:0;font-size:1.6rem}.top p{margin:4px 0;color:var(--muted)}.top-actions{display:flex;align-items:center;gap:12px}
-.link{color:var(--accent);font-weight:600;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px}
-.filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}.field{min-width:180px;flex:1}.field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}
-.btn{padding:9px 14px;border:0;border-radius:5px;background:var(--accent);color:#fff;font-weight:600}.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
-.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:6px}table{width:100%;border-collapse:collapse;min-width:620px}th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{background:#f4f7f9;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}th button{border:0;background:none;color:inherit;font-weight:700;text-transform:inherit;letter-spacing:inherit;padding:0}
+main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}.top h2{margin:0;font-size:1.6rem}.top p{margin:4px 0;color:var(--muted)}.top-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.link{color:var(--accent);font-weight:600;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px}.card+.card{margin-top:16px}.card h3{margin:0 0 12px;font-size:1.05rem}
+.filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:16px}.field{min-width:150px;flex:1}.field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}
+.btn{padding:9px 14px;border:0;border-radius:5px;background:var(--accent);color:#fff;font-weight:600}.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}.btn.danger{background:var(--bad)}.btn:disabled{opacity:.5;cursor:default}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:6px}table{width:100%;border-collapse:collapse;min-width:620px}th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{background:#f4f7f9;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}th button{border:0;background:none;color:inherit;font-weight:700;text-transform:inherit;letter-spacing:inherit;padding:0}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .pager{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:var(--muted);font-size:.9rem}.pager .buttons{display:flex;gap:8px}.pager button{padding:6px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}.pager button:disabled{opacity:.45;cursor:default}
-.empty{padding:32px;text-align:center;color:var(--muted)}.error{padding:12px;margin-bottom:14px;border-radius:6px;background:#fbe6e4;color:var(--bad)}.success{padding:12px;margin-bottom:14px;border-radius:6px;background:#e1f2e8;color:var(--ok)}.row-actions{display:flex;gap:6px}.row-actions button{padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}.row-actions .danger{color:var(--bad)}.check{width:16px;height:16px}.modal-backdrop{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:#0b162699}.modal{width:min(620px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;padding:22px;box-shadow:0 12px 40px #0005}.modal h3{margin:0 0 16px}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.modal-field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.modal-field input,.modal-field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}@media(max-width:720px){.layout{grid-template-columns:1fr}aside{padding:16px}.tables{display:flex;overflow:auto}.table-btn{min-width:140px}.top{display:block}.top .link{display:inline-block;margin-top:12px}.modal-grid{grid-template-columns:1fr}}
+.empty{padding:32px;text-align:center;color:var(--muted)}.error{padding:12px;margin-bottom:14px;border-radius:6px;background:var(--bad-soft);color:var(--bad)}.success{padding:12px;margin-bottom:14px;border-radius:6px;background:var(--ok-soft);color:var(--ok)}.row-actions{display:flex;gap:6px}.row-actions button{padding:5px 8px;border:1px solid var(--line);border-radius:4px;background:#fff}.row-actions .danger{color:var(--bad)}.check{width:16px;height:16px}
+.modal-backdrop{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:#0b162699}.modal{width:min(640px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:8px;padding:22px;box-shadow:0 12px 40px #0005}.modal h3{margin:0 0 16px}.modal h4{margin:18px 0 8px;font-size:.95rem}.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.modal-field label{display:block;margin-bottom:4px;color:var(--muted);font-size:.82rem;font-weight:600}.modal-field input,.modal-field select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#fff}.modal-field input[type=checkbox]{width:auto}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.full{grid-column:1/-1}.hint{margin:4px 0 0;color:var(--muted);font-size:.82rem}
+.chip{display:inline-block;padding:1px 10px;border:1px solid currentColor;border-radius:99px;font-size:.78rem;font-weight:600}.c-P{color:var(--ok);background:var(--ok-soft)}.c-A{color:var(--bad);background:var(--bad-soft)}.c-T{color:var(--warn);background:var(--warn-soft)}.c-N{color:var(--muted)}
+.muted{color:var(--muted)}.low{color:var(--bad);font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;margin-bottom:16px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}.stats div{padding:12px 14px;background:#fff}.stats b{display:block;font-size:1.4rem}.stats span{color:var(--muted);font-size:.8rem}
+.result{margin-top:14px;padding:12px;border-radius:6px;background:var(--bg);font-size:.9rem;white-space:pre-wrap}
+@media(max-width:720px){.layout{grid-template-columns:1fr}aside{padding:16px}.tables{display:flex;overflow:auto}.table-btn{min-width:140px}.top{display:block}.top-actions{margin-top:12px}.modal-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="layout">
-<aside><h1>Panel de Inspectoría</h1><p>Lectura de inspectoria.sqlite</p><nav class="tables" id="tables" aria-label="Tablas"></nav></aside>
+<aside>
+  <h1>Panel de Inspectoría</h1><p>Lectura de inspectoria.sqlite</p>
+  <div class="nav-label">Gestión</div>
+  <nav class="tables" id="views" aria-label="Vistas">
+    <button class="table-btn" data-view="registros">Registros por día</button>
+    <button class="table-btn" data-view="resumen">Resumen por mes</button>
+    <button class="table-btn" data-view="coherencia">Coherencia <span id="cohCount"></span></button>
+  </nav>
+  <div class="nav-label">Tablas (avanzado)</div>
+  <nav class="tables" id="tables" aria-label="Tablas"></nav>
+</aside>
 <main>
-  <div class="top"><div><h2 id="title">Selecciona una tabla</h2><p id="subtitle">Consulta los registros actuales de la base de datos.</p></div><div class="top-actions"><button class="btn" id="generateIntegrated">Generar datos integrados</button><a class="link" href="index.html" target="_blank" rel="noopener">Ver página scrapeable ↗</a></div></div>
-  <section class="card" id="content"><div class="empty">Cargando tablas…</div></section>
+  <div class="top"><div><h2 id="title">Panel</h2><p id="subtitle"></p></div><div class="top-actions"><button class="btn" id="generate">Generar datos</button><button class="btn secondary" id="deleteRange">Borrar rango</button><a class="link" href="index.html" target="_blank" rel="noopener">Ver página scrapeable ↗</a></div></div>
+  <section id="content"><div class="card empty">Cargando…</div></section>
 </main>
 </div>
 <script>
 (() => {
-  const state = { table: null, schema: null, page: 1, limit: 25, q: '', order: '', dir: 'asc', selected: new Set() };
-  let rowsRequest = 0;
   const $ = selector => document.querySelector(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const get = async url => { const response = await fetch(url); if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`); return response.json(); };
   const send = async (url, options) => { const response = await fetch(url, { headers: {'Content-Type':'application/json'}, ...options }); if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`); return response.json(); };
   const notifyError = error => { $('#content').innerHTML = `<div class="error">${esc(error.message)}</div>`; };
-  const keyOf = row => JSON.stringify((state.schema.primaryKey || []).length ? state.schema.primaryKey.map(name => row[name]) : [row.__rowid]);
-  const keyObject = row => (state.schema.primaryKey || []).length ? Object.fromEntries(state.schema.primaryKey.map(name => [name, row[name]])) : {__rowid: row.__rowid};
-  const isPk = name => (state.schema.primaryKey || []).includes(name);
-  const saveView = () => {
-    const params = new URLSearchParams({ tabla: state.table || '', pagina: state.page, q: state.q, orden: state.order, dir: state.dir });
-    history.replaceState(null, '', `${location.pathname}?${params}`);
-  };
-  const restoreView = () => {
-    const params = new URLSearchParams(location.search);
-    return { table: params.get('tabla'), page: Math.max(1, Number(params.get('pagina')) || 1), q: params.get('q') || '', order: params.get('orden') || '', dir: params.get('dir') === 'desc' ? 'desc' : 'asc' };
-  };
-
-  async function loadTables() {
-    const tables = await get('/admin/api/tablas');
-    $('#tables').innerHTML = tables.map(item => `<button class="table-btn" data-table="${esc(item.name)}">${esc(item.name)} <span>${item.count}</span></button>`).join('');
-    if (tables.length) {
-      const saved = restoreView();
-      await selectTable(tables.some(item => item.name === saved.table) ? saved.table : tables[0].name, saved);
-    }
-  }
-
-  async function selectTable(table, saved = {}) {
-    state.table = table; state.schema = await get(`/admin/api/tablas/${encodeURIComponent(table)}/esquema`);
-    state.page = saved.page || 1; state.q = saved.q || ''; state.order = saved.order || state.schema.columns[0]?.name || ''; state.dir = saved.dir || 'asc'; state.selected.clear();
-    document.querySelectorAll('.table-btn').forEach(button => button.classList.toggle('active', button.dataset.table === table));
-    $('#title').textContent = table; $('#subtitle').textContent = 'Administra los registros almacenados en esta tabla.';
-    await loadRows();
-  }
-
-  async function openIntegratedGenerator() {
-    const today = new Date();
-    const end = today.toISOString().slice(0, 10);
-    today.setDate(today.getDate() - 60);
-    const start = today.toISOString().slice(0, 10);
+  const fmt = f => f ? f.split('-').reverse().join('/') : '';
+  const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const addDays = (iso, n) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const pct = (a, b) => b ? (100 * a / b).toFixed(1).replace('.', ',') + ' %' : '–';
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const mesTxt = ym => { const [y, m] = ym.split('-'); return `${MESES[m - 1][0].toUpperCase()}${MESES[m - 1].slice(1)} ${y}`; };
+  const ESTADOS = { P: 'Presente', A: 'Ausente', T: 'Atraso', '': 'Sin registro' };
+  const chip = e => `<span class="chip c-${e || 'N'}">${ESTADOS[e || '']}</span>`;
+  const MOTIVOS_RETIRO = ['Control médico', 'Malestar de salud', 'Trámite familiar', 'Emergencia familiar', 'Hora dental'];
+  const QUIEN_RETIRA = ['Apoderado titular', 'Apoderado suplente', 'Madre', 'Padre', 'Abuela'];
+  const MOTIVOS_REINGRESO = ['Control médico', 'Retraso de transporte', 'Trámite familiar', 'Examen médico'];
+  const options = (list, sel) => list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(sel ?? '') ? ' selected' : ''}>${esc(l)}</option>`).join('');
+  const datalist = (id, list) => `<datalist id="${id}">${list.map(v => `<option value="${esc(v)}">`).join('')}</datalist>`;
+  const modal = html => {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `<form class="modal" id="integratedForm"><h3>Generar datos integrados</h3><p>Genera alumnos y registros relacionados. No modifica cursos, meses ni feriados.</p><div class="modal-grid"><div class="modal-field"><label>Nuevos alumnos</label><input name="nuevosAlumnos" type="number" min="0" max="500" value="10"></div><div class="modal-field"><label>Semilla opcional</label><input name="seed" type="number"></div><div class="modal-field"><label>Desde</label><input name="desde" type="date" value="${start}" required></div><div class="modal-field"><label>Hasta</label><input name="hasta" type="date" value="${end}" required></div><div class="modal-field"><label>Asistencias por alumno</label><input name="asistenciasPorAlumno" type="number" min="1" max="10000" value="40" required></div><div class="modal-field"><label>Atrasos por alumno</label><input name="atrasosPorAlumno" type="number" min="1" max="100" value="3" required></div><div class="modal-field"><label>Retiros por alumno</label><input name="retirosPorAlumno" type="number" min="1" max="100" value="2" required></div><div class="modal-field"><label>Reingresos por alumno</label><input name="reingresosPorAlumno" type="number" min="1" max="100" value="2" required></div><div class="modal-field" style="grid-column:1/-1"><label><input name="saltarNoLectivos" type="checkbox" checked> Saltar fines de semana y feriados</label></div></div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelIntegrated">Cancelar</button><button class="btn">Generar datos</button></div></form>`;
+    backdrop.innerHTML = html;
     document.body.appendChild(backdrop);
-    $('#cancelIntegrated').addEventListener('click', () => backdrop.remove());
-    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
-    $('#integratedForm').addEventListener('submit', async event => {
+    backdrop.addEventListener('click', event => { if (event.target === backdrop || event.target.closest('[data-close]')) backdrop.remove(); });
+    return backdrop;
+  };
+
+  let META = { cursos: [], alumnos: [], feriados: [], rango: {} };
+  let view = 'registros';
+  const R = { desde: '', hasta: '', curso: '', alumno: '', tipo: '', q: '', page: 1, limit: 50, selected: new Set() };
+  const nombreAl = a => `${a.apellidos}, ${a.nombres}`;
+  const loadMeta = async () => { META = await get('/admin/api/meta'); };
+
+  /* ---------- Navegación y URL ---------- */
+  function saveView() {
+    const p = new URLSearchParams({ vista: view });
+    if (view === 'registros') Object.entries({ desde: R.desde, hasta: R.hasta, curso: R.curso, alumno: R.alumno, tipo: R.tipo, q: R.q, pagina: R.page }).forEach(([k, v]) => v && p.set(k, v));
+    if (view === 'tabla') { p.set('tabla', T.table); p.set('pagina', T.page); if (T.q) p.set('q', T.q); p.set('orden', T.order); p.set('dir', T.dir); }
+    history.replaceState(null, '', `${location.pathname}?${p}`);
+  }
+  function markNav() {
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    document.querySelectorAll('[data-table]').forEach(b => b.classList.toggle('active', view === 'tabla' && b.dataset.table === T.table));
+  }
+  async function show(name) {
+    view = name; markNav();
+    try {
+      if (name === 'registros') await vRegistros();
+      else if (name === 'resumen') await vResumen();
+      else if (name === 'coherencia') await vCoherencia();
+      saveView();
+    } catch (error) { notifyError(error); }
+  }
+  async function refreshSide() {
+    const tables = await get('/admin/api/tablas');
+    $('#tables').innerHTML = tables.map(item => `<button class="table-btn" data-table="${esc(item.name)}">${esc(item.name)} <span>${item.count}</span></button>`).join('');
+    const coh = await get('/admin/api/coherencia');
+    const n = coh.reduce((s, x) => s + x.n, 0);
+    $('#cohCount').textContent = n ? `⚠ ${n}` : '✓';
+    markNav();
+  }
+  const refreshAll = async () => { await loadMeta(); await refreshSide(); if (view === 'tabla') await loadRows(); else await show(view); };
+
+  /* ---------- Registros por día ---------- */
+  async function vRegistros() {
+    $('#title').textContent = 'Registros por día';
+    $('#subtitle').textContent = 'Asistencia, atraso, retiro y reingreso de cada alumno en un mismo lugar.';
+    if (!R.hasta) R.hasta = META.rango.max || isoLocal(new Date());
+    if (!R.desde) R.desde = addDays(R.hasta, -13);
+    const alumnos = META.alumnos.filter(a => !R.curso || a.curso_id === Number(R.curso));
+    $('#content').innerHTML = `<div class="card"><div class="filters">
+      <div class="field"><label for="rDesde">Desde</label><input id="rDesde" type="date" value="${esc(R.desde)}"></div>
+      <div class="field"><label for="rHasta">Hasta</label><input id="rHasta" type="date" value="${esc(R.hasta)}"></div>
+      <div class="field"><label for="rCurso">Curso</label><select id="rCurso">${options([['', 'Todos'], ...META.cursos.map(c => [c.id, c.nombre])], R.curso)}</select></div>
+      <div class="field"><label for="rAlumno">Alumno</label><select id="rAlumno">${options([['', 'Todos'], ...alumnos.map(a => [a.id, `${nombreAl(a)} · ${a.curso}`])], R.alumno)}</select></div>
+      <div class="field"><label for="rTipo">Mostrar</label><select id="rTipo">${options([['', 'Todos los registros'], ['ausentes', 'Solo ausentes'], ['atrasos', 'Solo atrasos'], ['retiros', 'Solo retiros'], ['reingresos', 'Solo reingresos'], ['incoherentes', 'Incoherentes']], R.tipo)}</select></div>
+      <div class="field"><label for="rQ">Buscar</label><input id="rQ" type="search" value="${esc(R.q)}" placeholder="Nombre o RUT"></div>
+    </div>
+    <div class="filters" style="margin-bottom:12px"><button class="btn" id="newDay">Nuevo registro de día</button><button class="btn secondary" id="delSel">Eliminar seleccionados</button><button class="btn secondary" id="allRange">Todo el rango con datos</button></div>
+    <div id="rStats"></div><div id="rTable"></div></div>`;
+    const bind = (id, key, reset) => { const el = $(id); el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', () => { R[key] = el.value; R.page = 1; if (reset) { R.alumno = ''; return vRegistros().then(saveView); } loadRegistros(); }); };
+    bind('#rDesde', 'desde'); bind('#rHasta', 'hasta'); bind('#rCurso', 'curso', true); bind('#rAlumno', 'alumno'); bind('#rTipo', 'tipo'); bind('#rQ', 'q');
+    $('#newDay').addEventListener('click', () => openDay(null));
+    $('#delSel').addEventListener('click', deleteSelected);
+    $('#allRange').addEventListener('click', () => { R.desde = META.rango.min || R.desde; R.hasta = META.rango.max || R.hasta; R.page = 1; vRegistros().then(saveView); });
+    await loadRegistros();
+  }
+  let regReq = 0, regRows = [];
+  async function loadRegistros() {
+    const req = ++regReq;
+    const p = new URLSearchParams({ desde: R.desde, hasta: R.hasta, curso: R.curso, alumno: R.alumno, tipo: R.tipo, q: R.q, page: R.page, limit: R.limit });
+    const data = await get(`/admin/api/registros?${p}`);
+    if (req !== regReq) return;
+    regRows = data.rows;
+    const keyOf = r => `${r.alumno_id}|${r.fecha}`;
+    const body = data.rows.map(r => `<tr>
+      <td><input class="check selDay" type="checkbox" data-key="${esc(keyOf(r))}" ${R.selected.has(keyOf(r)) ? 'checked' : ''}></td>
+      <td>${fmt(r.fecha)}</td><td>${esc(r.apellidos)}, ${esc(r.nombres)}</td><td class="muted">${esc(r.rut)}</td><td>${esc(r.curso)}</td><td>${chip(r.estado)}</td>
+      <td>${r.hora_llegada ? `${esc(r.hora_llegada)} ${r.justificado ? '<span class="chip c-P">Just.</span>' : ''}` : '<span class="muted">–</span>'}</td>
+      <td>${r.hora_retiro ? `${esc(r.hora_retiro)} · ${esc(r.motivo_retiro)}` : '<span class="muted">–</span>'}</td>
+      <td>${r.hora_reingreso ? `${esc(r.hora_reingreso)} · ${esc(r.motivo_reingreso)}` : '<span class="muted">–</span>'}</td>
+      <td><div class="row-actions"><button data-edit="${esc(keyOf(r))}">Editar</button><button class="danger" data-del="${esc(keyOf(r))}">Eliminar</button></div></td></tr>`).join('');
+    $('#rTable').innerHTML = `<div class="table-wrap"><table><thead><tr><th><input class="check" id="selAllDays" type="checkbox" title="Seleccionar página"></th><th>Fecha</th><th>Alumno</th><th>RUT</th><th>Curso</th><th>Estado</th><th>Atraso</th><th>Retiro</th><th>Reingreso</th><th>Acciones</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="10" class="empty">No hay registros con estos filtros.</td></tr>'}</tbody></table></div>
+      <div class="pager"><span>${data.total} día(s)-alumno · página ${data.page} de ${data.pages}${R.selected.size ? ` · ${R.selected.size} seleccionado(s)` : ''}</span><div class="buttons"><button id="rPrev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button><button id="rNext" ${data.page >= data.pages ? 'disabled' : ''}>Siguiente</button></div></div>`;
+    $('#rPrev').addEventListener('click', () => { R.page--; loadRegistros(); });
+    $('#rNext').addEventListener('click', () => { R.page++; loadRegistros(); });
+    $('#selAllDays').addEventListener('change', e => { data.rows.forEach(r => e.target.checked ? R.selected.add(keyOf(r)) : R.selected.delete(keyOf(r))); loadRegistros(); });
+    document.querySelectorAll('.selDay').forEach(c => c.addEventListener('change', e => { e.target.checked ? R.selected.add(e.target.dataset.key) : R.selected.delete(e.target.dataset.key); }));
+    document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openDay(regRows.find(r => keyOf(r) === b.dataset.edit))));
+    document.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      const r = regRows.find(x => keyOf(x) === b.dataset.del);
+      if (!confirm(`¿Eliminar todo el día ${fmt(r.fecha)} de ${r.apellidos}, ${r.nombres}? (asistencia, atraso, retiro y reingreso)`)) return;
+      try { await send('/admin/api/registros', { method: 'DELETE', body: JSON.stringify({ alumno_id: r.alumno_id, fecha: r.fecha }) }); R.selected.delete(b.dataset.del); await refreshAll(); } catch (error) { alert(error.message); }
+    }));
+    // Resumen del filtro actual (sobre la página no: sobre todo el resultado, pidiendo totales por tipo).
+    const base = { desde: R.desde, hasta: R.hasta, curso: R.curso, alumno: R.alumno, q: R.q, limit: 1 };
+    const count = async tipo => (await get(`/admin/api/registros?${new URLSearchParams({ ...base, tipo })}`)).total;
+    const [aus, atr, ret, rei] = await Promise.all(['ausentes', 'atrasos', 'retiros', 'reingresos'].map(count));
+    if (req !== regReq) return;
+    $('#rStats').innerHTML = `<div class="stats"><div><b>${aus}</b><span>Ausencias</span></div><div><b>${atr}</b><span>Atrasos</span></div><div><b>${ret}</b><span>Retiros</span></div><div><b>${rei}</b><span>Reingresos</span></div></div>`;
+    saveView();
+  }
+  async function deleteSelected() {
+    const keys = [...R.selected].map(k => { const [alumno_id, fecha] = k.split('|'); return { alumno_id: Number(alumno_id), fecha }; });
+    if (!keys.length) return alert('Selecciona al menos un día.');
+    if (!confirm(`¿Eliminar ${keys.length} día(s)-alumno completos? Esta acción no se puede deshacer.`)) return;
+    try { await send('/admin/api/registros', { method: 'DELETE', body: JSON.stringify({ keys }) }); R.selected.clear(); await refreshAll(); } catch (error) { alert(error.message); }
+  }
+
+  // Formulario de un día: guarda las 4 tablas juntas y valida la coherencia.
+  function openDay(row) {
+    const edit = Boolean(row);
+    const r = row || { alumno_id: R.alumno || '', fecha: R.hasta || isoLocal(new Date()), estado: 'P' };
+    const b = modal(`<form class="modal" id="dayForm"><h3>${edit ? 'Editar' : 'Nuevo'} registro de día</h3>
+      <div class="modal-grid">
+        <div class="modal-field full"><label>Alumno *</label><select name="alumno_id" required ${edit ? 'disabled' : ''}>${options([['', 'Selecciona…'], ...META.alumnos.map(a => [a.id, `${nombreAl(a)} · ${a.curso} · ${a.rut}`])], r.alumno_id)}</select></div>
+        <div class="modal-field"><label>Fecha *</label><input name="fecha" type="date" value="${esc(r.fecha)}" required ${edit ? 'disabled' : ''}></div>
+        <div class="modal-field"><label>Asistencia</label><select name="estado">${options([['P', 'P - Presente'], ['T', 'T - Atraso'], ['A', 'A - Ausente'], ['', 'Sin registro']], r.estado ?? '')}</select></div>
+      </div>
+      <div id="secAtraso"><h4>Atraso</h4><div class="modal-grid"><div class="modal-field"><label>Hora de llegada *</label><input name="hora_llegada" type="time" value="${esc(r.hora_llegada || '08:15')}"></div><div class="modal-field"><label>&nbsp;</label><label><input name="justificado" type="checkbox" ${r.justificado ? 'checked' : ''}> Justificado</label></div></div></div>
+      <div id="secSalidas">
+        <h4><label><input name="conRetiro" type="checkbox" ${r.hora_retiro ? 'checked' : ''}> Retiro anticipado</label></h4>
+        <div class="modal-grid" id="secRetiro"><div class="modal-field"><label>Hora de retiro</label><input name="hora_retiro" type="time" value="${esc(r.hora_retiro || '12:00')}"></div><div class="modal-field"><label>Retira</label><input name="retira" list="dlQuien" value="${esc(r.retira || 'Apoderado titular')}"></div><div class="modal-field full"><label>Motivo</label><input name="motivo_retiro" list="dlMotRet" value="${esc(r.motivo_retiro || 'Control médico')}"></div></div>
+        <h4><label><input name="conReingreso" type="checkbox" ${r.hora_reingreso ? 'checked' : ''}> Reingreso</label></h4>
+        <div class="modal-grid" id="secReingreso"><div class="modal-field"><label>Hora de reingreso</label><input name="hora_reingreso" type="time" value="${esc(r.hora_reingreso || '11:00')}"></div><div class="modal-field"><label>Motivo</label><input name="motivo_reingreso" list="dlMotRei" value="${esc(r.motivo_reingreso || 'Control médico')}"></div></div>
+      </div>
+      <p class="hint" id="dayHint"></p>
+      ${datalist('dlQuien', QUIEN_RETIRA)}${datalist('dlMotRet', MOTIVOS_RETIRO)}${datalist('dlMotRei', MOTIVOS_REINGRESO)}
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close>Cancelar</button><button class="btn">${edit ? 'Guardar cambios' : 'Crear registro'}</button></div></form>`);
+    const f = b.querySelector('#dayForm');
+    const sync = () => {
+      const e = f.estado.value;
+      b.querySelector('#secAtraso').hidden = e !== 'T';
+      b.querySelector('#secSalidas').hidden = e !== 'P' && e !== 'T';
+      b.querySelector('#secRetiro').hidden = !f.conRetiro.checked;
+      b.querySelector('#secReingreso').hidden = !f.conReingreso.checked;
+      b.querySelector('#dayHint').textContent = e === 'A' ? 'Un alumno ausente no tiene atraso, retiro ni reingreso: se eliminarán si existían.' : e === '' ? 'Sin registro: se elimina todo lo del día.' : '';
+    };
+    f.addEventListener('change', sync); sync();
+    f.addEventListener('submit', async event => {
       event.preventDefault();
-      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-      const options = Object.fromEntries(['nuevosAlumnos', 'asistenciasPorAlumno', 'atrasosPorAlumno', 'retirosPorAlumno', 'reingresosPorAlumno'].map(name => [name, Number(data[name])]));
-      options.desde = data.desde; options.hasta = data.hasta; options.saltarNoLectivos = Boolean(data.saltarNoLectivos);
+      const e = f.estado.value, presente = e === 'P' || e === 'T';
+      const body = {
+        alumno_id: Number(edit ? row.alumno_id : f.alumno_id.value), fecha: edit ? row.fecha : f.fecha.value, estado: e,
+        atraso: e === 'T' ? { hora_llegada: f.hora_llegada.value, justificado: f.justificado.checked } : null,
+        retiro: presente && f.conRetiro.checked ? { hora_retiro: f.hora_retiro.value, retira: f.retira.value.trim(), motivo: f.motivo_retiro.value.trim() } : null,
+        reingreso: presente && f.conReingreso.checked ? { hora_reingreso: f.hora_reingreso.value, motivo: f.motivo_reingreso.value.trim() } : null
+      };
       try {
-        const result = await send('/admin/api/generar-datos-integrados', { method: 'POST', body: JSON.stringify({ seed: data.seed, options }) });
-        const summary = Object.entries(result).map(([table, report]) => `${table}: ${report.inserted} insertados`).join('\n');
-        alert(`Generación completada.\n${summary}`);
-        backdrop.remove(); await loadTables(); await loadRows();
+        if (!edit) {
+          const w = new Date(`${body.fecha}T12:00:00`).getDay();
+          if ((w === 0 || w === 6 || META.feriados.includes(body.fecha)) && !confirm('Esa fecha es fin de semana o feriado. ¿Guardar igual?')) return;
+          const existe = await get(`/admin/api/registros?${new URLSearchParams({ alumno: body.alumno_id, desde: body.fecha, hasta: body.fecha, limit: 1 })}`);
+          if (existe.total && !confirm('Ese alumno ya tiene registros ese día. ¿Reemplazarlos?')) return;
+        }
+        await send('/admin/api/registros', { method: 'PUT', body: JSON.stringify(body) });
+        b.remove(); await refreshAll();
       } catch (error) { alert(error.message); }
     });
+  }
+
+  /* ---------- Resumen por mes ---------- */
+  async function vResumen() {
+    $('#title').textContent = 'Resumen por mes';
+    $('#subtitle').textContent = 'Totales de la base para ver de un vistazo qué hay cargado.';
+    const data = await get('/admin/api/resumen');
+    const filas = data.porMes.map(m => `<tr><td><button class="btn secondary" style="padding:4px 10px" data-mes="${m.mes}">${mesTxt(m.mes)}</button></td><td class="num">${m.dias}</td><td class="num">${m.registros}</td><td class="num">${m.P}</td><td class="num">${m.A}</td><td class="num">${m.T}</td>
+      <td class="num ${m.registros && (m.P + m.T) / m.registros < 0.85 ? 'low' : ''}">${pct(m.P + m.T, m.registros)}</td><td class="num">${m.atrasos}</td><td class="num">${m.retiros}</td><td class="num">${m.reingresos}</td></tr>`).join('');
+    const riesgo = data.riesgo.map(a => `<tr><td><button class="btn secondary" style="padding:4px 10px" data-al="${a.id}">${esc(a.apellidos)}, ${esc(a.nombres)}</button></td><td>${esc(a.curso)}</td><td class="num">${a.dias}</td><td class="num">${a.A}</td><td class="num">${a.T}</td><td class="num ${a.pct < 85 ? 'low' : ''}">${String(a.pct).replace('.', ',')} %</td></tr>`).join('');
+    $('#content').innerHTML = `<div class="card"><h3>Por mes</h3><div class="table-wrap"><table><thead><tr><th>Mes</th><th class="num">Días</th><th class="num">Registros</th><th class="num">P</th><th class="num">A</th><th class="num">T</th><th class="num">% asistencia</th><th class="num">Atrasos</th><th class="num">Retiros</th><th class="num">Reingresos</th></tr></thead><tbody>${filas || '<tr><td colspan="10" class="empty">Sin datos.</td></tr>'}</tbody></table></div><p class="hint">Haz clic en un mes para ver sus registros.</p></div>
+      <div class="card"><h3>Alumnos bajo 85 % o con 10+ atrasos</h3><div class="table-wrap"><table><thead><tr><th>Alumno</th><th>Curso</th><th class="num">Días</th><th class="num">Ausencias</th><th class="num">Atrasos</th><th class="num">% asistencia</th></tr></thead><tbody>${riesgo || '<tr><td colspan="6" class="empty">Ningún alumno en esta situación.</td></tr>'}</tbody></table></div></div>`;
+    document.querySelectorAll('[data-mes]').forEach(b => b.addEventListener('click', () => {
+      const [y, m] = b.dataset.mes.split('-').map(Number);
+      Object.assign(R, { desde: `${b.dataset.mes}-01`, hasta: isoLocal(new Date(y, m, 0)), curso: '', alumno: '', tipo: '', q: '', page: 1 });
+      show('registros');
+    }));
+    document.querySelectorAll('[data-al]').forEach(b => b.addEventListener('click', () => {
+      Object.assign(R, { desde: META.rango.min || R.desde, hasta: META.rango.max || R.hasta, curso: '', alumno: b.dataset.al, tipo: '', q: '', page: 1 });
+      show('registros');
+    }));
+  }
+
+  /* ---------- Coherencia ---------- */
+  async function vCoherencia() {
+    $('#title').textContent = 'Coherencia de datos';
+    $('#subtitle').textContent = 'Revisa que asistencia, atrasos, retiros y reingresos cuenten la misma historia.';
+    const data = await get('/admin/api/coherencia');
+    const total = data.reduce((s, x) => s + x.n, 0);
+    $('#content').innerHTML = `<div class="card">${total ? '' : '<div class="success">Todo coherente: no se encontraron problemas.</div>'}
+      <div class="table-wrap"><table><thead><tr><th>Revisión</th><th class="num">Casos</th><th>Reparación automática</th></tr></thead><tbody>
+      ${data.map(x => `<tr><td>${esc(x.txt)}</td><td class="num ${x.n ? 'low' : ''}">${x.n}</td><td class="muted">${esc(x.fixTxt)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="filters" style="margin:16px 0 0"><button class="btn" id="fix" ${total ? '' : 'disabled'}>Reparar automáticamente</button><button class="btn secondary" id="seeBad">Ver registros incoherentes</button></div>
+      <p class="hint">Reglas: estado T ⇔ fila en atrasos; retiro/reingreso solo con el alumno presente; sin registros en fines de semana ni feriados. Las claves foráneas (alumno_id → alumnos) se revisan con PRAGMA foreign_key_check.</p></div>`;
+    $('#fix').addEventListener('click', async () => {
+      if (!confirm('¿Aplicar las reparaciones automáticas a la base de datos?')) return;
+      try { await send('/admin/api/coherencia/reparar', { method: 'POST', body: '{}' }); await refreshAll(); } catch (error) { alert(error.message); }
+    });
+    $('#seeBad').addEventListener('click', () => { Object.assign(R, { desde: META.rango.min, hasta: META.rango.max, curso: '', alumno: '', tipo: 'incoherentes', q: '', page: 1 }); show('registros'); });
+  }
+
+  /* ---------- Generar datos ---------- */
+  function openGenerate() {
+    const hoy = isoLocal(new Date());
+    const desde = META.rango.max && META.rango.max < hoy ? addDays(META.rango.max, 1) : `${hoy.slice(0, 7)}-01`;
+    const b = modal(`<form class="modal" id="genForm"><h3>Generar datos realistas</h3>
+      <p class="hint" style="margin-bottom:14px">Genera asistencia para todos los días lectivos del rango (sin fines de semana ni feriados), con atrasos, retiros y reingresos coherentes. Cada alumno recibe un perfil: regular, atrasador, inasistente o en riesgo; las ausencias vienen en rachas y hay días con muchos atrasos.</p>
+      <div class="modal-grid">
+        <div class="modal-field"><label>Desde *</label><input name="desde" type="date" value="${desde}" required></div>
+        <div class="modal-field"><label>Hasta *</label><input name="hasta" type="date" value="${hoy}" required></div>
+        <div class="modal-field"><label>Nivel de carga</label><select name="carga">${options([['normal', 'Normal (pocos casos)'], ['alta', 'Alta (muchos atrasos e inasistencias)'], ['muy_alta', 'Muy alta (sistema sobrecargado)']], 'alta')}</select></div>
+        <div class="modal-field"><label>Curso</label><select name="cursoId">${options([['', 'Todos los cursos'], ...META.cursos.map(c => [c.id, c.nombre])], '')}</select></div>
+        <div class="modal-field"><label>Alumnos nuevos</label><input name="nuevosAlumnos" type="number" min="0" max="300" value="0"></div>
+        <div class="modal-field"><label>Semilla (opcional)</label><input name="seed" type="number" placeholder="Para repetir el mismo resultado"></div>
+        <div class="modal-field full"><label><input name="reemplazar" type="checkbox"> Reemplazar datos del rango (borra asistencia, atrasos, retiros y reingresos del rango y los regenera)</label><p class="hint">Sin marcar: solo rellena los días-alumno que no tienen ningún registro.</p></div>
+      </div>
+      <div id="genResult"></div>
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close>Cerrar</button><button class="btn" id="genBtn">Generar</button></div></form>`);
+    b.querySelector('#genForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      const d = Object.fromEntries(new FormData(event.currentTarget).entries());
+      if (d.reemplazar && !confirm(`Se borrarán los registros existentes entre ${fmt(d.desde)} y ${fmt(d.hasta)}${d.cursoId ? ' del curso elegido' : ''}. ¿Continuar?`)) return;
+      const btn = b.querySelector('#genBtn'); btn.disabled = true; btn.textContent = 'Generando…';
+      try {
+        const r = await send('/admin/api/generar-escenario', { method: 'POST', body: JSON.stringify({ seed: d.seed, options: { desde: d.desde, hasta: d.hasta, carga: d.carga, cursoId: d.cursoId, nuevosAlumnos: d.nuevosAlumnos, reemplazar: Boolean(d.reemplazar) } }) });
+        b.querySelector('#genResult').innerHTML = `<div class="result">Listo: ${r.dias} días lectivos.
+Asistencia: ${r.asistencia} (P ${r.P} · A ${r.A} · T ${r.T}) → ${pct(r.P + r.T, r.asistencia)} de asistencia
+Atrasos: ${r.atrasos} · Retiros: ${r.retiros} · Reingresos: ${r.reingresos}
+Perfiles: ${Object.entries(r.perfiles).map(([k, v]) => `${k} ${v}`).join(' · ')}${r.alumnosNuevos ? `\nAlumnos nuevos: ${r.alumnosNuevos}` : ''}${r.borrados ? `\nRegistros borrados antes de generar: ${r.borrados}` : ''}${r.omitidosExistentes ? `\nDías-alumno omitidos porque ya tenían datos: ${r.omitidosExistentes}` : ''}</div>`;
+        await refreshAll();
+      } catch (error) { alert(error.message); }
+      finally { btn.disabled = false; btn.textContent = 'Generar'; }
+    });
+  }
+
+  /* ---------- Borrar rango ---------- */
+  function openDeleteRange() {
+    const b = modal(`<form class="modal" id="delForm"><h3>Borrar datos de un rango</h3>
+      <p class="hint" style="margin-bottom:14px">Borra asistencia, atrasos, retiros y reingresos del rango. No toca alumnos, cursos, meses ni feriados, así que no rompe ninguna clave.</p>
+      <div class="modal-grid">
+        <div class="modal-field"><label>Desde *</label><input name="desde" type="date" value="${esc(R.desde)}" required></div>
+        <div class="modal-field"><label>Hasta *</label><input name="hasta" type="date" value="${esc(R.hasta)}" required></div>
+        <div class="modal-field full"><label>Curso</label><select name="cursoId">${options([['', 'Todos los cursos'], ...META.cursos.map(c => [c.id, c.nombre])], '')}</select></div>
+      </div>
+      <div id="delPreview"></div>
+      <div class="modal-actions"><button type="button" class="btn secondary" data-close>Cancelar</button><button type="button" class="btn secondary" id="delCalc">Calcular</button><button class="btn danger" id="delGo" disabled>Borrar</button></div></form>`);
+    const f = b.querySelector('#delForm');
+    const body = preview => JSON.stringify({ desde: f.desde.value, hasta: f.hasta.value, cursoId: f.cursoId.value, preview });
+    f.addEventListener('change', () => { b.querySelector('#delGo').disabled = true; b.querySelector('#delPreview').innerHTML = ''; });
+    b.querySelector('#delCalc').addEventListener('click', async () => {
+      try {
+        const r = await send('/admin/api/borrar-rango', { method: 'POST', body: body(true) });
+        const total = Object.values(r.counts).reduce((s, n) => s + n, 0);
+        b.querySelector('#delPreview').innerHTML = `<div class="result">Se borrarían ${total} filas:\n${Object.entries(r.counts).map(([t, n]) => `${t}: ${n}`).join('\n')}</div>`;
+        b.querySelector('#delGo').disabled = !total;
+      } catch (error) { alert(error.message); }
+    });
+    f.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!confirm(`¿Borrar definitivamente los registros entre ${fmt(f.desde.value)} y ${fmt(f.hasta.value)}?`)) return;
+      try {
+        const r = await send('/admin/api/borrar-rango', { method: 'POST', body: body(false) });
+        b.querySelector('#delPreview').innerHTML = `<div class="success">Borrado: ${Object.entries(r.deleted).map(([t, n]) => `${t} ${n}`).join(' · ')}</div>`;
+        b.querySelector('#delGo').disabled = true;
+        await refreshAll();
+      } catch (error) { alert(error.message); }
+    });
+  }
+
+  /* ---------- Tablas (avanzado): CRUD genérico por tabla ---------- */
+  const T = { table: null, schema: null, page: 1, limit: 25, q: '', order: '', dir: 'asc', selected: new Set() };
+  let rowsRequest = 0;
+  const keyOf = row => JSON.stringify((T.schema.primaryKey || []).length ? T.schema.primaryKey.map(name => row[name]) : [row.__rowid]);
+  const keyObject = row => (T.schema.primaryKey || []).length ? Object.fromEntries(T.schema.primaryKey.map(name => [name, row[name]])) : {__rowid: row.__rowid};
+
+  async function selectTable(table, saved = {}) {
+    view = 'tabla';
+    T.table = table; T.schema = await get(`/admin/api/tablas/${encodeURIComponent(table)}/esquema`);
+    T.page = saved.page || 1; T.q = saved.q || ''; T.order = saved.order || T.schema.columns[0]?.name || ''; T.dir = saved.dir || 'asc'; T.selected.clear();
+    markNav();
+    $('#title').textContent = table; $('#subtitle').textContent = 'Vista avanzada: edita las filas de esta tabla directamente.';
+    await loadRows();
   }
 
   function fieldType(column) {
@@ -95,9 +355,8 @@ main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items
     if (/INT/i.test(column.type)) return 'number';
     return 'text';
   }
-
   async function foreignOptions(column) {
-    const relation = state.schema.foreignKeys.find(fk => fk.from === column.name);
+    const relation = T.schema.foreignKeys.find(fk => fk.from === column.name);
     if (!relation) return null;
     const data = await get(`/admin/api/tablas/${encodeURIComponent(relation.table)}?limit=100&orden=${encodeURIComponent(relation.to)}`);
     return data.rows.map(row => {
@@ -105,125 +364,85 @@ main{min-width:0;padding:28px clamp(16px,4vw,48px)}.top{display:flex;align-items
       return `<option value="${esc(row[relation.to])}">${esc(label)}</option>`;
     }).join('');
   }
-
   async function distinctOptions(column) {
-    if (state.table !== 'asistencia' || column.name !== 'estado') return null;
-    const data = await get(`/admin/api/tablas/${encodeURIComponent(state.table)}/columna/${encodeURIComponent(column.name)}/valores`);
-    return data.values.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('');
+    if (T.table !== 'asistencia' || column.name !== 'estado') return null;
+    return ['P', 'A', 'T'].map(value => `<option value="${value}">${value}</option>`).join('');
   }
-
   async function openForm(row = null) {
     const edit = Boolean(row);
-    const fields = await Promise.all(state.schema.columns.map(async column => {
-      const disabled = '';
+    const fields = await Promise.all(T.schema.columns.map(async column => {
       const required = column.notnull ? 'required' : '';
       const value = row ? row[column.name] : '';
-      const options = await foreignOptions(column);
-      if (options !== null) return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><select name="${esc(column.name)}" ${required} ${disabled}><option value="">Selecciona…</option>${options}</select></div>`;
-      const distinct = await distinctOptions(column);
-      if (distinct !== null) return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><select name="${esc(column.name)}" ${required} ${disabled}><option value="">Selecciona…</option>${distinct}</select></div>`;
-      return `<div class="modal-field"><label>${esc(column.name)}${column.notnull ? ' *' : ''}</label><input name="${esc(column.name)}" type="${fieldType(column)}" value="${esc(value)}" ${required} ${disabled}></div>`;
+      const label = `<label>${esc(column.name)}${column.notnull ? ' *' : ''}</label>`;
+      const opts = (await foreignOptions(column)) ?? (await distinctOptions(column));
+      if (opts !== null) return `<div class="modal-field">${label}<select name="${esc(column.name)}" ${required}><option value="">Selecciona…</option>${opts}</select></div>`;
+      return `<div class="modal-field">${label}<input name="${esc(column.name)}" type="${fieldType(column)}" value="${esc(value)}" ${required}></div>`;
     }));
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `<form class="modal" id="recordForm"><h3>${edit ? 'Editar' : 'Nuevo'} registro: ${esc(state.table)}</h3><div class="modal-grid">${fields.join('')}</div><div class="modal-actions"><button type="button" class="btn secondary" id="cancelForm">Cancelar</button><button class="btn">${edit ? 'Guardar cambios' : 'Crear registro'}</button></div></form>`;
-    document.body.appendChild(backdrop);
-    state.schema.columns.forEach(column => { if (row) backdrop.querySelector(`[name="${CSS.escape(column.name)}"]`).value = row[column.name] ?? ''; });
-    $('#cancelForm').addEventListener('click', () => backdrop.remove());
-    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
-    $('#recordForm').addEventListener('submit', async event => {
+    const b = modal(`<form class="modal" id="recordForm"><h3>${edit ? 'Editar' : 'Nuevo'} registro: ${esc(T.table)}</h3><div class="modal-grid">${fields.join('')}</div><div class="modal-actions"><button type="button" class="btn secondary" data-close>Cancelar</button><button class="btn">${edit ? 'Guardar cambios' : 'Crear registro'}</button></div></form>`);
+    T.schema.columns.forEach(column => { if (row) b.querySelector(`[name="${CSS.escape(column.name)}"]`).value = row[column.name] ?? ''; });
+    b.querySelector('#recordForm').addEventListener('submit', async event => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-      state.schema.columns.filter(column => /INT/i.test(column.type) && data[column.name] !== '').forEach(column => { data[column.name] = Number(data[column.name]); });
+      T.schema.columns.filter(column => /INT/i.test(column.type) && data[column.name] !== '').forEach(column => { data[column.name] = Number(data[column.name]); });
       try {
-        await send(`/admin/api/tablas/${encodeURIComponent(state.table)}`, { method: edit ? 'PUT' : 'POST', body: JSON.stringify(edit ? { pk: keyObject(row), data } : { data }) });
-        backdrop.remove(); await loadTables(); await loadRows();
+        await send(`/admin/api/tablas/${encodeURIComponent(T.table)}`, { method: edit ? 'PUT' : 'POST', body: JSON.stringify(edit ? { pk: keyObject(row), data } : { data }) });
+        b.remove(); await refreshAll();
       } catch (error) { alert(error.message); }
     });
   }
-
   async function removeRow(row) {
-    if (!confirm(`¿Eliminar este registro de ${state.table}?`)) return;
-    try { await send(`/admin/api/tablas/${encodeURIComponent(state.table)}`, { method: 'DELETE', body: JSON.stringify({ pk: keyObject(row) }) }); state.selected.delete(keyOf(row)); await loadTables(); await loadRows(); }
+    if (!confirm(`¿Eliminar este registro de ${T.table}?`)) return;
+    try { await send(`/admin/api/tablas/${encodeURIComponent(T.table)}`, { method: 'DELETE', body: JSON.stringify({ pk: keyObject(row) }) }); T.selected.delete(keyOf(row)); await refreshAll(); }
     catch (error) { alert(error.message); }
   }
-
   async function removeSelected() {
-    const keys = [...state.selected].map(value => JSON.parse(value));
+    const keys = [...T.selected].map(value => JSON.parse(value)).map(values => (T.schema.primaryKey || []).length ? Object.fromEntries(T.schema.primaryKey.map((name, i) => [name, values[i]])) : { __rowid: values[0] });
     if (!keys.length) return alert('Selecciona al menos un registro.');
-    if (!confirm(`¿Eliminar ${keys.length} registro(s) de ${state.table}? Esta acción no se puede deshacer.`)) return;
-    try { await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/eliminar-multiple`, { method: 'POST', body: JSON.stringify({ keys }) }); state.selected.clear(); await loadTables(); await loadRows(); }
+    if (!confirm(`¿Eliminar ${keys.length} registro(s) de ${T.table}? Esta acción no se puede deshacer.`)) return;
+    try { await send(`/admin/api/tablas/${encodeURIComponent(T.table)}/eliminar-multiple`, { method: 'POST', body: JSON.stringify({ keys }) }); T.selected.clear(); await refreshAll(); }
     catch (error) { alert(error.message); }
   }
-
-  function generatorFields() {
-    const special = ['asistencia', 'atrasos', 'retiros', 'reingresos'].includes(state.table);
-    return `<div class="modal-field"><label>Cantidad</label><input name="count" type="number" min="1" max="10000" value="30" required></div><div class="modal-field"><label>Semilla opcional</label><input name="seed" type="number" placeholder="Reproducible"></div>${special ? `<div class="modal-field"><label>Alumnos (IDs separados por coma)</label><input name="alumnoIds" placeholder="1,2,3"></div><div class="modal-field"><label>Desde</label><input name="desde" type="date" required></div><div class="modal-field"><label>Hasta</label><input name="hasta" type="date" required></div>` : ''}${state.table === 'asistencia' ? `<div class="modal-field"><label>Estado fijo</label><select name="estado"><option value="P">P - Presente</option><option value="T">T - Tardanza</option><option value="A">A - Ausente</option></select></div><div class="modal-field"><label>Distribución opcional (%)</label><input name="distribucion" placeholder="P:80,T:15,A:5"></div><div class="modal-field"><label><input name="saltarNoLectivos" type="checkbox"> Saltar fines de semana y feriados</label></div><div class="modal-field"><label>Duplicados</label><select name="duplicateMode"><option value="ignore">Ignorar</option><option value="overwrite">Sobrescribir</option></select></div>` : ''}${state.table === 'alumnos' ? `<div class="modal-field"><label>Curso ID (vacío = aleatorio)</label><input name="cursoId" type="number"></div>` : ''}${!special && state.table !== 'alumnos' ? `<div class="modal-field" style="grid-column:1/-1"><label>Valores por columna (JSON)</label><textarea name="valores" rows="4" placeholder='{"nombre":"Dato de prueba"}'></textarea></div>` : ''}`;
-  }
-
-  function parseDistribution(value) {
-    return Object.fromEntries(value.split(',').map(item => item.trim().split(':')).filter(item => item.length === 2).map(([key, amount]) => [key.trim(), Number(amount)]));
-  }
-
-  async function openGenerator() {
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `<form class="modal" id="generatorForm"><h3>Generar registros: ${esc(state.table)}</h3><div class="modal-grid">${generatorFields()}</div><pre id="preview" class="empty">Pulsa «Vista previa» antes de generar.</pre><div class="modal-actions"><button type="button" class="btn secondary" id="cancelGenerator">Cancelar</button><button type="button" class="btn secondary" id="previewGenerator">Vista previa</button><button class="btn">Generar registros</button></div></form>`;
-    document.body.appendChild(backdrop);
-    $('#cancelGenerator').addEventListener('click', () => backdrop.remove());
-    backdrop.addEventListener('click', event => { if (event.target === backdrop) backdrop.remove(); });
-    const readBody = preview => {
-      const form = $('#generatorForm');
-      const data = Object.fromEntries(new FormData(form).entries());
-      const body = { count: Number(data.count), seed: data.seed, preview, options: {} };
-      if (data.alumnoIds) body.options.alumnoIds = data.alumnoIds.split(',').map(value => Number(value.trim())).filter(Boolean);
-      if (data.desde) body.options.desde = data.desde;
-      if (data.hasta) body.options.hasta = data.hasta;
-      if (data.estado) body.options.estado = data.estado;
-      if (data.distribucion) body.options.distribucion = parseDistribution(data.distribucion);
-      if (data.saltarNoLectivos) body.options.saltarNoLectivos = true;
-      if (data.duplicateMode) body.duplicateMode = data.duplicateMode;
-      if (data.cursoId) body.options.cursoId = Number(data.cursoId);
-      if (data.valores) body.options.valores = JSON.parse(data.valores);
-      return body;
-    };
-    $('#previewGenerator').addEventListener('click', async () => { try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/masivo`, { method: 'POST', body: JSON.stringify(readBody(true)) }); $('#preview').textContent = JSON.stringify(result.preview, null, 2); } catch (error) { alert(error.message); } });
-    $('#generatorForm').addEventListener('submit', async event => { event.preventDefault(); try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/masivo`, { method: 'POST', body: JSON.stringify(readBody(false)) }); alert(`Generados: ${result.generated}. Insertados: ${result.inserted}. Omitidos: ${result.omitted}.`); backdrop.remove(); await loadTables(); await loadRows(); } catch (error) { alert(error.message); } });
-  }
-
   function openCsvImport() {
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.innerHTML = `<form class="modal" id="csvForm"><h3>Importar CSV: ${esc(state.table)}</h3><p class="note">La primera fila debe contener los nombres exactos de las columnas.</p><textarea name="csv" rows="12" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:5px" placeholder="columna1,columna2&#10;valor1,valor2" required></textarea><p><label><input name="duplicateMode" type="checkbox"> Ignorar duplicados</label></p><div class="modal-actions"><button type="button" class="btn secondary" id="cancelCsv">Cancelar</button><button class="btn">Importar CSV</button></div></form>`;
-    document.body.appendChild(backdrop);
-    $('#cancelCsv').addEventListener('click', () => backdrop.remove());
-    $('#csvForm').addEventListener('submit', async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await send(`/admin/api/tablas/${encodeURIComponent(state.table)}/importar-csv`, { method: 'POST', body: JSON.stringify({ csv: data.csv, duplicateMode: data.duplicateMode ? 'ignore' : 'error' }) }); alert(`Filas: ${result.generated}. Insertadas: ${result.inserted}. Omitidas: ${result.omitted}.`); backdrop.remove(); await loadTables(); await loadRows(); } catch (error) { alert(error.message); } });
+    const b = modal(`<form class="modal" id="csvForm"><h3>Importar CSV: ${esc(T.table)}</h3><p class="hint">La primera fila debe contener los nombres exactos de las columnas.</p><textarea name="csv" rows="12" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:5px" placeholder="columna1,columna2&#10;valor1,valor2" required></textarea><p><label><input name="duplicateMode" type="checkbox"> Ignorar duplicados</label></p><div class="modal-actions"><button type="button" class="btn secondary" data-close>Cancelar</button><button class="btn">Importar CSV</button></div></form>`);
+    b.querySelector('#csvForm').addEventListener('submit', async event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const result = await send(`/admin/api/tablas/${encodeURIComponent(T.table)}/importar-csv`, { method: 'POST', body: JSON.stringify({ csv: data.csv, duplicateMode: data.duplicateMode ? 'ignore' : 'error' }) }); alert(`Filas: ${result.generated}. Insertadas: ${result.inserted}. Omitidas: ${result.omitted}.`); b.remove(); await refreshAll(); } catch (error) { alert(error.message); } });
   }
-
   async function loadRows() {
     try {
       const request = ++rowsRequest;
-      const params = new URLSearchParams({ page: state.page, limit: state.limit, q: state.q, orden: state.order, dir: state.dir });
-      const data = await get(`/admin/api/tablas/${encodeURIComponent(state.table)}?${params}`);
+      const params = new URLSearchParams({ page: T.page, limit: T.limit, q: T.q, orden: T.order, dir: T.dir });
+      const data = await get(`/admin/api/tablas/${encodeURIComponent(T.table)}?${params}`);
       if (request !== rowsRequest) return;
-      const headers = `<th><input class="check" id="selectAll" type="checkbox" title="Seleccionar página"></th>${data.columns.map(column => `<th><button data-order="${esc(column.name)}">${esc(column.name)}${state.order === column.name ? (state.dir === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`).join('')}<th>Acciones</th>`;
-      const rows = data.rows.map(row => { const key = keyOf(row); return `<tr><td><input class="check select-row" data-key="${esc(key)}" type="checkbox" ${state.selected.has(key) ? 'checked' : ''}></td>${data.columns.map(column => `<td>${esc(row[column.name])}</td>`).join('')}<td><div class="row-actions"><button class="edit-row" data-key="${esc(key)}">Editar</button><button class="danger delete-row" data-key="${esc(key)}">Eliminar</button></div></td></tr>`; }).join('');
-      $('#content').innerHTML = `<div class="filters"><div class="field"><label for="search">Buscar</label><input id="search" value="${esc(state.q)}" placeholder="Texto en cualquier columna"></div><button class="btn secondary" id="clear">Limpiar</button><button class="btn" id="newRow">Nuevo registro</button><button class="btn secondary" id="deleteSelected">Eliminar seleccionados</button><button class="btn secondary" id="generateRows">Generar registros</button><button class="btn secondary" id="importCsv">Importar CSV</button></div><div class="table-wrap"><table><thead><tr>${headers}</tr></thead><tbody>${rows || `<tr><td colspan="${data.columns.length + 2}" class="empty">No hay registros para mostrar.</td></tr>`}</tbody></table></div><div class="pager"><span>${data.total} registro(s) · página ${data.page} de ${data.pages}</span><div class="buttons"><button id="prev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button><button id="next" ${data.page >= data.pages ? 'disabled' : ''}>Siguiente</button></div></div>`;
-      $('#search').addEventListener('input', event => { state.q = event.target.value; state.page = 1; saveView(); loadRows(); });
-      $('#clear').addEventListener('click', () => { state.q = ''; state.page = 1; saveView(); loadRows(); }); $('#newRow').addEventListener('click', () => openForm().catch(notifyError)); $('#deleteSelected').addEventListener('click', removeSelected); $('#generateRows').addEventListener('click', () => openGenerator().catch(notifyError)); $('#importCsv').addEventListener('click', openCsvImport);
-      $('#prev').addEventListener('click', () => { state.page--; saveView(); loadRows(); }); $('#next').addEventListener('click', () => { state.page++; saveView(); loadRows(); });
-      $('#selectAll').addEventListener('change', event => { data.rows.forEach(row => event.target.checked ? state.selected.add(keyOf(row)) : state.selected.delete(keyOf(row))); loadRows(); });
-      document.querySelectorAll('.select-row').forEach(input => input.addEventListener('change', event => { const key = event.target.dataset.key; event.target.checked ? state.selected.add(key) : state.selected.delete(key); }));
+      const headers = `<th><input class="check" id="selectAll" type="checkbox" title="Seleccionar página"></th>${data.columns.map(column => `<th><button data-order="${esc(column.name)}">${esc(column.name)}${T.order === column.name ? (T.dir === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>`).join('')}<th>Acciones</th>`;
+      const rows = data.rows.map(row => { const key = keyOf(row); return `<tr><td><input class="check select-row" data-key="${esc(key)}" type="checkbox" ${T.selected.has(key) ? 'checked' : ''}></td>${data.columns.map(column => `<td>${esc(row[column.name])}</td>`).join('')}<td><div class="row-actions"><button class="edit-row" data-key="${esc(key)}">Editar</button><button class="danger delete-row" data-key="${esc(key)}">Eliminar</button></div></td></tr>`; }).join('');
+      const actividad = ['asistencia', 'atrasos', 'retiros', 'reingresos'].includes(T.table);
+      $('#content').innerHTML = `<div class="card">${actividad ? '<div class="success" style="background:var(--warn-soft);color:var(--warn)">Para asistencia, atrasos, retiros y reingresos es más seguro usar «Registros por día»: guarda las cuatro tablas de forma coherente.</div>' : ''}<div class="filters"><div class="field"><label for="search">Buscar</label><input id="search" value="${esc(T.q)}" placeholder="Texto en cualquier columna"></div><button class="btn secondary" id="clear">Limpiar</button><button class="btn" id="newRow">Nuevo registro</button><button class="btn secondary" id="deleteSelected">Eliminar seleccionados</button><button class="btn secondary" id="importCsv">Importar CSV</button></div><div class="table-wrap"><table><thead><tr>${headers}</tr></thead><tbody>${rows || `<tr><td colspan="${data.columns.length + 2}" class="empty">No hay registros para mostrar.</td></tr>`}</tbody></table></div><div class="pager"><span>${data.total} registro(s) · página ${data.page} de ${data.pages}</span><div class="buttons"><button id="prev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button><button id="next" ${data.page >= data.pages ? 'disabled' : ''}>Siguiente</button></div></div></div>`;
+      $('#search').addEventListener('input', event => { T.q = event.target.value; T.page = 1; loadRows(); });
+      $('#clear').addEventListener('click', () => { T.q = ''; T.page = 1; loadRows(); }); $('#newRow').addEventListener('click', () => openForm().catch(notifyError)); $('#deleteSelected').addEventListener('click', removeSelected); $('#importCsv').addEventListener('click', openCsvImport);
+      $('#prev').addEventListener('click', () => { T.page--; loadRows(); }); $('#next').addEventListener('click', () => { T.page++; loadRows(); });
+      $('#selectAll').addEventListener('change', event => { data.rows.forEach(row => event.target.checked ? T.selected.add(keyOf(row)) : T.selected.delete(keyOf(row))); loadRows(); });
+      document.querySelectorAll('.select-row').forEach(input => input.addEventListener('change', event => { const key = event.target.dataset.key; event.target.checked ? T.selected.add(key) : T.selected.delete(key); }));
       document.querySelectorAll('.edit-row').forEach(button => button.addEventListener('click', () => openForm(data.rows.find(row => keyOf(row) === button.dataset.key)).catch(notifyError)));
       document.querySelectorAll('.delete-row').forEach(button => button.addEventListener('click', () => removeRow(data.rows.find(row => keyOf(row) === button.dataset.key))));
-      document.querySelectorAll('[data-order]').forEach(button => button.addEventListener('click', () => { const order = button.dataset.order; state.dir = state.order === order && state.dir === 'asc' ? 'desc' : 'asc'; state.order = order; state.page = 1; saveView(); loadRows(); }));
+      document.querySelectorAll('[data-order]').forEach(button => button.addEventListener('click', () => { const order = button.dataset.order; T.dir = T.order === order && T.dir === 'asc' ? 'desc' : 'asc'; T.order = order; T.page = 1; loadRows(); }));
       saveView();
     } catch (error) { notifyError(error); }
   }
 
-  $('#tables').addEventListener('click', event => { const button = event.target.closest('[data-table]'); if (button) selectTable(button.dataset.table).catch(notifyError); });
-  $('#generateIntegrated').addEventListener('click', () => openIntegratedGenerator().catch(notifyError));
-  loadTables().catch(notifyError);
+  /* ---------- Arranque ---------- */
+  $('#views').addEventListener('click', event => { const b = event.target.closest('[data-view]'); if (b) show(b.dataset.view); });
+  $('#tables').addEventListener('click', event => { const b = event.target.closest('[data-table]'); if (b) selectTable(b.dataset.table).catch(notifyError); });
+  $('#generate').addEventListener('click', openGenerate);
+  $('#deleteRange').addEventListener('click', openDeleteRange);
+  (async () => {
+    try {
+      await loadMeta(); await refreshSide();
+      const p = new URLSearchParams(location.search);
+      if (p.get('tabla')) return await selectTable(p.get('tabla'), { page: Number(p.get('pagina')) || 1, q: p.get('q') || '', order: p.get('orden') || '', dir: p.get('dir') === 'desc' ? 'desc' : 'asc' });
+      ['desde', 'hasta', 'curso', 'alumno', 'tipo', 'q'].forEach(k => { if (p.get(k)) R[k] = p.get(k); });
+      R.page = Number(p.get('pagina')) || 1;
+      await show(['registros', 'resumen', 'coherencia'].includes(p.get('vista')) ? p.get('vista') : 'registros');
+    } catch (error) { notifyError(error); }
+  })();
 })();
 </script>
 </body>

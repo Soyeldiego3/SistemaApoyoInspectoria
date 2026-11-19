@@ -489,6 +489,326 @@ function createAdminRouter(db) {
     }
   });
 
+  /* ================================================================
+   * Vista unificada por alumno y día + generación realista
+   * Tablas de actividad: asistencia, atrasos, retiros, reingresos.
+   * Todas tienen PK (alumno_id, fecha) y FK alumno_id -> alumnos.id;
+   * ninguna tabla las referencia, así que borrar filas de ellas es seguro.
+   * ================================================================ */
+  const ACT = ['asistencia', 'atrasos', 'retiros', 'reingresos'];
+  const bad = message => Object.assign(new Error(message), { statusCode: 400 });
+  const ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const tx = fn => {
+    db.prepare('BEGIN').run();
+    try { const result = fn(); db.prepare('COMMIT').run(); return result; }
+    catch (error) { db.prepare('ROLLBACK').run(); throw error; }
+  };
+  const checkRange = (desde, hasta) => {
+    if (!ISO.test(desde || '') || !ISO.test(hasta || '') || desde > hasta) throw bad('Rango de fechas no válido.');
+  };
+  const weekday = date => new Date(`${date}T12:00:00Z`).getUTCDay();
+  const schoolDays = (desde, hasta) => {
+    const feriados = new Set(db.prepare('SELECT fecha FROM feriados').all().map(row => row.fecha));
+    const out = [];
+    for (let d = new Date(`${desde}T12:00:00Z`); d <= new Date(`${hasta}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+      const f = d.toISOString().slice(0, 10), w = d.getUTCDay();
+      if (w > 0 && w < 6 && !feriados.has(f)) out.push(f);
+    }
+    return out;
+  };
+  const hhmm = minutes => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  const rutDv = body => {
+    let sum = 0, mul = 2;
+    for (let i = body.length - 1; i >= 0; i -= 1) { sum += Number(body[i]) * mul; mul = mul === 7 ? 2 : mul + 1; }
+    const dv = 11 - (sum % 11);
+    return dv === 11 ? '0' : dv === 10 ? 'K' : String(dv);
+  };
+  const fmtRut = body => `${body.slice(0, 2)}.${body.slice(2, 5)}.${body.slice(5)}-${rutDv(body)}`;
+
+  // Filtro común (rango, curso, alumno) sobre la unión de claves (alumno_id, fecha) de las 4 tablas.
+  const filtroDias = query => {
+    const where = [], params = [];
+    if (ISO.test(query.desde || '')) { where.push('k.fecha >= ?'); params.push(query.desde); }
+    if (ISO.test(query.hasta || '')) { where.push('k.fecha <= ?'); params.push(query.hasta); }
+    if (Number(query.curso)) { where.push('a.curso_id = ?'); params.push(Number(query.curso)); }
+    if (Number(query.alumno)) { where.push('a.id = ?'); params.push(Number(query.alumno)); }
+    if (typeof query.q === 'string' && query.q.trim()) {
+      where.push("(a.rut LIKE ? OR (a.apellidos || ' ' || a.nombres) LIKE ? OR (a.nombres || ' ' || a.apellidos) LIKE ?)");
+      const like = `%${query.q.trim()}%`; params.push(like, like, like);
+    }
+    const tipos = {
+      ausentes: "s.estado = 'A'",
+      atrasos: 't.alumno_id IS NOT NULL',
+      retiros: 'r.alumno_id IS NOT NULL',
+      reingresos: 'i.alumno_id IS NOT NULL',
+      incoherentes: `((t.alumno_id IS NOT NULL AND s.estado IS NOT 'T') OR (s.estado = 'T' AND t.alumno_id IS NULL)
+                     OR ((r.alumno_id IS NOT NULL OR i.alumno_id IS NOT NULL) AND s.estado IS NOT 'P' AND s.estado IS NOT 'T'))`
+    };
+    if (tipos[query.tipo]) where.push(tipos[query.tipo]);
+    return { where: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
+  };
+  const FROM_DIAS = `FROM (SELECT alumno_id, fecha FROM asistencia UNION SELECT alumno_id, fecha FROM atrasos
+                           UNION SELECT alumno_id, fecha FROM retiros UNION SELECT alumno_id, fecha FROM reingresos) k
+    JOIN alumnos a ON a.id = k.alumno_id JOIN cursos c ON c.id = a.curso_id
+    LEFT JOIN asistencia s ON s.alumno_id = k.alumno_id AND s.fecha = k.fecha
+    LEFT JOIN atrasos t    ON t.alumno_id = k.alumno_id AND t.fecha = k.fecha
+    LEFT JOIN retiros r    ON r.alumno_id = k.alumno_id AND r.fecha = k.fecha
+    LEFT JOIN reingresos i ON i.alumno_id = k.alumno_id AND i.fecha = k.fecha`;
+
+  router.get('/meta', (req, res) => {
+    try {
+      const rango = db.prepare(`SELECT MIN(f) AS min, MAX(f) AS max FROM (SELECT fecha f FROM asistencia UNION ALL SELECT fecha FROM atrasos
+                                UNION ALL SELECT fecha FROM retiros UNION ALL SELECT fecha FROM reingresos)`).get();
+      res.json({
+        rango,
+        cursos: db.prepare('SELECT id, nombre FROM cursos ORDER BY id').all(),
+        alumnos: db.prepare(`SELECT a.id, a.rut, a.nombres, a.apellidos, a.curso_id, c.nombre AS curso
+                             FROM alumnos a JOIN cursos c ON c.id = a.curso_id ORDER BY a.apellidos, a.nombres`).all(),
+        feriados: db.prepare('SELECT fecha FROM feriados ORDER BY fecha').all().map(row => row.fecha)
+      });
+    } catch (error) { sendError(res, error); }
+  });
+
+  router.get('/registros', (req, res) => {
+    try {
+      const { where, params } = filtroDias(req.query);
+      const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+      const total = db.prepare(`SELECT COUNT(*) AS n ${FROM_DIAS} ${where}`).get(...params).n;
+      const rows = db.prepare(`SELECT k.alumno_id, k.fecha, a.rut, a.nombres, a.apellidos, c.nombre AS curso, s.estado,
+          t.hora_llegada, t.justificado, r.hora_retiro, r.retira, r.motivo AS motivo_retiro, i.hora_reingreso, i.motivo AS motivo_reingreso
+        ${FROM_DIAS} ${where} ORDER BY k.fecha DESC, c.id, a.apellidos, a.nombres LIMIT ? OFFSET ?`).all(...params, limit, (page - 1) * limit);
+      res.json({ rows, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // Guarda un día completo de un alumno en las 4 tablas, de forma coherente y en una sola transacción.
+  router.put('/registros', (req, res) => {
+    try {
+      const body = req.body || {};
+      const alumnoId = Number(body.alumno_id);
+      if (!alumnoId || !db.prepare('SELECT 1 FROM alumnos WHERE id = ?').get(alumnoId)) throw bad('Alumno no válido.');
+      if (!ISO.test(body.fecha || '')) throw bad('Fecha no válida.');
+      const estado = body.estado || '';
+      if (!['', 'P', 'A', 'T'].includes(estado)) throw bad('Estado no válido.');
+      const { atraso, retiro, reingreso } = body;
+      if (estado === 'T' && !atraso) throw bad('Un atraso (estado T) requiere hora de llegada.');
+      if (atraso && estado !== 'T') throw bad('Solo un alumno con estado T (atraso) puede tener hora de llegada.');
+      if ((retiro || reingreso) && estado !== 'P' && estado !== 'T') throw bad('Retiro y reingreso requieren que el alumno esté presente (P o T).');
+      if (atraso && !HORA.test(atraso.hora_llegada || '')) throw bad('Hora de llegada no válida (HH:MM).');
+      if (retiro && (!HORA.test(retiro.hora_retiro || '') || !retiro.retira || !retiro.motivo)) throw bad('Retiro incompleto: hora (HH:MM), quién retira y motivo.');
+      if (reingreso && (!HORA.test(reingreso.hora_reingreso || '') || !reingreso.motivo)) throw bad('Reingreso incompleto: hora (HH:MM) y motivo.');
+      const key = [alumnoId, body.fecha];
+      tx(() => {
+        ACT.forEach(t => db.prepare(`DELETE FROM ${t} WHERE alumno_id = ? AND fecha = ?`).run(...key));
+        if (estado) db.prepare('INSERT INTO asistencia (alumno_id, fecha, estado) VALUES (?, ?, ?)').run(...key, estado);
+        if (atraso) db.prepare('INSERT INTO atrasos (alumno_id, fecha, hora_llegada, justificado) VALUES (?, ?, ?, ?)').run(...key, atraso.hora_llegada, atraso.justificado ? 1 : 0);
+        if (retiro) db.prepare('INSERT INTO retiros (alumno_id, fecha, hora_retiro, retira, motivo) VALUES (?, ?, ?, ?, ?)').run(...key, retiro.hora_retiro, String(retiro.retira), String(retiro.motivo));
+        if (reingreso) db.prepare('INSERT INTO reingresos (alumno_id, fecha, hora_reingreso, motivo) VALUES (?, ?, ?, ?)').run(...key, reingreso.hora_reingreso, String(reingreso.motivo));
+      });
+      res.json({ ok: true });
+    } catch (error) { sendError(res, sqliteError(error)); }
+  });
+
+  router.delete('/registros', (req, res) => {
+    try {
+      const keys = Array.isArray(req.body && req.body.keys) ? req.body.keys : [req.body || {}];
+      if (!keys.length || keys.some(k => !Number(k.alumno_id) || !ISO.test(k.fecha || ''))) throw bad('Claves no válidas.');
+      const changes = tx(() => keys.reduce((n, k) => n + ACT.reduce((m, t) =>
+        m + Number(db.prepare(`DELETE FROM ${t} WHERE alumno_id = ? AND fecha = ?`).run(Number(k.alumno_id), k.fecha).changes), 0), 0));
+      res.json({ changes });
+    } catch (error) { sendError(res, sqliteError(error)); }
+  });
+
+  // Borra (o cuenta, con preview) todos los registros de actividad en un rango, opcionalmente de un curso.
+  router.post('/borrar-rango', (req, res) => {
+    try {
+      const { desde, hasta, preview } = req.body || {};
+      checkRange(desde, hasta);
+      const curso = Number(req.body.cursoId) || null;
+      const cond = `fecha BETWEEN ? AND ?${curso ? ' AND alumno_id IN (SELECT id FROM alumnos WHERE curso_id = ?)' : ''}`;
+      const params = curso ? [desde, hasta, curso] : [desde, hasta];
+      const counts = Object.fromEntries(ACT.map(t => [t, db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE ${cond}`).get(...params).n]));
+      if (preview) return res.json({ preview: true, counts });
+      const deleted = tx(() => Object.fromEntries(ACT.map(t => [t, Number(db.prepare(`DELETE FROM ${t} WHERE ${cond}`).run(...params).changes)])));
+      res.json({ deleted });
+    } catch (error) { sendError(res, sqliteError(error)); }
+  });
+
+  router.get('/resumen', (req, res) => {
+    try {
+      const meses = db.prepare(`SELECT substr(fecha, 1, 7) AS mes, COUNT(DISTINCT fecha) AS dias, COUNT(*) AS registros,
+          SUM(estado = 'P') AS P, SUM(estado = 'A') AS A, SUM(estado = 'T') AS T FROM asistencia GROUP BY mes ORDER BY mes`).all();
+      const extra = t => Object.fromEntries(db.prepare(`SELECT substr(fecha, 1, 7) AS mes, COUNT(*) AS n FROM ${t} GROUP BY mes`).all().map(r => [r.mes, r.n]));
+      const [atr, ret, rei] = ['atrasos', 'retiros', 'reingresos'].map(extra);
+      const todos = new Set([...meses.map(m => m.mes), ...Object.keys(atr), ...Object.keys(ret), ...Object.keys(rei)]);
+      const porMes = [...todos].sort().map(mes => {
+        const m = meses.find(x => x.mes === mes) || { mes, dias: 0, registros: 0, P: 0, A: 0, T: 0 };
+        return { ...m, atrasos: atr[mes] || 0, retiros: ret[mes] || 0, reingresos: rei[mes] || 0 };
+      });
+      const riesgo = db.prepare(`SELECT a.id, a.rut, a.nombres, a.apellidos, c.nombre AS curso, COUNT(*) AS dias,
+          SUM(s.estado = 'A') AS A, SUM(s.estado = 'T') AS T, ROUND(100.0 * SUM(s.estado <> 'A') / COUNT(*), 1) AS pct
+        FROM asistencia s JOIN alumnos a ON a.id = s.alumno_id JOIN cursos c ON c.id = a.curso_id
+        GROUP BY a.id HAVING pct < 85 OR T >= 10 ORDER BY pct, T DESC LIMIT 30`).all();
+      res.json({ porMes, riesgo });
+    } catch (error) { sendError(res, error); }
+  });
+
+  // Revisión de coherencia entre tablas (y reparación opcional).
+  const PROBLEMAS = {
+    atrasoSinT: { txt: 'Atraso registrado pero asistencia distinta de T', sql: `FROM atrasos t LEFT JOIN asistencia s USING (alumno_id, fecha) WHERE s.estado IS NOT 'T'`,
+      fix: `INSERT INTO asistencia (alumno_id, fecha, estado) SELECT t.alumno_id, t.fecha, 'T' FROM atrasos t WHERE true
+            ON CONFLICT (alumno_id, fecha) DO UPDATE SET estado = 'T'`, fixTxt: 'marca la asistencia como T' },
+    tSinAtraso: { txt: 'Asistencia T sin hora de llegada', sql: `FROM asistencia s LEFT JOIN atrasos t USING (alumno_id, fecha) WHERE s.estado = 'T' AND t.alumno_id IS NULL`,
+      fix: `INSERT INTO atrasos (alumno_id, fecha, hora_llegada, justificado) SELECT s.alumno_id, s.fecha, '08:15', 0 FROM asistencia s
+            WHERE s.estado = 'T' AND NOT EXISTS (SELECT 1 FROM atrasos t WHERE t.alumno_id = s.alumno_id AND t.fecha = s.fecha)`, fixTxt: 'crea el atraso a las 08:15' },
+    salidaAusente: { txt: 'Retiro o reingreso en un día sin presencia (A o sin asistencia)',
+      sql: `FROM (SELECT alumno_id, fecha FROM retiros UNION SELECT alumno_id, fecha FROM reingresos) x LEFT JOIN asistencia s USING (alumno_id, fecha)
+            WHERE s.estado IS NULL OR s.estado = 'A'`,
+      fix: `INSERT INTO asistencia (alumno_id, fecha, estado) SELECT alumno_id, fecha, 'P' FROM (SELECT alumno_id, fecha FROM retiros UNION SELECT alumno_id, fecha FROM reingresos) WHERE true
+            ON CONFLICT (alumno_id, fecha) DO UPDATE SET estado = 'P' WHERE estado = 'A'`, fixTxt: 'marca la asistencia como P' },
+    diaNoLectivo: { txt: 'Registros en fin de semana o feriado',
+      sql: `FROM (SELECT fecha FROM asistencia UNION ALL SELECT fecha FROM atrasos UNION ALL SELECT fecha FROM retiros UNION ALL SELECT fecha FROM reingresos)
+            WHERE strftime('%w', fecha) IN ('0', '6') OR fecha IN (SELECT fecha FROM feriados)`,
+      fixAll: ACT.map(t => `DELETE FROM ${t} WHERE strftime('%w', fecha) IN ('0', '6') OR fecha IN (SELECT fecha FROM feriados)`), fixTxt: 'los elimina' }
+  };
+  const revisar = () => {
+    const out = Object.entries(PROBLEMAS).map(([id, p]) => ({ id, txt: p.txt, fixTxt: p.fixTxt, n: db.prepare(`SELECT COUNT(*) AS n ${p.sql}`).get().n }));
+    out.push({ id: 'fk', txt: 'Filas con alumno inexistente (FK rota)', fixTxt: 'revisar a mano', n: db.prepare('PRAGMA foreign_key_check').all().length });
+    return out;
+  };
+  router.get('/coherencia', (req, res) => { try { res.json(revisar()); } catch (error) { sendError(res, error); } });
+  router.post('/coherencia/reparar', (req, res) => {
+    try {
+      tx(() => ['diaNoLectivo', 'atrasoSinT', 'tSinAtraso', 'salidaAusente'].forEach(id => {
+        const p = PROBLEMAS[id];
+        (p.fixAll || [p.fix]).forEach(sql => db.prepare(sql).run());
+      }));
+      res.json(revisar());
+    } catch (error) { sendError(res, sqliteError(error)); }
+  });
+
+  /* ---------- Generación realista ----------
+   * Cada alumno recibe un perfil (regular, atrasador, inasistente, en riesgo). Cada día lectivo:
+   *  - las ausencias llegan en rachas (enfermedad de 1 a 4 días) y son más probables lunes y viernes;
+   *  - algunos días son "difíciles" (lluvia, paro de transporte) con muchos más atrasos;
+   *  - estado T siempre trae su fila en atrasos; retiros y reingresos solo en días presentes.
+   */
+  const PERFILES = {
+    regular:     { a: 0.020, t: 0.030, ret: 0.010, rei: 0.008 },
+    atrasador:   { a: 0.030, t: 0.220, ret: 0.012, rei: 0.020 },
+    inasistente: { a: 0.110, t: 0.060, ret: 0.025, rei: 0.015 },
+    riesgo:      { a: 0.170, t: 0.150, ret: 0.035, rei: 0.025 }
+  };
+  const CARGAS = {
+    normal:   { regular: 75, atrasador: 12, inasistente: 8,  riesgo: 5 },
+    alta:     { regular: 45, atrasador: 25, inasistente: 18, riesgo: 12 },
+    muy_alta: { regular: 25, atrasador: 30, inasistente: 25, riesgo: 20 }
+  };
+  const MOTIVOS_RETIRO = ['Control médico', 'Control médico', 'Malestar de salud', 'Malestar de salud', 'Trámite familiar', 'Emergencia familiar', 'Hora dental'];
+  const QUIEN_RETIRA = ['Apoderado titular', 'Apoderado titular', 'Apoderado suplente', 'Madre', 'Padre', 'Abuela'];
+  const MOTIVOS_REINGRESO = ['Control médico', 'Retraso de transporte', 'Trámite familiar', 'Examen médico'];
+  const NOMBRES = ['Sofía', 'Mateo', 'Isidora', 'Benjamín', 'Camila', 'Tomás', 'Emilia', 'Agustín', 'Valentina', 'Vicente', 'Florencia', 'Martín',
+    'Antonella', 'Lucas', 'Josefa', 'Maximiliano', 'Trinidad', 'Joaquín', 'Catalina', 'Cristóbal', 'Javiera', 'Gaspar', 'Amanda', 'Felipe'];
+  const APELLIDOS = ['González', 'Muñoz', 'Rojas', 'Díaz', 'Pérez', 'Soto', 'Contreras', 'Silva', 'Martínez', 'Sepúlveda', 'Morales', 'Rodríguez',
+    'López', 'Fuentes', 'Hernández', 'Torres', 'Araya', 'Flores', 'Espinoza', 'Valenzuela', 'Castillo', 'Tapia', 'Reyes', 'Gutiérrez', 'Castro', 'Vargas'];
+
+  router.post('/generar-escenario', (req, res) => {
+    try {
+      const o = (req.body && req.body.options) || {};
+      checkRange(o.desde, o.hasta);
+      const dias = schoolDays(o.desde, o.hasta);
+      if (!dias.length) throw bad('El rango no contiene días lectivos (lunes a viernes sin feriados).');
+      if (dias.length > 400) throw bad('El rango es demasiado largo (máximo 400 días lectivos).');
+      const carga = CARGAS[o.carga] ? o.carga : 'alta';
+      const cursoId = Number(o.cursoId) || null;
+      const nuevos = Math.max(0, Math.min(300, Number.parseInt(o.nuevosAlumnos, 10) || 0));
+      const random = seededRandom(req.body.seed === '' || req.body.seed == null ? undefined : req.body.seed);
+      const pick = list => list[Math.floor(random() * list.length)];
+      const cursos = db.prepare('SELECT id FROM cursos ORDER BY id').all().map(r => r.id);
+      if (!cursos.length) throw bad('No hay cursos.');
+
+      const report = tx(() => {
+        const rep = { dias: dias.length, alumnosNuevos: 0, borrados: 0, asistencia: 0, P: 0, A: 0, T: 0, atrasos: 0, retiros: 0, reingresos: 0, omitidosExistentes: 0, perfiles: {} };
+        // Alumnos nuevos con RUT válido (módulo 11), repartidos en los cursos con menos alumnos.
+        const usados = new Set(db.prepare('SELECT rut FROM alumnos').all().map(r => r.rut));
+        const insAlumno = db.prepare('INSERT INTO alumnos (rut, nombres, apellidos, curso_id) VALUES (?, ?, ?, ?)');
+        const porCurso = new Map(cursos.map(id => [id, 0]));
+        db.prepare('SELECT curso_id, COUNT(*) AS n FROM alumnos GROUP BY curso_id').all().forEach(r => porCurso.set(r.curso_id, r.n));
+        for (let i = 0; i < nuevos; i += 1) {
+          let rut;
+          do rut = fmtRut(String(22000000 + Math.floor(random() * 5000000))); while (usados.has(rut));
+          usados.add(rut);
+          const destino = cursoId || [...porCurso.entries()].sort((x, y) => x[1] - y[1])[0][0];
+          porCurso.set(destino, (porCurso.get(destino) || 0) + 1);
+          const nombres = random() < 0.4 ? `${pick(NOMBRES)} ${pick(NOMBRES)}` : pick(NOMBRES);
+          insAlumno.run(rut, nombres, `${pick(APELLIDOS)} ${pick(APELLIDOS)}`, destino);
+          rep.alumnosNuevos += 1;
+        }
+        const alumnos = db.prepare(`SELECT id FROM alumnos ${cursoId ? 'WHERE curso_id = ?' : ''} ORDER BY id`).all(...(cursoId ? [cursoId] : [])).map(r => r.id);
+
+        if (o.reemplazar) {
+          const cond = `fecha BETWEEN ? AND ?${cursoId ? ' AND alumno_id IN (SELECT id FROM alumnos WHERE curso_id = ?)' : ''}`;
+          const params = cursoId ? [o.desde, o.hasta, cursoId] : [o.desde, o.hasta];
+          ACT.forEach(t => { rep.borrados += Number(db.prepare(`DELETE FROM ${t} WHERE ${cond}`).run(...params).changes); });
+        }
+        // Días con algún registro previo: no se tocan (para no mezclar datos incoherentes).
+        const ocupados = new Set(db.prepare(`SELECT alumno_id || '|' || fecha AS k FROM asistencia WHERE fecha BETWEEN ? AND ?
+          UNION SELECT alumno_id || '|' || fecha FROM atrasos WHERE fecha BETWEEN ? AND ? UNION SELECT alumno_id || '|' || fecha FROM retiros WHERE fecha BETWEEN ? AND ?
+          UNION SELECT alumno_id || '|' || fecha FROM reingresos WHERE fecha BETWEEN ? AND ?`).all(o.desde, o.hasta, o.desde, o.hasta, o.desde, o.hasta, o.desde, o.hasta).map(r => r.k));
+
+        // Días difíciles (lluvia, problemas de transporte): ~10 % de los días, con el triple de atrasos.
+        const dificil = new Map(dias.map(f => [f, random() < 0.10 ? 3 : 1]));
+        const reparto = CARGAS[carga];
+        const totalPeso = Object.values(reparto).reduce((s, v) => s + v, 0);
+        const insS = db.prepare('INSERT INTO asistencia (alumno_id, fecha, estado) VALUES (?, ?, ?)');
+        const insT = db.prepare('INSERT INTO atrasos (alumno_id, fecha, hora_llegada, justificado) VALUES (?, ?, ?, ?)');
+        const insR = db.prepare('INSERT INTO retiros (alumno_id, fecha, hora_retiro, retira, motivo) VALUES (?, ?, ?, ?, ?)');
+        const insI = db.prepare('INSERT INTO reingresos (alumno_id, fecha, hora_reingreso, motivo) VALUES (?, ?, ?, ?)');
+
+        for (const alumnoId of alumnos) {
+          let punto = random() * totalPeso, perfil = 'regular';
+          for (const [nombre, peso] of Object.entries(reparto)) { punto -= peso; if (punto <= 0) { perfil = nombre; break; } }
+          rep.perfiles[perfil] = (rep.perfiles[perfil] || 0) + 1;
+          const p = PERFILES[perfil];
+          let racha = 0;
+          for (const fecha of dias) {
+            if (ocupados.has(`${alumnoId}|${fecha}`)) { rep.omitidosExistentes += 1; racha = 0; continue; }
+            const w = weekday(fecha);
+            let estado = 'P';
+            if (racha > 0) { estado = 'A'; racha -= 1; }
+            else if (random() < p.a * (w === 1 || w === 5 ? 1.4 : 1)) {
+              estado = 'A';
+              // Racha de enfermedad: 40 % de las ausencias duran de 2 a 4 días.
+              if (random() < 0.4) racha = 1 + Math.floor(random() * 3);
+            } else if (random() < Math.min(0.85, p.t * dificil.get(fecha) * (w === 1 ? 1.25 : 1))) estado = 'T';
+            insS.run(alumnoId, fecha, estado); rep.asistencia += 1; rep[estado] += 1;
+            if (estado === 'A') continue;
+            if (estado === 'T') {
+              // La mayoría llega pocos minutos tarde; unos pocos, cerca de las 09:30.
+              const llegada = 8 * 60 + 5 + Math.floor(Math.pow(random(), 2.2) * 85);
+              insT.run(alumnoId, fecha, hhmm(llegada), random() < 0.3 ? 1 : 0); rep.atrasos += 1;
+            }
+            let retiroMin = null;
+            if (random() < p.ret) {
+              retiroMin = 10 * 60 + 15 * Math.floor(random() * 24);
+              insR.run(alumnoId, fecha, hhmm(retiroMin), pick(QUIEN_RETIRA), pick(MOTIVOS_RETIRO)); rep.retiros += 1;
+            }
+            // Reingreso: vuelve tras un retiro corto (control médico) o llega después de un trámite.
+            if (retiroMin !== null && retiroMin <= 13 * 60 && random() < 0.3) {
+              insI.run(alumnoId, fecha, hhmm(retiroMin + 90 + 15 * Math.floor(random() * 6)), 'Control médico'); rep.reingresos += 1;
+            } else if (retiroMin === null && random() < p.rei) {
+              insI.run(alumnoId, fecha, hhmm(9 * 60 + 45 + 15 * Math.floor(random() * 12)), pick(MOTIVOS_REINGRESO)); rep.reingresos += 1;
+            }
+          }
+        }
+        return rep;
+      });
+      res.json(report);
+    } catch (error) { sendError(res, sqliteError(error)); }
+  });
+
   router.post('/tablas/:tabla/masivo', (req, res) => {
     try {
       const table = getTable(req.params.tabla);
