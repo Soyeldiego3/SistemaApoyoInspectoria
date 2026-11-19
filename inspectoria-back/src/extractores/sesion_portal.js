@@ -58,7 +58,7 @@ function candidatosNavegador() {
   if (process.platform !== 'linux') {
     candidatos.push({
       nombre: 'Microsoft Edge',
-      lanzar: () => chromium.launch({ channel: 'noexiste', headless: false }),
+      lanzar: () => chromium.launch({ channel: 'msedge', headless: false }),
     });
   }
   candidatos.push({
