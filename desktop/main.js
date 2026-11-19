@@ -74,6 +74,7 @@ function createWindow() {
     width: 1280,
     height: 800,
     backgroundColor: '#1c1c1e', // evita el destello blanco al abrir
+    icon: path.join(__dirname, 'assets', 'icons', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
