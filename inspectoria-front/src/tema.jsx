@@ -12,16 +12,16 @@ export const MODOS = [
 
 // "muestra" es solo para el selector; los colores reales están en index.css (data-paleta)
 export const PALETAS = [
+  { id: 'oficina', label: 'Oficina', muestra: '#4f6d8f' },
   { id: 'azul', label: 'Azul', muestra: '#0a84ff' },
   { id: 'lavanda', label: 'Lavanda', muestra: '#7d6bf0' },
-  { id: 'oficina', label: 'Oficina', muestra: '#4f6d8f' },
   { id: 'lasalle', label: 'De La Salle', muestra: 'linear-gradient(135deg, #1f4fa3 50%, #ffcc00 50%)' },
 ];
 
-const POR_DEFECTO = { modo: 'oscuro', paleta: 'azul' };
+const POR_DEFECTO = { modo: 'oscuro', paleta: 'oficina' };
 const CONSULTA_CLARO = '(prefers-color-scheme: light)';
 
-// Si no hay nada guardado (o el navegador no deja leer), se usa Oscuro + Azul.
+// Si no hay nada guardado (o el navegador no deja leer), se usa Oscuro + Oficina.
 export function leerPreferencia() {
   try {
     const guardada = JSON.parse(localStorage.getItem(CLAVE_TEMA));

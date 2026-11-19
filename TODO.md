@@ -10,14 +10,11 @@
 
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
 
-- Añadir efecto hover en los botones para seleccionar secciones. (inicio, auditar, alumnos, etc.)
-
 - En auditoria enfocarse en la idea de poder detectar patrones de inasistencia y jusitificaciones. ej: alumno falta siempre el mismo dia, alumno falta mucho, razon multiples certificados medicos. asi poder iniciar alertas en casos especificos y hacer llamados de atención. 
 
+- Pasar el inicio de sesion en la url hacia el telefono.
 
 ## En progreso
-
-- Pasar el inicio de sesion en la url hacia el telefono.
 
 
 
@@ -52,6 +49,9 @@
 - El token de sesión guarda el nombre del usuario, no su id. Ver auth.js:25 y sesion.js:9.
 
 - Arreglar seccion de sincronizacion de inicio.
+
 - Probar más paletas de colores
 
 - Añadir sección de ajustes: paleta de colores, tamaño de texto, modo claro/oscuro, personalización
+
+- Añadir efecto hover en los botones para seleccionar secciones. (inicio, auditar, alumnos, etc.)

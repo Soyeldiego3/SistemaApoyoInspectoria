@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, FileUp, RefreshCw } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { FileUp, RefreshCw } from 'lucide-react';
 import {
   getCredencialesPortal,
   guardarCredencialesPortal,
@@ -9,14 +9,7 @@ import {
   probarCredencialesPortal,
 } from '../api.js';
 import GridLoader from '../components/GridLoader.jsx';
-
-const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
-  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
-  CREDENCIALES_REQUERIDAS: 'Las credenciales del portal son necesarias para sincronizar.',
-};
+import CredencialesSheet, { MENSAJES_PORTAL } from '../components/CredencialesSheet.jsx';
 
 // RF-01: obtener asistencia por extracción automática (Playwright) o importando CSV/Excel
 export default function Sync() {
@@ -27,9 +20,7 @@ export default function Sync() {
   const [archivo, setArchivo] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [mostrarCredenciales, setMostrarCredenciales] = useState(false);
-  const [mostrarPass, setMostrarPass] = useState(false);
   const [guardadas, setGuardadas] = useState(false);
-  const [estadoPortal, setEstadoPortal] = useState('cargando');
   const [portal, setPortal] = useState(null);
   const [accionModal, setAccionModal] = useState('sync'); // sync | probar | guardar
   const [procesando, setProcesando] = useState(false);
@@ -47,14 +38,12 @@ export default function Sync() {
       const info = await getCredencialesPortal();
       setPortal(info);
       setGuardadas(Boolean(info.guardadas || info.enMemoria));
-      setEstadoPortal(info.invalidas ? 'invalidas' : (info.guardadas || info.enMemoria ? 'ok' : 'vacio'));
       setCredenciales((actuales) => ({
         ...actuales,
         usuario: info.usuario || actuales.usuario,
         urlPortal: info.urlPortal || actuales.urlPortal,
       }));
     } catch (error) {
-      setEstadoPortal('error');
       setMensaje(error.message);
     }
   };
@@ -97,7 +86,6 @@ export default function Sync() {
   const abrirModal = (accion) => {
     setAccionModal(accion);
     setMostrarCredenciales(true);
-    setMostrarPass(false);
     setMensaje('');
     setMensajeModal('');
     setProcesando(false);
@@ -283,7 +271,7 @@ export default function Sync() {
       await olvidarCredencialesPortal();
       setGuardadas(false);
       setPortal(null);
-      setEstadoPortal('vacio');
+      setMostrarCredenciales(false);
       setCredenciales({ usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false });
       setMensaje('Credenciales olvidadas en este equipo.');
       setEstado('ok');
@@ -309,33 +297,6 @@ export default function Sync() {
 
   return (
     <>
-      {esPc && (
-        <section className="card" style={{ marginBottom: 16 }}>
-          <div>
-            <h2>Credenciales del portal</h2>
-            {estadoPortal === 'cargando' && <p className="muted">Consultando estado…</p>}
-            {estadoPortal === 'vacio' && <p className="muted">No configuradas.</p>}
-            {estadoPortal === 'ok' && (
-              <p className="muted">
-                Configuradas para <strong>{portal?.usuario}</strong>
-                {portal?.enMemoria ? ' · solo en memoria' : ''}
-              </p>
-            )}
-            {estadoPortal === 'invalidas' && (
-              <p role="alert" style={{ color: 'var(--bad)' }}>
-                Las credenciales guardadas están inválidas. Actualízalas para continuar.
-              </p>
-            )}
-            {portal?.urlPortal && <p className="muted">Portal: {portal.urlPortal}</p>}
-          </div>
-          <div className="portal-acciones">
-            <button className="btn" onClick={() => abrirModal('guardar')}>Modificar</button>
-            <button className="btn outline" onClick={() => abrirModal('probar')}>Probar conexión</button>
-            {guardadas && <button className="btn peligro" onClick={olvidar}>Olvidar</button>}
-          </div>
-        </section>
-      )}
-
       <div className="cols2">
         <section className="card">
           <h2>Extracción automática</h2>
@@ -351,6 +312,11 @@ export default function Sync() {
             <p className="muted" role="status" style={{ marginTop: 10 }}>
               Descargando todos los cursos desde el portal, puede tardar unos segundos.
             </p>
+          )}
+          {esPc && (
+            <Link to="/ajustes" className="muted" style={{ display: 'inline-block', marginTop: 10, fontSize: '.85rem' }}>
+              Configurar credenciales en Ajustes
+            </Link>
           )}
         </section>
 
@@ -373,74 +339,19 @@ export default function Sync() {
       )}
 
       {mostrarCredenciales && (
-        <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="portal-title">
-          <form className="sheet" onSubmit={enviarCredenciales}>
-            <div className="grab" />
-            <div className="row">
-              <h2 id="portal-title">Credenciales del portal</h2>
-              <button type="button" className="iconbtn" onClick={() => {
-                if (procesando) cancelarOperacion();
-                setMostrarCredenciales(false);
-              }} aria-label="Cerrar">×</button>
-            </div>
-            <p className="muted">
-              {accionModal === 'probar' ? 'Comprueba el acceso sin guardar cambios.' :
-                accionModal === 'guardar' ? 'Se validarán antes de guardarse.' :
-                'Se usan durante la sincronización.'}
-            </p>
-            <div className="field">
-              <label htmlFor="portal-user">Usuario</label>
-              <input id="portal-user" className="input" value={credenciales.usuario}
-                onChange={(e) => setCredenciales({ ...credenciales, usuario: e.target.value })}
-                autoComplete="username" autoFocus />
-            </div>
-            <div className="field">
-              <label htmlFor="portal-pass">Contraseña</label>
-              <div style={{ position: 'relative' }}>
-                <input id="portal-pass" className="input" type={mostrarPass ? 'text' : 'password'}
-                  value={credenciales.pass}
-                  ref={passRef}
-                  onChange={(e) => setCredenciales({ ...credenciales, pass: e.target.value })}
-                  autoComplete="current-password" style={{ paddingRight: 48 }} />
-                <button type="button" className="iconbtn" onClick={() => setMostrarPass(!mostrarPass)}
-                  aria-label={mostrarPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  style={{ position: 'absolute', right: 12, top: 12 }}>
-                  {mostrarPass ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="portal-url">URL del portal</label>
-              <input id="portal-url" className="input" type="url" value={credenciales.urlPortal}
-                onChange={(e) => setCredenciales({ ...credenciales, urlPortal: e.target.value })}
-                placeholder="Usar URL configurada por defecto" />
-            </div>
-            {accionModal === 'sync' && (
-              <>
-                <label className="row" style={{ justifyContent: 'flex-start', fontSize: '.85rem' }}>
-                  <input type="checkbox" checked={credenciales.recordar}
-                    onChange={(e) => setCredenciales({ ...credenciales, recordar: e.target.checked })} />
-                  Recordarme en este equipo
-                </label>
-                {!credenciales.recordar && (
-                  <label className="row" style={{ justifyContent: 'flex-start', fontSize: '.85rem' }}>
-                    <input type="checkbox" checked={credenciales.enMemoria}
-                      onChange={(e) => setCredenciales({ ...credenciales, enMemoria: e.target.checked })} />
-                    Mantener en memoria mientras la app esté abierta
-                  </label>
-                )}
-              </>
-            )}
-            {mensajeModal && estado === 'error' && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{mensajeModal}</p>}
-            <button className="btn" disabled={procesando}>
-              {procesando ? 'Procesando…' :
-                accionModal === 'probar' ? 'Probar conexión' :
-                accionModal === 'guardar' ? 'Guardar y verificar' : 'Sincronizar'}
-            </button>
-            {procesando && <button type="button" className="btn ghost" onClick={cancelarOperacion}>Cancelar</button>}
-            {guardadas && <button type="button" className="btn ghost" onClick={olvidar}>Olvidar credenciales guardadas</button>}
-          </form>
-        </div>
+        <CredencialesSheet
+          accion={accionModal}
+          credenciales={credenciales}
+          setCredenciales={setCredenciales}
+          procesando={procesando}
+          mensajeError={estado === 'error' ? mensajeModal : ''}
+          guardadas={guardadas}
+          passRef={passRef}
+          onSubmit={enviarCredenciales}
+          onCerrar={() => setMostrarCredenciales(false)}
+          onCancelar={cancelarOperacion}
+          onOlvidar={olvidar}
+        />
       )}
     </>
   );
