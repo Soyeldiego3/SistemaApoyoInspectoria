@@ -23,7 +23,7 @@
 
 ## En progreso
 
-- Arreglar seccion de sincronizacion de inicio.
+
 
 ## Completado
 
@@ -52,4 +52,7 @@
 - Añadir seccion de ajustes: alternar modo headless playwright (solo admin), alternar servidor web para smartphone (no mostrar en vista pequeña para evitar cortar la conexion por accidente)
 
 - Animación de carga al importar datos de alumnos
+
 - El token de sesión guarda el nombre del usuario, no su id. Ver auth.js:25 y sesion.js:9.
+
+- Arreglar seccion de sincronizacion de inicio.

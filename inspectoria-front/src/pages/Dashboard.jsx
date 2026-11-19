@@ -6,7 +6,35 @@ import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
 import { getCredencialesPortal, getDashboard, iniciarSync } from '../api.js';
 
-let sincronizacionAutomaticaEjecutada = false;
+// La sincronización automática se ejecuta una sola vez por sesión de la app. Se guarda la
+// promesa (no solo un indicador) para que, si el Inicio se vuelve a montar (al volver desde
+// otra pantalla), pueda leer el resultado en vez de quedarse en "Sincronizando…".
+let promesaSyncAutomatica = null;
+
+const ejecutarSyncAutomatica = async () => {
+  try {
+    const credenciales = await getCredencialesPortal();
+    if (!credenciales.guardadas || credenciales.invalidas) {
+      return {
+        estado: 'requiere',
+        codigo: '',
+        mensaje: credenciales.invalidas
+          ? 'Las credenciales guardadas están inválidas. Actualízalas para sincronizar.' : '',
+      };
+    }
+    await iniciarSync();
+    return { estado: 'ok', codigo: '', mensaje: 'Datos sincronizados correctamente.' };
+  } catch (error) {
+    const deLogin = error.code === 'CREDENCIALES_REQUERIDAS' || error.code === 'LOGIN_RECHAZADO';
+    return {
+      estado: 'error',
+      codigo: error.code || '',
+      mensaje: error.message || (deLogin
+        ? 'No se pudo iniciar sesión en el portal.'
+        : 'No se pudo sincronizar. Puedes reintentar desde Datos.'),
+    };
+  }
+};
 
 export default function Dashboard() {
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
@@ -35,44 +63,19 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!esPc || sincronizacionAutomaticaEjecutada) {
-      if (!esPc) setSyncEstado('sinDatos');
+    if (!esPc) {
+      setSyncEstado('sinDatos');
       return undefined;
     }
-    sincronizacionAutomaticaEjecutada = true;
     let activo = true;
-    const sincronizarAutomaticamente = async () => {
-      try {
-        const credenciales = await getCredencialesPortal();
-        if (!activo) return;
-        if (!credenciales.guardadas || credenciales.invalidas) {
-          setSyncEstado('requiere');
-          if (credenciales.invalidas) {
-            setSyncMensaje('Las credenciales guardadas están inválidas. Actualízalas para sincronizar.');
-          }
-          return;
-        }
-        await iniciarSync();
-        if (activo) {
-          setSyncCodigo('');
-          setSyncEstado('ok');
-          setSyncMensaje('Datos sincronizados correctamente.');
-          await cargarDashboard(() => activo);
-        }
-      } catch (error) {
-        if (!activo) return;
-        setSyncCodigo(error.code || '');
-        if (error.code === 'CREDENCIALES_REQUERIDAS' || error.code === 'LOGIN_RECHAZADO') {
-          setSyncEstado('error');
-          setSyncMensaje(error.message || 'No se pudo iniciar sesión en el portal.');
-        } else {
-          setSyncEstado('error');
-          setSyncMensaje(error.message || 'No se pudo sincronizar. Puedes reintentar desde Datos.');
-        }
-        await cargarDashboard(() => activo);
-      }
-    };
-    sincronizarAutomaticamente();
+    if (!promesaSyncAutomatica) promesaSyncAutomatica = ejecutarSyncAutomatica();
+    promesaSyncAutomatica.then((resultado) => {
+      if (!activo) return;
+      setSyncEstado(resultado.estado);
+      setSyncCodigo(resultado.codigo);
+      setSyncMensaje(resultado.mensaje);
+      if (resultado.estado !== 'requiere') cargarDashboard(() => activo);
+    });
     return () => { activo = false; };
   }, [esPc]);
 
@@ -100,7 +103,7 @@ export default function Dashboard() {
             {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />
               {syncCodigo === 'LOGIN_RECHAZADO' || syncCodigo === 'CREDENCIALES_REQUERIDAS'
                 ? 'Actualizar credenciales' : 'Reintentar'}</> :
-              syncEstado === 'requiere' ? 'Configurar credenciales' : 'Sincronizar'}
+              syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
           </Link>
         </div>
       </section>
