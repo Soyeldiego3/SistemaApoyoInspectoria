@@ -1,7 +1,9 @@
 # SistemaApoyoInspectoria
 Sistema de Apoyo para la auditoria y registro de justificaciones para la asistencia de los alumnos
 
-## instrucciones para crear el ejecutable portable windows.
+![Vista Demo del Proyecto](demos/demo-dark.png)
+
+## instrucciones para crear el ejecutable portable windows y linux.
 
 1. cd desktop
 
