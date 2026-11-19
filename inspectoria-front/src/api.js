@@ -108,6 +108,38 @@ export function crearJustificativo(rut, datos) {
   });
 }
 
+// ---------- Master de registro de inasistencias (Excel por curso) ----------
+export function getRangoDatos() {
+  return request('/registro/rango');
+}
+
+// Devuelve { blob, nombre, advertencias } para descargar el Excel del curso
+export async function exportarRegistro(curso) {
+  const token = getToken();
+  const response = await fetch(`${API_URL}${API_BASE}/registro/exportar?${new URLSearchParams({ curso })}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Error de API (${response.status})`);
+  }
+  const disposicion = response.headers.get('content-disposition') || '';
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposicion);
+  const simple = /filename="([^"]+)"/i.exec(disposicion);
+  const nombre = utf8 ? decodeURIComponent(utf8[1]) : simple?.[1] || 'Master de registro.xlsx';
+  let advertencias = [];
+  try { advertencias = JSON.parse(decodeURIComponent(response.headers.get('x-advertencias') || '[]')); } catch { /* sin avisos */ }
+  return { blob: await response.blob(), nombre, advertencias };
+}
+
+export function importarRegistro(curso, archivo) {
+  return request(`/registro/importar?${new URLSearchParams({ curso })}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: archivo,
+  });
+}
+
 export function iniciarSync(credenciales, options = {}) {
   return request('/sync/descargar-e-importar', {
     method: 'POST',

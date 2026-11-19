@@ -23,6 +23,8 @@ npm-debug.log*
 # Archivos descargados o temporales
 Archivos/
 *.xlsx
+# La plantilla del Master de registro (sin datos personales) sí se versiona
+!plantillas/master-inasistencias.xlsx
 
 # Archivos del sistema operativo
 .DS_Store

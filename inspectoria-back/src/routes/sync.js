@@ -66,7 +66,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     return res.status(estado).json(datos);
   };
   try {
-    const { usuario, pass, recordar, enMemoria, urlPortal } = req.body ?? {};
+    const { usuario, pass, recordar, enMemoria, urlPortal, periodo } = req.body ?? {};
     const tieneCredencialesBody = typeof usuario === 'string' && usuario.trim()
       && typeof pass === 'string' && pass;
     if (usuario !== undefined || pass !== undefined) {
@@ -101,7 +101,14 @@ router.post('/descargar-e-importar', async (req, res) => {
     if (!credenciales.urlPortal) credenciales.urlPortal = URL_PORTAL_CONFIGURADA;
 
     // TODO: convertir a job asíncrono
-    const mes = MESES[new Date().getMonth()];
+    const mesActual = new Date().getMonth();
+    const mes = MESES[mesActual];
+    // periodo 'anio': año escolar completo, de marzo al mes actual (útil para el Master de registro)
+    const INICIO_ANIO_ESCOLAR = 2; // marzo
+    const meses = periodo === 'anio' && mesActual > INICIO_ANIO_ESCOLAR
+      ? MESES.slice(INICIO_ANIO_ESCOLAR, mesActual + 1)
+      : [mes];
+    const advertencias = [];
     sesion = await abrirSesion(credenciales);
     credencialesPortal.registrarExito(credenciales);
     if (recordar) credencialesPortal.guardar(credenciales);
@@ -120,14 +127,26 @@ router.post('/descargar-e-importar', async (req, res) => {
 
     for (const curso of cursos) {
       try {
-        const buffer = await descargarAsistencia(sesion.page, curso, mes);
-        const data = parsearAsistencia(buffer);
+        // Meses anteriores: si el portal no los entrega se avisa, pero no se cae la sincronización.
+        // El mes actual sí es obligatorio, igual que antes.
+        const datosMeses = [];
+        for (const m of meses) {
+          try {
+            datosMeses.push(parsearAsistencia(await descargarAsistencia(sesion.page, curso, m)));
+          } catch (error) {
+            if (m === mes) throw error;
+            advertencias.push(`${curso}: no se pudo descargar ${m}.`);
+            console.error(`Sincronización anual, ${curso} ${m}:`, error.message);
+          }
+        }
+        const data = datosMeses.at(-1);
         const atrasos = parsearAtrasos(await extraerTablaAtrasos(sesion.page, curso));
         const fechasAtrasos = atrasos.map((atraso) => atraso.fecha);
         const mm = String(data.mes).padStart(2, '0');
         const ultimoDia = new Date(data.anio, data.mes, 0).getDate();
         paquetes.push({
           data,
+          anteriores: datosMeses.slice(0, -1),
           atrasos,
           rango: {
             // Atrasos es una ventana móvil del portal, no el mes del Excel.
@@ -150,6 +169,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     transaccion(db, () => {
       borrarDatosSincronizados(db);
       for (const paquete of paquetes) {
+        for (const anterior of paquete.anteriores) filasAsistencia += guardar(db, anterior, { transaccionar: false });
         filasAsistencia += guardar(db, paquete.data, { transaccionar: false });
         totalAlumnos += paquete.data.alumnos.length;
         filasAtrasos += guardarAtrasos(db, paquete.atrasos, { ...paquete.rango, transaccionar: false });
@@ -160,6 +180,8 @@ router.post('/descargar-e-importar', async (req, res) => {
     responder(200, {
       mensaje: 'Proceso completado',
       mes,
+      meses,
+      advertencias,
       totalCursos: cursos.length,
       cursosProcesados: paquetes.length,
       totalAlumnos,

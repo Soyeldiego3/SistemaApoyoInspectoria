@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AttendanceRow from '../components/AttendanceRow.jsx';
 import JustifySheet, { SIN_JUSTIFICAR, motivoCorto } from '../components/JustifySheet.jsx';
 import Chips from '../components/Chips.jsx';
@@ -63,6 +63,8 @@ export default function StudentDetail() {
   const [mensaje, setMensaje] = useState('');
   const [sel, setSel] = useState(SIN_SELECCION);
   const [abierto, setAbierto] = useState(false);
+  // Meses abiertos/cerrados a mano ('vista:YYYY-MM' → boolean); el resto usa el valor por defecto
+  const [mesesManual, setMesesManual] = useState({});
 
   const cargar = () => {
     setCargando(true);
@@ -78,7 +80,7 @@ export default function StudentDetail() {
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => { setSel(SIN_SELECCION); setMensaje(''); cargar(); }, [rut]);
+  useEffect(() => { setSel(SIN_SELECCION); setMensaje(''); setMesesManual({}); cargar(); }, [rut]);
 
   // Pestaña en la URL (?vista=atrasos). Sin parámetro, se abre la que tenga pendientes.
   const vistaUrl = searchParams.get('vista');
@@ -116,6 +118,20 @@ export default function StudentDetail() {
     if (meses.at(-1)?.clave !== clave) meses.push({ clave, filas: [] });
     meses.at(-1).filas.push(r);
   }
+  // Totales por mes (de todos los registros de la pestaña, no solo los visibles)
+  const totalesMes = {};
+  for (const r of registros) {
+    const t = (totalesMes[r.fecha.slice(0, 7)] ??= { total: 0, pendientes: 0 });
+    t.total += 1;
+    if (!r.justificado) t.pendientes += 1;
+  }
+  // Abiertos por defecto: el mes más reciente y los que tienen pendientes
+  const mesAbierto = (clave, i) => {
+    const k = `${vista}:${clave}`;
+    if (k in mesesManual) return mesesManual[k];
+    return i === 0 || (totalesMes[clave]?.pendientes ?? 0) > 0;
+  };
+  const alternarMes = (clave, i) => setMesesManual((m) => ({ ...m, [`${vista}:${clave}`]: !mesAbierto(clave, i) }));
 
   const alternar = (clave) => setSel((s) => ({
     ...s,
@@ -213,15 +229,29 @@ export default function StudentDetail() {
       {mensaje && <p className="msg" role="status">{mensaje}</p>}
       {vacio || (
         <div className="meses" role="tabpanel">
-          {meses.map(({ clave, filas }) => {
-            const sinJustificar = filas.filter((r) => !r.justificado).length;
+          {meses.map(({ clave, filas }, i) => {
+            const { total = 0, pendientes = 0 } = totalesMes[clave] || {};
+            const abiertoMes = mesAbierto(clave, i);
+            const nombre = vista === 'atrasos'
+              ? (total === 1 ? 'atraso' : 'atrasos')
+              : (total === 1 ? 'inasistencia' : 'inasistencias');
+            const todoOk = vista === 'atrasos' ? 'todos justificados' : 'todas justificadas';
             return (
               <section key={clave} className="mes">
-                <h3 className="mes-titulo">
-                  {tituloMes(clave)}
-                  {sinJustificar > 0 && ver === 'todas' && <span className="muted"> · {sinJustificar} sin justificar</span>}
+                <h3>
+                  <button type="button" className="mes-titulo" aria-expanded={abiertoMes}
+                    aria-controls={`mes-${clave}`} onClick={() => alternarMes(clave, i)}>
+                    <ChevronRight size={16} className="mes-chevron" aria-hidden />
+                    {tituloMes(clave)}
+                    <span className="muted">
+                      {' · '}{total} {nombre}{' · '}
+                      {pendientes > 0
+                        ? <span style={{ color: 'var(--bad)' }}>{pendientes} sin justificar</span>
+                        : todoOk}
+                    </span>
+                  </button>
                 </h3>
-                <div className="list">{filas.map(fila)}</div>
+                {abiertoMes && <div className="list" id={`mes-${clave}`}>{filas.map(fila)}</div>}
               </section>
             );
           })}

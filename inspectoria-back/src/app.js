@@ -13,6 +13,7 @@ const dashboardRouter = require('./routes/dashboard');
 const setupRouter = require('./routes/setup');
 const cuentaRouter = require('./routes/cuenta');
 const ajustesRouter = require('./routes/ajustes');
+const registroRouter = require('./routes/registro');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { requerirRol } = require('./middleware/roles');
@@ -74,6 +75,7 @@ app.use('/api/cuenta', requerirSesion, cuentaRouter);
 app.use('/api/usuarios', requerirSesion, requerirRol('admin'), usuariosRouter);
 app.use('/api/auditoria', requerirSesion, auditoriaRouter);
 app.use('/api/dashboard', requerirSesion, dashboardRouter);
+app.use('/api/registro', requerirSesion, registroRouter);
 app.use('/api/ajustes', requerirSesion, requerirLoopback, requerirRol('admin'), ajustesRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {

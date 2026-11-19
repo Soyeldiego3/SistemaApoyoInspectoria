@@ -124,6 +124,7 @@ function abrirDb(ruta = DB_PATH) {
       duracion_ms      INTEGER,
       creado_en        TEXT,
       aplica_a         TEXT,                       -- 'inasistencia' | 'atraso' | NULL (ambos)
+      observacion      TEXT,                       -- columna OBS del Master de registro
       CHECK (fecha_fin >= fecha_inicio)
     );
     CREATE INDEX IF NOT EXISTS idx_just_alumno ON justificativo(rut_alumno, fecha_inicio, fecha_fin);
@@ -137,6 +138,9 @@ function abrirDb(ruta = DB_PATH) {
   }
   if (!columnasJustificativo.some((columna) => columna.name === 'aplica_a')) {
     db.exec('ALTER TABLE justificativo ADD COLUMN aplica_a TEXT');
+  }
+  if (!columnasJustificativo.some((columna) => columna.name === 'observacion')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN observacion TEXT');
   }
   // Las vistas creadas con una regla de justificación anterior se recrean una sola vez
   for (const vista of ['v_asistencia', 'v_atraso']) {

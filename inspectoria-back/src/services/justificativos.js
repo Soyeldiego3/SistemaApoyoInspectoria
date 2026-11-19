@@ -11,12 +11,32 @@
 const SIN_JUSTIFICAR = 'NO SE HA JUSTIFICADO';
 const TIPOS = ['inasistencia', 'atraso'];
 
+// Códigos del "Master de registro" (columna COD). Los textos son los mismos que ofrece la
+// app (JustifySheet.jsx); el Excel los escribe con otros acentos, por eso se cruza por código.
+const CODIGOS = {
+  1: SIN_JUSTIFICAR,
+  2: 'EL APODERADO JUSTIFICA CON LICENCIA MÉDICA',
+  3: 'EL APODERADO JUSTIFICA PERSONALMENTE',
+  4: 'EL APODERADO JUSTIFICA CON CORREO ELECTRÓNICO',
+  5: 'EL ALUMNO(A) INGRESA TARDE AL ESTABLECIMIENTO',
+  6: 'SUSPENDIDO COMO ACCIÓN DISCIPLINARIA',
+};
+const sinTildes = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+// Texto de justificativo → código (1 si no tiene o no se reconoce)
+function codigoDeTipo(tipo) {
+  if (!tipo) return 1;
+  const buscado = sinTildes(tipo);
+  const par = Object.entries(CODIGOS).find(([, texto]) => sinTildes(texto) === buscado);
+  return par ? Number(par[0]) : 1;
+}
+
 // tipo_documento del justificativo aprobado que cubre la fecha (o NULL). Si quedara más
 // de uno, manda el más reciente. `rut` y `fecha` son expresiones SQL (columnas o
 // parámetros con nombre); `tipo` es siempre una constante del código, nunca del usuario.
-function sqlUltimoTipo(rut, fecha, tipo) {
+function sqlUltimoTipo(rut, fecha, tipo, campo = 'tipo_documento') {
   if (!TIPOS.includes(tipo)) throw new Error(`Tipo de registro desconocido: ${tipo}`);
-  return `(SELECT j.tipo_documento FROM justificativo j
+  if (!['tipo_documento', 'observacion'].includes(campo)) throw new Error(`Campo desconocido: ${campo}`);
+  return `(SELECT j.${campo} FROM justificativo j
       WHERE j.rut_alumno = ${rut} AND j.estado_documento = 'APROBADO'
         AND (j.aplica_a IS NULL OR j.aplica_a = '${tipo}')
         AND ${fecha} BETWEEN j.fecha_inicio AND j.fecha_fin
@@ -52,8 +72,8 @@ function recortarSuperpuestos(db, nuevo, excluir = new Set([nuevo.id_justificati
   `);
   const insertar = db.prepare(`
     INSERT INTO justificativo
-      (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento, duracion_ms, creado_en, aplica_a)
-    VALUES (@rut_alumno, @tipo_documento, @ini, @fin, @estado_documento, NULL, @creado_en, @aplica)
+      (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento, duracion_ms, creado_en, aplica_a, observacion)
+    VALUES (@rut_alumno, @tipo_documento, @ini, @fin, @estado_documento, NULL, @creado_en, @aplica, @observacion)
   `);
 
   let cambios = 0;
@@ -114,5 +134,6 @@ function normalizarJustificativos(db) {
 }
 
 module.exports = {
-  SIN_JUSTIFICAR, sqlJustificado, sqlUltimoTipo, recortarSuperpuestos, normalizarJustificativos,
+  SIN_JUSTIFICAR, CODIGOS, codigoDeTipo, sinTildes,
+  sqlJustificado, sqlUltimoTipo, recortarSuperpuestos, normalizarJustificativos,
 };

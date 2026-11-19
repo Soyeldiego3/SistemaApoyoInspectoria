@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FileUp, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import {
   getCredencialesPortal,
   guardarCredencialesPortal,
@@ -10,14 +10,14 @@ import {
 } from '../api.js';
 import GridLoader from '../components/GridLoader.jsx';
 import CredencialesSheet, { MENSAJES_PORTAL } from '../components/CredencialesSheet.jsx';
+import RegistroMaster from '../components/RegistroMaster.jsx';
 
-// RF-01: obtener asistencia por extracción automática (Playwright) o importando CSV/Excel
+// RF-01: obtener asistencia por extracción automática (Playwright) e importar/exportar el Master de registro
 export default function Sync() {
   const location = useLocation();
   const navigate = useNavigate();
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [estado, setEstado] = useState('inactivo'); // inactivo | cargando | ok | error
-  const [archivo, setArchivo] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [mostrarCredenciales, setMostrarCredenciales] = useState(false);
   const [guardadas, setGuardadas] = useState(false);
@@ -26,6 +26,9 @@ export default function Sync() {
   const [procesando, setProcesando] = useState(false);
   const [mensajeModal, setMensajeModal] = useState('');
   const passRef = useRef(null);
+  // 'mes' = mes actual (lo de siempre) · 'anio' = año escolar completo (marzo a hoy)
+  const periodoRef = useRef('mes');
+  const [versionDatos, setVersionDatos] = useState(0);
   const controllerRef = useRef(null);
   const timeoutRef = useRef(null);
   const [credenciales, setCredenciales] = useState({
@@ -105,19 +108,24 @@ export default function Sync() {
     controllerRef.current?.abort();
     controllerRef.current = new AbortController();
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const anual = periodoRef.current === 'anio';
     timeoutRef.current = setTimeout(() => {
       controllerRef.current?.abort();
       setProcesando(false);
       setEstado('error');
       setMensaje('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
       setMensajeModal('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
-    }, 45000);
+    }, anual ? 600000 : 45000); // el año completo descarga varios meses por curso
     try {
-      const data = await iniciarSync(datos, { signal: controllerRef.current.signal });
+      const cuerpo = anual ? { ...(datos || {}), periodo: 'anio' } : datos;
+      const data = await iniciarSync(cuerpo, { signal: controllerRef.current.signal });
       const errores = data.errores?.length || 0;
       const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
-      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleErrores}`);
+      const detalleMeses = data.meses?.length > 1 ? ` Meses: ${data.meses[0]} a ${data.meses.at(-1)}.` : '';
+      const detalleAvisos = data.advertencias?.length ? ` ${data.advertencias.length} meses no se pudieron descargar.` : '';
+      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleMeses}${detalleAvisos}${detalleErrores}`);
       setEstado(errores ? 'error' : 'ok');
+      setVersionDatos((v) => v + 1);
       setMostrarCredenciales(false);
       if (datos?.recordar) setGuardadas(true);
     } catch (e) {
@@ -141,7 +149,8 @@ export default function Sync() {
     }
   };
 
-  const extraer = async () => {
+  const extraer = async (periodo = 'mes') => {
+    periodoRef.current = periodo;
     setEstado('cargando');
     setMensaje('');
     try {
@@ -280,29 +289,13 @@ export default function Sync() {
     }
   };
 
-  const importar = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!/\.(csv|xlsx?)$/i.test(f.name)) {
-      setArchivo('');
-      setMensaje('Archivo no válido. Usa un .csv o .xlsx con las columnas de asistencia.');
-      setEstado('error');
-      return;
-    }
-    setArchivo(f.name);
-    // TODO: POST /api/import con el archivo (aún no existe el endpoint)
-    setMensaje('');
-    setEstado('ok');
-  };
-
   return (
     <>
-      <div className="cols2">
-        <section className="card">
+      <section className="card sync-card">
           <h2>Extracción automática</h2>
           <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes actual.</p>
 
-          <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={extraer} disabled={estado === 'cargando'}>
+          <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={() => extraer('mes')} disabled={estado === 'cargando'}>
             {estado === 'cargando' && !mostrarCredenciales
               ? <GridLoader pequeno />
               : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
@@ -310,26 +303,24 @@ export default function Sync() {
           </button>
           {estado === 'cargando' && !mostrarCredenciales && (
             <p className="muted" role="status" style={{ marginTop: 10 }}>
-              Descargando todos los cursos desde el portal, puede tardar unos segundos.
+              {periodoRef.current === 'anio'
+                ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
+                : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}
             </p>
           )}
           {esPc && (
-            <Link to="/ajustes" className="muted" style={{ display: 'inline-block', marginTop: 10, fontSize: '.85rem' }}>
+            <Link to="/ajustes" className="muted sync-ajustes">
               Configurar credenciales en Ajustes
             </Link>
           )}
-        </section>
+      </section>
 
-        <section className="card">
-          <h2>Importar archivo</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Alternativa si el portal no está disponible (CSV o Excel).</p>
-          <label className="btn ghost" style={{ display: 'block', textAlign: 'center', cursor: 'pointer' }}>
-            <FileUp size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Elegir archivo
-            <input type="file" accept=".csv,.xls,.xlsx" onChange={importar} hidden />
-          </label>
-          {archivo && <p className="muted" style={{ marginTop: 10 }}>{archivo}</p>}
-        </section>
-      </div>
+      <RegistroMaster version={versionDatos} sincronizando={estado === 'cargando'}
+        onSincronizarAnio={() => {
+          if (window.confirm('Se descargará la asistencia de marzo a hoy de todos los cursos. Puede tardar varios minutos. ¿Continuar?')) {
+            extraer('anio');
+          }
+        }} />
 
       {estado === 'ok' && <p className="msg" role="status">{mensaje || 'Asistencia actualizada.'}</p>}
       {estado === 'error' && (

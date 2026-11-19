@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 env
+# Archivos reales del establecimiento (datos de alumnos): no se suben al repo
+/Master de registro*.xlsx

@@ -2,9 +2,9 @@
 
 ## Pendiente
 
-- Seccion de Graficos (barras, torta, etc.)
+- Importar y exportar atrasos como Excel
 
-- Importar y exportar asistencia y atrasos como Excel
+- Seccion de Graficos (barras, torta, etc.)
 
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
 
@@ -13,6 +13,8 @@
 - Pasar el inicio de sesion en la url hacia el telefono.
 
 ## En progreso
+
+
 
 ## Completado
 
@@ -53,3 +55,5 @@
 - Añadir sección de ajustes: paleta de colores, tamaño de texto, modo claro/oscuro, personalización
 
 - Añadir efecto hover en los botones para seleccionar secciones. (inicio, auditar, alumnos, etc.)
+
+- Importar y exportar asistencia como Excel
