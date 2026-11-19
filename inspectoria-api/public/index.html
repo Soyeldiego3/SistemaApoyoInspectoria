@@ -191,7 +191,7 @@ tfoot td{border-top:1px solid var(--line);font-weight:600}
 const $=s=>document.querySelector(s);
 
 /* ---------- Datos (vienen del servidor, ver cargar()) ---------- */
-let TODAY,FER,CURSOS,AL,ORD,CURSO_OPT,TODOS;
+let TODAY,ANIO,FER,CURSOS,AL,ORD,CURSO_OPT,TODOS;
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const MES_LECT=[3,4,5,6,7,8,9,10,11,12];
@@ -222,7 +222,11 @@ const reingreso=(a,f)=>REI.get(clave(a.rut,f))||null;
 async function cargar(){
   const get=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
   const [base,asis,atr,ret,rei]=await Promise.all(['base','asistencia','atrasos','retiros','reingresos'].map(n=>get('/api/'+n)));
-  TODAY=base.hoy;FER=new Set(base.feriados);CURSOS=base.cursos;AL=base.alumnos;
+  // "Hoy" = última fecha con cualquier registro (asistencia, atrasos, retiros o reingresos).
+  TODAY=[base.hoy,...atr.map(x=>x.fecha),...ret.map(x=>x.fecha),...rei.map(x=>x.fecha)].filter(Boolean).reduce((a,b)=>b>a?b:a,'');
+  if(!TODAY){const d=new Date();TODAY=iso(d.getFullYear(),d.getMonth()+1,d.getDate())}
+  ANIO=+TODAY.slice(0,4);
+  FER=new Set(base.feriados);CURSOS=base.cursos;AL=base.alumnos;
   ORD=AL.slice().sort(cmp);
   CURSO_OPT=CURSOS.map(c=>[c,c]);TODOS=[['','Todos los cursos'],...CURSO_OPT];
   [ASIS,ATR,RET,REI].forEach(m=>m.clear());
@@ -230,29 +234,32 @@ async function cargar(){
   atr.forEach(x=>ATR.set(clave(x.rut,x.fecha),{hora:x.hora,just:!!x.just}));
   ret.forEach(x=>RET.set(clave(x.rut,x.fecha),x));
   rei.forEach(x=>REI.set(clave(x.rut,x.fecha),x));
+  // Un atraso sin registro de asistencia ese día cuenta como atraso (solo en memoria).
+  atr.forEach(x=>{const k=clave(x.rut,x.fecha);if(!ASIS.has(k))ASIS.set(k,'T')});
   C.curso=CURSOS[0];C.fecha=TODAY;Y.rut=ORD[0].rut;
 }
 
 const diasHabiles=(y,m)=>Array.from({length:new Date(y,m,0).getDate()},(_,i)=>{const d=i+1,f=iso(y,m,d);return{d,f,w:new Date(y,m-1,d).getDay(),fer:FER.has(f)}}).filter(x=>x.w>0&&x.w<6);
-const lectivos=m=>diasHabiles(2026,m).filter(d=>!d.fer&&d.f<=TODAY);
-const cerrado=m=>iso(2026,m,new Date(2026,m,0).getDate())<TODAY;
-function ultimosHabiles(n){const out=[],d=new Date(2026,9,13);while(out.length<n){const f=iso(d.getFullYear(),d.getMonth()+1,d.getDate());if(esDia(f))out.push(f);d.setDate(d.getDate()-1)}return out}
+const lectivos=m=>diasHabiles(ANIO,m).filter(d=>!d.fer&&d.f<=TODAY);
+const cerrado=m=>iso(ANIO,m,new Date(ANIO,m,0).getDate())<TODAY;
+function ultimosHabiles(n){const out=[],d=fecha(TODAY),tope=new Date(ANIO-1,0,1);while(out.length<n&&d>=tope){const f=iso(d.getFullYear(),d.getMonth()+1,d.getDate());if(esDia(f))out.push(f);d.setDate(d.getDate()-1)}return out}
 
 // Asistencia de un curso en un mes, con los porcentajes mensual y anual de cada alumno.
 function detalleMes(curso,m){
-  const dias=diasHabiles(2026,m),lm=lectivos(m).length;
+  const dias=diasHabiles(ANIO,m),lm=lectivos(m).length;
   const anio=MES_LECT.flatMap(k=>lectivos(k).map(d=>d.f));
+  // Días sin registro quedan vacíos ("sin registrar") y no cuentan para los porcentajes.
   const alumnos=ORD.filter(a=>a.curso===curso).map(a=>{
-    const cells=dias.map(d=>d.fer?'F':d.f>TODAY?null:(estado(a.rut,d.f)||'A'));
-    const aus=cells.filter(c=>c==='A').length;
-    const ausA=anio.filter(f=>estado(a.rut,f)==='A').length;
-    return{a,cells,pres:lm-aus,aus,pm:lm?(lm-aus)/lm*100:null,pa:anio.length?(anio.length-ausA)/anio.length*100:null};
+    const cells=dias.map(d=>d.fer?'F':d.f>TODAY?null:(estado(a.rut,d.f)||null));
+    const aus=cells.filter(c=>c==='A').length,pres=cells.filter(c=>c==='P'||c==='T').length;
+    let presA=0,ausA=0;anio.forEach(f=>{const e=estado(a.rut,f);if(e==='A')ausA++;else if(e)presA++});
+    return{a,cells,pres,aus,pm:pres+aus?pres/(pres+aus)*100:null,pa:presA+ausA?presA/(presA+ausA)*100:null};
   });
   return{curso,mes:m,dias,alumnos,lect:lm,etapa:cerrado(m)?'Cerrada':'Abierta'};
 }
 
 /* ---------- Exportar a Excel y PDF (sin librerías externas) ---------- */
-const mesTxt=m=>cap(MESES[m.mes-1])+' 2026';
+const mesTxt=m=>cap(MESES[m.mes-1])+' '+ANIO;
 const nota=()=>'% anual: acumulado de marzo al '+fmt(TODAY)+'. Atraso cuenta como presente. Datos de ejemplo.';
 const utf8=new TextEncoder();
 const xe=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -453,7 +460,7 @@ const ligar=(st,ids)=>Object.entries(ids).forEach(([id,k])=>{const e=$('#'+id);e
 
 /* ---------- Vistas ---------- */
 function vInicio(){
-  const c={P:0,A:0,T:0};AL.forEach(a=>c[estado(a.rut,TODAY)]++);
+  const c={P:0,A:0,T:0};AL.forEach(a=>{const e=estado(a.rut,TODAY);if(e in c)c[e]++});
   const ret=AL.filter(a=>retiro(a,TODAY)).length;
   W('<h1>Buenos días, inspector</h1><p class="lead">'+cap(largo(TODAY))+'. Datos de ejemplo de '+AL.length+' alumnos.</p>'+
     '<div class="strip" role="group" aria-label="Resumen de la jornada">'+
@@ -566,7 +573,7 @@ function vDetalle(){
     '</tbody></table></div>'+
     '<div class="legend"><span>'+DOT+' Presente (incluye atrasos)</span><span>'+EQUIS+' Ausente</span><span><b>F</b> Feriado</span></div>'+
     '<p class="note">'+nota()+' En rojo, lo que está bajo el 85 %.</p>');
-  const archivo='asistencia-'+m.curso.replace(/[^A-Za-z0-9]/g,'')+'-'+MESES[m.mes-1]+'-2026';
+  const archivo='asistencia-'+m.curso.replace(/[^A-Za-z0-9]/g,'')+'-'+MESES[m.mes-1]+'-'+ANIO;
   $('#back').onclick=()=>{M.det=null;vMensual();$('#work').scrollTop=0};
   $('#xls').onclick=()=>baja(archivo+'.xlsx',buildXlsx(m),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   $('#pdf').onclick=()=>baja(archivo+'.pdf',buildPdf(m),'application/pdf');
@@ -582,16 +589,16 @@ function vAnual(){
     const a=AL.find(x=>x.rut===Y.rut),t={n:0,P:0,A:0,T:0};
     const rows=MES_LECT.map(m=>{
       const ds=lectivos(m),c={P:0,A:0,T:0};
-      ds.forEach(d=>c[estado(a.rut,d.f)||'A']++);
+      ds.forEach(d=>{const e=estado(a.rut,d.f);if(e in c)c[e]++});
       t.n+=ds.length;['P','A','T'].forEach(k=>{t[k]+=c[k]});
-      const v=ds.length?(c.P+c.T)/ds.length*100:null,x=z=>ds.length?z:'–';
+      const reg=c.P+c.A+c.T,v=reg?(c.P+c.T)/reg*100:null,x=z=>ds.length?z:'–';
       return [cap(MESES[m-1]),x(ds.length),x(c.P),x(c.A),x(c.T),pct(v),barra(v)];
     });
-    const tot=t.n?(t.P+t.T)/t.n*100:null;
+    const regT=t.P+t.A+t.T,tot=regT?(t.P+t.T)/regT*100:null;
     $('#sum').innerHTML='<div class="sumrow"><span class="big">'+pct(tot)+'</span>'+chip(tot>=85?'P':'A',tot>=85?'Sobre el mínimo de 85 %':'Bajo el mínimo de 85 %')+
       '<span class="count" style="margin:0">'+nombre(a)+' · '+a.curso+' · '+mono(a.rut)+'</span></div>';
     $('#tbl').innerHTML=tabla(['Mes','Días lectivos','Presentes','Ausencias','Atrasos','% asistencia','Frente al 85 %'],rows,
-      '<tfoot><tr><td>Año 2026</td><td>'+t.n+'</td><td>'+t.P+'</td><td>'+t.A+'</td><td>'+t.T+'</td><td>'+pct(tot)+'</td><td></td></tr></tfoot>');
+      '<tfoot><tr><td>Año '+ANIO+'</td><td>'+t.n+'</td><td>'+t.P+'</td><td>'+t.A+'</td><td>'+t.T+'</td><td>'+pct(tot)+'</td><td></td></tr></tfoot>');
   };
   ligar(Y,{yAl:'rut'});
   redraw();
