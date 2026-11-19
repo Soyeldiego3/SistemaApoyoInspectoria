@@ -1,11 +1,41 @@
+/* Colores del tema. Estos valores son el modo oscuro; el modo claro y las paletas los sobrescriben más abajo. */
 :root {
-  --bg: #1c1c1e; --card: #2a2a2d; --card-2: #343438; --line: #3a3a3e;
-  --text: #fff; --muted: #9a9aa0; --accent: #0a84ff; --ok: #30d19b; --warn: #ffb020; --bad: #ff5a5f;
+  --page: #111; --bg: #1c1c1e; --card: #2a2a2d; --card-2: #343438; --line: #3a3a3e; --nav: #151517;
+  --text: #fff; --muted: #9a9aa0; --accent: #0a84ff; --on-accent: #fff; --accent-soft: #d6e9ff;
+  --accent-2: var(--accent); --on-accent-2: var(--on-accent); /* color de realce (pestaña activa, chip activo) */
+  --nav-activo: var(--accent-2);
+  --ok: #30d19b; --warn: #ffb020; --bad: #ff5a5f;
+  --ok-soft: rgba(48,209,155,.12); --bad-soft: rgba(255,90,95,.12);
+  --hover: rgba(255,255,255,.06); --skeleton-hi: #3d3d42; --shadow: rgba(0,0,0,.45);
   --r: 22px;
+  color-scheme: dark;
 }
+
+/* Modo claro: ok/warn/bad un poco más oscuros para que se lean sobre fondo blanco */
+:root[data-modo="claro"] {
+  --page: #e5e5ea; --bg: #f2f2f7; --card: #fff; --card-2: #e9e9ee; --line: #d8d8dc; --nav: #fff;
+  --text: #1c1c1e; --muted: #6b6b72; --accent: #007aff; --accent-soft: #dbeaff;
+  --ok: #1f9e6e; --warn: #b26a00; --bad: #d92d3a;
+  --ok-soft: rgba(31,158,110,.12); --bad-soft: rgba(217,45,58,.1);
+  --hover: rgba(0,0,0,.05); --skeleton-hi: #f7f7f9; --shadow: rgba(0,0,0,.15);
+  color-scheme: light;
+}
+
+/* Paletas: cambian el color principal (y el de realce); cada una con su versión para modo claro */
+/* Lavanda: suave y agradable */
+:root[data-paleta="lavanda"] { --accent: #7d6bf0; --accent-soft: #e4e0ff; }
+:root[data-modo="claro"][data-paleta="lavanda"] { --accent: #5b48d6; }
+/* Oficina: sobria, azul pizarra poco saturado */
+:root[data-paleta="oficina"] { --accent: #4f6d8f; --accent-soft: #dde5ee; }
+:root[data-modo="claro"][data-paleta="oficina"] { --accent: #3b5573; }
+/* De La Salle: azul institucional con realce amarillo (tonos aproximados) */
+:root[data-paleta="lasalle"] { --accent: #1f4fa3; --accent-soft: #dbe5f7; --accent-2: #ffcc00; --on-accent-2: #1c1c1e; }
+/* En claro el texto amarillo sobre blanco no se lee: la pestaña activa queda en azul */
+:root[data-modo="claro"][data-paleta="lasalle"] { --accent: #003a8c; --accent-2: #f2b800; --nav-activo: var(--accent); }
+
 * { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
-body { background: #111; color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background: var(--page); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
 button, input, select { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -18,10 +48,10 @@ a { color: inherit; text-decoration: none; }
 .avatar { width: 44px; height: 44px; border-radius: 14px; background: var(--card-2); display: grid; place-items: center; font-weight: 700; }
 
 .card { background: var(--card); border-radius: var(--r); padding: 18px; }
-.card.blue { background: var(--accent); color: #fff; }
+.card.blue { background: var(--accent); color: var(--on-accent); }
 .card h2 { font-size: 1.05rem; font-weight: 600; }
 .muted { color: var(--muted); font-size: .85rem; }
-.card.blue .muted { color: #d6e9ff; }
+.card.blue .muted { color: var(--accent-soft); }
 .big { font-size: 3.4rem; font-weight: 300; line-height: 1; letter-spacing: -.03em; }
 .big small { font-size: 1rem; font-weight: 500; margin-left: 6px; letter-spacing: 0; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -33,9 +63,9 @@ a { color: inherit; text-decoration: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: .8rem; color: var(--muted); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; margin-right: 6px; }
 
-.btn { border: 0; border-radius: 14px; padding: 14px 16px; background: var(--accent); font-weight: 600; cursor: pointer; width: 100%; }
-.btn.dark { background: #1c1c1e; }
-.btn.ghost { background: var(--card-2); }
+.btn { border: 0; border-radius: 14px; padding: 14px 16px; background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; width: 100%; }
+.btn.dark { background: var(--bg); color: var(--text); }
+.btn.ghost { background: var(--card-2); color: var(--text); }
 .btn:disabled { opacity: .5; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
@@ -49,17 +79,17 @@ a { color: inherit; text-decoration: none; }
 .item b { display: block; }
 .tag { font-size: .75rem; padding: 4px 10px; border-radius: 20px; background: var(--card-2); white-space: nowrap; }
 .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); } .tag.bad { color: var(--bad); }
-.msg { padding: 12px 14px; border-radius: 14px; background: rgba(48,209,155,.12); color: var(--ok); font-size: .9rem; }
+.msg { padding: 12px 14px; border-radius: 14px; background: var(--ok-soft); color: var(--ok); font-size: .9rem; }
 
-.nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; justify-content: space-around; background: #151517; border-top: 1px solid var(--line); padding: 10px 4px calc(10px + env(safe-area-inset-bottom)); }
-.nav a { display: grid; justify-items: center; gap: 4px; font-size: .68rem; color: var(--muted); padding: 4px 8px; min-width: 56px; }
-.nav a.active { color: var(--accent); }
+.nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; justify-content: space-around; background: var(--nav); border-top: 1px solid var(--line); padding: 10px 4px calc(10px + env(safe-area-inset-bottom)); }
+.nav a { display: grid; justify-items: center; gap: 4px; font-size: .68rem; color: var(--muted); padding: 4px 8px; min-width: 56px; border-radius: 12px; }
+.nav a.active { color: var(--nav-activo); }
 
 .center { min-height: 100%; display: grid; place-content: center; padding: 24px; }
 @media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .6s ease; } }
 
 /* Skeleton, filas seleccionables, filtros y panel inferior */
-.skeleton { background: linear-gradient(90deg, var(--card-2), #3d3d42, var(--card-2)); border-radius: 10px; }
+.skeleton { background: linear-gradient(90deg, var(--card-2), var(--skeleton-hi), var(--card-2)); border-radius: 10px; }
 @media (prefers-reduced-motion: no-preference) { .skeleton { background-size: 200% 100%; animation: sh 1.6s infinite; } @keyframes sh { to { background-position: -200% 0; } } }
 .rowbtn { width: 100%; border: 0; text-align: left; cursor: pointer; }
 .rowbtn.sel { outline: 2px solid var(--accent); }
@@ -79,10 +109,10 @@ a { color: inherit; text-decoration: none; }
 .selector-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
 .selector-list { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; margin: 0; padding: 6px;
   list-style: none; background: var(--card-2); border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0,0,0,.45); max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
+  box-shadow: 0 12px 32px var(--shadow); max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
 .selector-list li { padding: 10px 12px 10px 30px; border-radius: 10px; font-size: .88rem; line-height: 1.3;
   cursor: pointer; position: relative; }
-.selector-list li.act { background: rgba(255,255,255,.06); }
+.selector-list li.act { background: var(--hover); }
 .selector-list li.sel { color: var(--accent); font-weight: 600; }
 .selector-list li.sel::before { content: '✓'; position: absolute; left: 11px; }
 .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--line); justify-self: center; }
@@ -139,7 +169,7 @@ a { color: inherit; text-decoration: none; }
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
 .chip { flex: none; border: 0; border-radius: 20px; padding: 9px 16px; background: var(--card); color: var(--muted); font-size: .88rem; cursor: pointer; }
-.chip.on { background: var(--accent); color: #fff; font-weight: 600; }
+.chip.on { background: var(--accent-2); color: var(--on-accent-2); font-weight: 600; }
 .curso { padding: 10px 14px; }
 .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .iconbtn { border: 0; cursor: pointer; color: var(--muted); }
@@ -169,3 +199,18 @@ a { color: inherit; text-decoration: none; }
 /* El botón sigue deshabilitado mientras extrae, pero con opacidad completa y el contenido centrado */
 .btn.sincronizando { display: flex; align-items: center; justify-content: center; }
 .btn.sincronizando:disabled { opacity: 1; cursor: progress; }
+
+/* Muestra de color en el selector de paleta (Ajustes → Apariencia) */
+.paleta-muestra { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 8px; vertical-align: -1px; }
+
+/* Botones de Credenciales del portal: mismo ancho y alto, colores según la paleta */
+.portal-acciones { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-top: 14px; }
+.portal-acciones .btn { padding: 12px 8px; font-size: .9rem; }
+.btn.outline { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.btn.peligro { background: var(--bad-soft); color: var(--bad); }
+
+/* Hover del menú de secciones: solo con mouse, para que no quede "pegado" al tocar en el teléfono */
+@media (hover: hover) {
+  .nav a:not(.active):hover { color: var(--text); background: var(--hover); }
+}
+@media (prefers-reduced-motion: no-preference) { .nav a { transition: background .15s, color .15s; } }

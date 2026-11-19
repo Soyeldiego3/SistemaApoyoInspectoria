@@ -161,7 +161,7 @@ export default function Students() {
         <h2>Alumnos</h2>
       </div>
 
-      {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'rgba(255,90,95,.12)' }}>{error}</p>}
+      {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
       <div className="searchbox">
         <Search size={18} />
         <input className="input" type="search" placeholder="RUT, nombre o curso" value={q}

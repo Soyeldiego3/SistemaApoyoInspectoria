@@ -4,7 +4,11 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './auth.jsx';
+import { TemaProvider, aplicarTema, leerPreferencia } from './tema.jsx';
 import './index.css';
+
+// Aplica el tema guardado antes de dibujar la app, para que no parpadee el modo oscuro al abrir.
+aplicarTema(leerPreferencia());
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -36,10 +40,12 @@ class ErrorBoundary extends React.Component {
 
 createRoot(document.getElementById('root')).render(
   <HashRouter>
-    <AuthProvider>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </AuthProvider>
+    <TemaProvider>
+      <AuthProvider>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </AuthProvider>
+    </TemaProvider>
   </HashRouter>
 );
