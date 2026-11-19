@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
@@ -11,6 +11,7 @@ import {
   getCursos,
   iniciarSync,
 } from '../api.js';
+import { fechaCorta } from '../fechas.js';
 
 const TABS = [
   { id: 'prioridad', label: 'A quién citar' },
@@ -106,12 +107,15 @@ function Avisos({ datos }) {
     : null;
 }
 
-function Prioridad({ datos }) {
+function Prioridad({ datos, tipo, rutaRetorno }) {
   if (!datos?.alumnos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
+  // Con un tipo elegido, la ficha se abre en esa pestaña (los ids coinciden con sus vistas)
+  const vista = tipo !== 'ambos' ? `?vista=${tipo}` : '';
   return (
     <div className="list">
       {datos.alumnos.map((alumno) => (
-        <Link key={alumno.rut} to={`/alumnos/${encodeURIComponent(alumno.rut)}`} className="item">
+        <Link key={alumno.rut} to={`/alumnos/${encodeURIComponent(alumno.rut)}${vista}`}
+          state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }} className="item">
           <div>
             <b>{alumno.nombres} {alumno.apellidos}</b>
             <span className="muted">{alumno.curso} · {alumno.rut}</span>
@@ -147,15 +151,36 @@ function Cursos({ datos }) {
   );
 }
 
+// Filtros que vienen en la URL al volver desde la ficha de un alumno (null si no hay)
+function filtrosDesdeUrl(search) {
+  const p = new URLSearchParams(search);
+  if (![...p.keys()].length) return null;
+  const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
+  const periodo = valido(PERIODOS, p.get('periodo'), 'hoy');
+  const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+  const rango = periodo === 'personalizado'
+    ? { desde: fecha(p.get('desde')), hasta: fecha(p.get('hasta')) }
+    : rangoPeriodo(periodo);
+  return {
+    tab: valido(TABS, p.get('tab'), 'prioridad'),
+    tipo: valido(TIPOS, p.get('tipo'), 'ambos'),
+    curso: p.get('curso') || '',
+    periodo,
+    ...rango,
+  };
+}
+
 export default function Audit() {
   const navigate = useNavigate();
+  const location = useLocation();
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-  const [tab, setTab] = useState('prioridad');
-  const [tipo, setTipo] = useState('ambos');
-  const [curso, setCurso] = useState('');
-  const [periodo, setPeriodo] = useState('hoy');
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
+  const [restaurados] = useState(() => filtrosDesdeUrl(location.search));
+  const [tab, setTab] = useState(restaurados?.tab ?? 'prioridad');
+  const [tipo, setTipo] = useState(restaurados?.tipo ?? 'ambos');
+  const [curso, setCurso] = useState(restaurados?.curso ?? '');
+  const [periodo, setPeriodo] = useState(restaurados?.periodo ?? 'hoy');
+  const [desde, setDesde] = useState(restaurados?.desde ?? '');
+  const [hasta, setHasta] = useState(restaurados?.hasta ?? '');
   const [cursos, setCursos] = useState([]);
   const [datos, setDatos] = useState(null);
   const [estadoDatos, setEstadoDatos] = useState(null);
@@ -180,6 +205,11 @@ export default function Audit() {
         if (!activo) return;
         setCursos(cursosRespuesta.cursos || []);
         setEstadoDatos(estado);
+        // Al volver desde la ficha de un alumno se respetan los filtros que traía
+        if (restaurados) {
+          if (!restaurados.desde && !restaurados.hasta) setCargando(false);
+          return;
+        }
         const hoy = fechaLocal(new Date());
         const ultima = [estado.ultimaFechaAsistencia, estado.ultimaFechaAtrasos]
           .filter(Boolean)
@@ -200,7 +230,7 @@ export default function Audit() {
           setPeriodo('personalizado');
           setDesde(ultima);
           setHasta(ultima);
-          setAvisoRango(`Mostrando el ${ultima.split('-').reverse().join('/')}, último día sincronizado`);
+          setAvisoRango(`Mostrando el ${fechaCorta(ultima)}, último día sincronizado`);
         }
       })
       .catch((e) => {
@@ -247,6 +277,22 @@ export default function Audit() {
     consultaAbortRef.current?.abort();
     syncAbortRef.current?.abort();
   }, []);
+
+  // Ruta para volver a esta misma vista desde la ficha de un alumno
+  const rutaRetorno = useMemo(() => {
+    const p = new URLSearchParams();
+    if (tab !== 'prioridad') p.set('tab', tab);
+    if (tipo !== 'ambos') p.set('tipo', tipo);
+    if (curso) p.set('curso', curso);
+    if (periodo !== 'hoy') p.set('periodo', periodo);
+    if (periodo === 'personalizado') {
+      if (desde) p.set('desde', desde);
+      if (hasta) p.set('hasta', hasta);
+    }
+    // Siempre lleva al menos un parámetro, para que Auditoría sepa que debe restaurar
+    if (![...p.keys()].length) p.set('periodo', 'hoy');
+    return `/auditar?${p}`;
+  }, [tab, tipo, curso, periodo, desde, hasta]);
 
   const cambiarPeriodo = (nuevoPeriodo) => {
     setPeriodo(nuevoPeriodo);
@@ -381,7 +427,9 @@ export default function Audit() {
         <>
           <Avisos datos={datos} />
           {datos && <Resumen datos={datos} />}
-          {tab === 'prioridad' ? <Prioridad datos={datos} /> : <Cursos datos={datos} />}
+          {tab === 'prioridad'
+            ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} />
+            : <Cursos datos={datos} />}
         </>
       )}
       <p className="muted">Estas señales no confirman la causa.</p>

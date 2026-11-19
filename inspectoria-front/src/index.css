@@ -94,6 +94,21 @@ a { color: inherit; text-decoration: none; }
 .rowbtn { width: 100%; border: 0; text-align: left; cursor: pointer; }
 .rowbtn.sel { outline: 2px solid var(--accent); }
 .tags { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.tags.start { justify-content: flex-start; }
+.tag svg { vertical-align: -2px; margin-right: 4px; }
+.kpis.ficha .card { display: grid; gap: 8px; align-content: start; }
+
+/* Ficha del alumno: registros agrupados por mes, cada fila con un bloque calendario */
+.meses { display: grid; gap: 18px; }
+.mes { display: grid; gap: 8px; align-content: start; }
+.mes-titulo { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text); padding: 0 4px; }
+.mes-titulo .muted { font-size: .8rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.fila-fecha { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cal { flex: none; width: 46px; height: 46px; border-radius: 12px; background: var(--card-2); display: grid; place-content: center; text-align: center; line-height: 1; }
+.cal b { font-size: 1.15rem; }
+.cal span { font-size: .62rem; font-weight: 600; letter-spacing: .06em; color: var(--muted); margin-top: 3px; }
+.cal.pendiente { background: var(--bad-soft); color: var(--bad); }
+.cal.pendiente span { color: var(--bad); }
 .check { width: 20px; height: 20px; border-radius: 7px; border: 2px solid var(--muted); }
 .check.on { background: var(--accent); border-color: var(--accent); }
 .seg { display: flex; background: var(--card); border-radius: 14px; padding: 4px; gap: 4px; }
@@ -127,6 +142,17 @@ a { color: inherit; text-decoration: none; }
 .actionbar { position: sticky; left: auto; transform: none; max-width: none; padding: 0; bottom: calc(76px + env(safe-area-inset-bottom)); }
 .center .card { width: min(100%, 400px); }
 
+/* ---------- Tablet / ventanas medianas: ocupa todo el ancho, sin franjas ---------- */
+@media (min-width: 600px) {
+  body { background: var(--bg); }
+  .app { max-width: none; }
+  .nav { max-width: none; }
+  .topbar, .content { width: 100%; max-width: 760px; margin: 0 auto; }
+  .list.cols { grid-template-columns: 1fr 1fr; }
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpis > :last-child { grid-column: auto; }
+}
+
 /* ---------- Escritorio ---------- */
 @media (min-width: 900px) {
   body { background: var(--bg); }
@@ -147,6 +173,7 @@ a { color: inherit; text-decoration: none; }
   .charts { grid-template-columns: repeat(3, 1fr); }
   .cols2 { grid-template-columns: 1fr 1fr; }
   .list.cols { grid-template-columns: 1fr 1fr; }
+  .meses { grid-template-columns: 1fr 1fr; align-items: start; }
   .filters { grid-template-columns: 1fr auto; align-items: end; }
   .filters .btn { width: auto; padding-inline: 32px; }
   .content > input.input { max-width: 480px; }
@@ -186,6 +213,23 @@ a { color: inherit; text-decoration: none; }
 .audit-custom-dates .input { min-width: 0; padding: 10px 8px; }
 .audit-last-sync { text-align: right; }
 @media (min-width: 900px) { .filterbar { grid-template-columns: 1fr 220px; align-items: center; } }
+
+/* Interruptor "Solo 3 o más" (solo escritorio; en el teléfono lo cubre el desplegable) */
+.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: .85rem; color: var(--text); }
+.switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.solo-pc { display: none; }
+@media (min-width: 900px) { .solo-pc { display: inline-flex; } }
+
+/* Alumnos: en el teléfono los chips se reemplazan por un desplegable junto al de curso */
+.filterbar.con-select { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.filterbar.con-select .chips { display: none; }
+.filterbar.con-select select { min-width: 0; padding: 11px 8px; border-radius: 12px; font-size: .82rem; }
+@media (min-width: 900px) {
+  .filterbar.con-select { grid-template-columns: 1fr 220px; gap: 10px; }
+  .filterbar.con-select .chips { display: flex; }
+  .filterbar.con-select .filtro-select { display: none; }
+  .filterbar.con-select select.curso { padding: 10px 14px; border-radius: 14px; font-size: inherit; }
+}
 
 /* Animación de carga 3x3 durante la extracción automática */
 .gridloader { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 36px; height: 36px; flex: none; }

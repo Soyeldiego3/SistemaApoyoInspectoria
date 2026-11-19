@@ -1,3 +1,5 @@
+const { sqlJustificado } = require('./justificativos');
+
 const TIPOS = new Set(['inasistencias', 'atrasos', 'ambos']);
 
 function normalizarTipo(tipo) {
@@ -90,12 +92,7 @@ function obtenerIncidentes(db, { desde, hasta, curso, tipo }) {
         c.nombre AS curso,
         m.id_matricula,
         NULL AS hora_llegada,
-        CASE WHEN EXISTS (
-          SELECT 1 FROM justificativo j
-          WHERE j.rut_alumno = a.rut
-            AND j.estado_documento = 'APROBADO'
-            AND s.fecha BETWEEN j.fecha_inicio AND j.fecha_fin
-        ) THEN 1 ELSE 0 END AS justificado
+        CASE WHEN ${sqlJustificado('a.rut', 's.fecha', 'inasistencia')} THEN 1 ELSE 0 END AS justificado
       FROM asistencia s
       JOIN matricula m ON m.id_matricula = s.id_matricula
       JOIN alumno a ON a.rut = m.rut_alumno
@@ -114,12 +111,8 @@ function obtenerIncidentes(db, { desde, hasta, curso, tipo }) {
         c.nombre AS curso,
         m.id_matricula,
         t.hora_llegada,
-        CASE WHEN t.justificado_portal = 1 OR EXISTS (
-          SELECT 1 FROM justificativo j
-          WHERE j.rut_alumno = a.rut
-            AND j.estado_documento = 'APROBADO'
-            AND t.fecha BETWEEN j.fecha_inicio AND j.fecha_fin
-        ) THEN 1 ELSE 0 END AS justificado
+        CASE WHEN t.justificado_portal = 1 OR ${sqlJustificado('a.rut', 't.fecha', 'atraso')}
+          THEN 1 ELSE 0 END AS justificado
       FROM atraso t
       JOIN matricula m ON m.id_matricula = t.id_matricula
       JOIN alumno a ON a.rut = m.rut_alumno

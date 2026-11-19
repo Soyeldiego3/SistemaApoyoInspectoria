@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutGrid, ClipboardCheck, Users, Database, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 
@@ -14,6 +14,14 @@ const tabs = [
 
 export default function BottomNav() {
   const { esAdmin } = useAuth();
+  const { pathname, state } = useLocation();
+  // La ficha de un alumno abierta desde Auditoría sigue resaltando "Auditar"
+  const desdeAuditoria = pathname.startsWith('/alumnos/') && Boolean(state?.returnTo?.startsWith('/auditar'));
+  const activa = (to, isActive) => {
+    if (to === '/auditar') return isActive || desdeAuditoria;
+    if (to === '/alumnos') return isActive && !desdeAuditoria;
+    return isActive;
+  };
   const visibleTabs = tabs.filter((tab) => {
     if (tab.to === '/usuarios') return esAdmin;
     return true;
@@ -22,7 +30,7 @@ export default function BottomNav() {
     <nav className="nav" aria-label="Navegación principal">
       {visibleTabs.map(({ to, label, Icon, end, abajo }) => (
         <NavLink key={to} to={to} end={end}
-          className={({ isActive }) => [isActive ? 'active' : '', abajo ? 'nav-bottom' : ''].join(' ').trim()}>
+          className={({ isActive }) => [activa(to, isActive) ? 'active' : '', abajo ? 'nav-bottom' : ''].join(' ').trim()}>
           <Icon size={22} /><span>{label}</span>
         </NavLink>
       ))}

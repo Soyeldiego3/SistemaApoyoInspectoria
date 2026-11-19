@@ -1,14 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 
+// Se guarda como registro (mismo formato que el portal), pero deja las fechas SIN justificar:
+// para cada día manda el justificativo más reciente.
+export const SIN_JUSTIFICAR = 'NO SE HA JUSTIFICADO';
+
 // Tipos de justificativo disponibles. Para agregar o quitar opciones basta con editar esta lista.
 const TIPOS_JUSTIFICATIVO = [
-  'NO SE HA JUSTIFICADO',
+  SIN_JUSTIFICAR,
   'EL APODERADO JUSTIFICA CON LICENCIA MÉDICA',
   'EL APODERADO JUSTIFICA PERSONALMENTE',
   'EL APODERADO JUSTIFICA CON CORREO ELECTRÓNICO',
   'EL ALUMNO(A) INGRESA TARDE AL ESTABLECIMIENTO',
   'SUSPENDIDO COMO ACCIÓN DISCIPLINARIA',
 ];
+
+// Texto corto para mostrar el motivo en las filas de la ficha
+const MOTIVOS_CORTOS = {
+  'EL APODERADO JUSTIFICA CON LICENCIA MÉDICA': 'Licencia médica',
+  'EL APODERADO JUSTIFICA PERSONALMENTE': 'Apoderado en persona',
+  'EL APODERADO JUSTIFICA CON CORREO ELECTRÓNICO': 'Correo electrónico',
+  'EL ALUMNO(A) INGRESA TARDE AL ESTABLECIMIENTO': 'Ingresa tarde',
+  'SUSPENDIDO COMO ACCIÓN DISCIPLINARIA': 'Suspensión',
+};
+export const motivoCorto = (tipo) => {
+  if (!tipo) return '';
+  if (MOTIVOS_CORTOS[tipo]) return MOTIVOS_CORTOS[tipo];
+  const t = tipo.toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 // Lista desplegable propia: a diferencia del <select> nativo, permite que los textos largos
 // hagan salto de línea y que el menú quede siempre dentro del ancho del panel.
@@ -67,9 +86,16 @@ function Selector({ id, value, opciones, onChange }) {
   );
 }
 
+const TIPO_ATRASO = 'EL ALUMNO(A) INGRESA TARDE AL ESTABLECIMIENTO';
+const TIPO_INASISTENCIA = 'EL APODERADO JUSTIFICA CON LICENCIA MÉDICA';
+const TITULOS = { inasistencia: 'Justificar inasistencias', atraso: 'Justificar atrasos' };
+
 // Panel inferior: se abre sobre la misma pantalla, así no hay que cambiar de ventana.
-export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', hasta = '', onGuardar }) {
-  const [tipo, setTipo] = useState(TIPOS_JUSTIFICATIVO[0]);
+// aplicaA: 'inasistencia' | 'atraso' → el justificativo solo cubre ese tipo de registro.
+// quitar: la selección ya estaba justificada → se propone "NO SE HA JUSTIFICADO".
+export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', hasta = '', aplicaA, quitar = false, onGuardar }) {
+  const tipoInicial = quitar ? SIN_JUSTIFICAR : aplicaA === 'atraso' ? TIPO_ATRASO : TIPO_INASISTENCIA;
+  const [tipo, setTipo] = useState(tipoInicial);
   const [fechas, setFechas] = useState({ desde, hasta });
   const inicioRegistro = useRef(null);
   useEffect(() => {
@@ -80,6 +106,9 @@ export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', h
       inicioRegistro.current = null;
     }
   }, [abierto, desde, hasta]);
+  useEffect(() => {
+    if (abierto) setTipo(tipoInicial);
+  }, [abierto, tipoInicial]);
   // Mientras el panel está abierto se bloquea el scroll de la página de fondo.
   useEffect(() => {
     if (!abierto) return;
@@ -105,11 +134,11 @@ export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', h
             const duracionMs = inicioRegistro.current == null
               ? null
               : Math.round(performance.now() - inicioRegistro.current);
-            onGuardar?.({ tipo, ...fechas, duracionMs });
+            onGuardar?.({ tipo, ...fechas, duracionMs, aplicaA });
           }
         }}>
         <div className="grab" />
-        <h2>Agregar justificativo</h2>
+        <h2>{quitar ? 'Cambiar justificación' : TITULOS[aplicaA] || 'Agregar justificativo'}</h2>
         {resumen && <p className="muted">{resumen}</p>}
         <div className="field"><label htmlFor="tipo">Tipo</label>
           <Selector id="tipo" value={tipo} opciones={TIPOS_JUSTIFICATIVO} onChange={setTipo} /></div>
@@ -120,7 +149,10 @@ export default function JustifySheet({ abierto, onCerrar, resumen, desde = '', h
             <input id="h" type="date" className="input" value={fechas.hasta} onChange={(e) => setFechas({ ...fechas, hasta: e.target.value })} /></div>
         </div>
         {mal && <p className="muted" style={{ color: 'var(--bad)' }}>La fecha final debe ser igual o posterior a la inicial.</p>}
-        <button className="btn" disabled={!ok}>Guardar justificativo</button>
+        {tipo === SIN_JUSTIFICAR && <p className="muted">Las fechas de este rango quedarán sin justificar.</p>}
+        <button className="btn" disabled={!ok}>
+          {tipo === SIN_JUSTIFICAR ? 'Marcar como no justificado' : 'Guardar justificativo'}
+        </button>
         <button type="button" className="btn ghost" onClick={onCerrar}>Cancelar</button>
       </form>
     </div>

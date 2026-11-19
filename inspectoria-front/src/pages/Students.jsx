@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw, Search, X } from 'lucide-react';
+import { CalendarX, Clock, RefreshCw, Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
@@ -16,13 +16,30 @@ const MENSAJES_PORTAL = {
 // { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
 //   atrasos    = atrasos acumulados sin justificar
 //   pendientes = inasistencias sin justificar
-const FILTROS = [
-  // Estados de asistencia entregados por la API: presente, ausente y atraso.
+// Filtro = estado base + sufijo '3' cuando está activo "Solo 3 o más" (ej. 'atrasos3')
+const CHIPS = [
   { id: 'todos', label: 'Todos' },
-  { id: 'sin', label: 'Sin justificar' },
-  { id: 'reinc', label: '+3 Sin justificar' },
+  { id: 'inasist', label: 'Inasistencias pendientes' },
+  { id: 'atrasos', label: 'Atrasos pendientes' },
   { id: 'ok', label: 'Al día' },
 ];
+// En el teléfono no hay interruptor: el desplegable lista todas las combinaciones
+const OPCIONES_SELECT = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'inasist', label: 'Inasistencias pendientes' },
+  { id: 'inasist3', label: '3+ inasistencias' },
+  { id: 'atrasos', label: 'Atrasos pendientes' },
+  { id: 'atrasos3', label: '3+ atrasos (reincidentes)' },
+  { id: 'ok', label: 'Al día' },
+];
+const CON_MINIMO = ['inasist', 'atrasos'];
+// 'reinc' era el filtro antiguo de reincidentes (links y sessionStorage guardados)
+const filtroValido = (f) => {
+  if (f === 'reinc') return 'atrasos3';
+  return OPCIONES_SELECT.some((o) => o.id === f) ? f : null;
+};
+// Con un filtro de inasistencias o atrasos, la ficha se abre directo en esa pestaña
+const VISTA_POR_FILTRO = { inasist: 'inasistencias', atrasos: 'atrasos' };
 
 const CURSO_STORAGE_KEY = 'inspectoria.alumnos.curso';
 const FILTRO_STORAGE_KEY = 'inspectoria.alumnos.filtro';
@@ -35,16 +52,18 @@ export default function Students() {
   const navigate = useNavigate();
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const parametros = new URLSearchParams(location.search);
+  // Si la URL trae filtros (ej. desde Inicio → Reincidencias), mandan ellos y no lo guardado
+  const urlConFiltros = parametros.has('filtro') || parametros.has('curso');
   const [q, setQ] = useState('');
   const [filtro, setFiltro] = useState(() => (
-    parametros.get('filtro')
-    || sessionStorage.getItem(FILTRO_STORAGE_KEY)
-    || 'todos'
+    urlConFiltros
+      ? filtroValido(parametros.get('filtro')) || 'todos'
+      : filtroValido(sessionStorage.getItem(FILTRO_STORAGE_KEY)) || 'todos'
   ));
   const [curso, setCurso] = useState(() => (
-    parametros.get('curso')
-    || sessionStorage.getItem(CURSO_STORAGE_KEY)
-    || ''
+    urlConFiltros
+      ? parametros.get('curso') || ''
+      : sessionStorage.getItem(CURSO_STORAGE_KEY) || ''
   ));
   const [alumnos, setAlumnos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -140,17 +159,24 @@ export default function Students() {
     return retorno.toString() ? `/alumnos?${retorno}` : '/alumnos';
   }, [curso, filtro]);
 
+  const base = filtro.replace(/3$/, '');
+  const minimo = filtro.endsWith('3') ? 3 : 1;
+
   // Se recalcula en cada tecla; no necesita ir al back
   const lista = useMemo(() => {
     const t = limpiar(q.trim());
     return alumnos.filter((a) =>
       (!t || limpiar(`${a.rut} ${a.nombres} ${a.apellidos} ${a.curso}`).includes(t)) &&
       (!curso || a.curso === curso) &&
-      (filtro === 'todos' ||
-        (filtro === 'sin' && (a.pendientes > 0 || a.atrasos > 0)) ||
-        (filtro === 'reinc' && a.atrasos >= 3) ||
-        (filtro === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
-  }, [alumnos, q, filtro, curso]);
+      (base === 'todos' ||
+        (base === 'inasist' && a.pendientes >= minimo) ||
+        (base === 'atrasos' && a.atrasos >= minimo) ||
+        (base === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
+  }, [alumnos, q, base, minimo, curso]);
+
+  // Con un filtro activo, cada tarjeta muestra solo el dato de ese filtro
+  const verInasist = base === 'todos' || base === 'inasist';
+  const verAtrasos = base === 'todos' || base === 'atrasos';
 
   const hayFiltros = q || curso || filtro !== 'todos';
   const limpiarTodo = () => { setQ(''); setCurso(''); setFiltro('todos'); };
@@ -168,8 +194,12 @@ export default function Students() {
           onChange={(e) => setQ(e.target.value)} aria-label="Buscar alumno" />
       </div>
 
-      <div className="filterbar">
-        <Chips opciones={FILTROS} valor={filtro} onChange={setFiltro} />
+      {/* En escritorio se ven los chips; en el teléfono, un desplegable (los chips no caben) */}
+      <div className="filterbar con-select">
+        <Chips opciones={CHIPS} valor={base} onChange={setFiltro} />
+        <select className="input filtro-select" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar por estado">
+          {OPCIONES_SELECT.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
         <select className="input curso" value={curso} onChange={(e) => setCurso(e.target.value)} disabled={!cursos.length} aria-label="Filtrar por curso">
           <option value="">Todos los cursos</option>
           {cursos.map((c) => <option key={c}>{c}</option>)}
@@ -177,8 +207,17 @@ export default function Students() {
       </div>
 
       <div className="row muted">
-        <span>{lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}</span>
-        {hayFiltros && <button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
+        <span className="row" style={{ gap: 16 }}>
+          {lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}
+          {CON_MINIMO.includes(base) && (
+            <label className="switch solo-pc">
+              <input type="checkbox" checked={minimo === 3}
+                onChange={(e) => setFiltro(e.target.checked ? `${base}3` : base)} />
+              Solo 3 o más
+            </label>
+          )}
+        </span>
+        {hayFiltros &&<button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
       </div>
 
       {lista.length === 0
@@ -199,13 +238,22 @@ export default function Students() {
             )
             : <EmptyState texto={error || 'Ningún alumno coincide con los filtros.'} filas={3} />
         : <div className="list cols">{lista.map((a) => (
-            <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`}
+            <Link key={a.rut}
+              to={`/alumnos/${encodeURIComponent(a.rut)}${VISTA_POR_FILTRO[base] ? `?vista=${VISTA_POR_FILTRO[base]}` : ''}`}
               state={{ returnTo: rutaRetorno }}
               className="item">
               <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
               <div className="tags">
-                {a.atrasos > 0 && <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`}>{a.atrasos} atrasos sin justificar</span>}
-                {a.pendientes > 0 && <span className="tag warn">{a.pendientes} inasistencias sin justificar</span>}
+                {verInasist && a.pendientes > 0 && (
+                  <span className={`tag ${a.pendientes >= 3 ? 'bad' : 'warn'}`} title="Inasistencias sin justificar">
+                    <CalendarX size={13} aria-hidden />{a.pendientes} {a.pendientes === 1 ? 'inasistencia' : 'inasistencias'}{a.pendientes >= 3 ? ' · 3 o más' : ''}
+                  </span>
+                )}
+                {verAtrasos && a.atrasos > 0 && (
+                  <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`} title="Atrasos sin justificar">
+                    <Clock size={13} aria-hidden />{a.atrasos} {a.atrasos === 1 ? 'atraso' : 'atrasos'}{a.atrasos >= 3 ? ' · reincidente' : ''}
+                  </span>
+                )}
                 {a.pendientes === 0 && a.atrasos === 0 && <span className="tag ok">Al día</span>}
               </div>
             </Link>))}</div>}

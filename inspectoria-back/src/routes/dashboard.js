@@ -1,6 +1,7 @@
 const express = require('express');
 const { abrirDb } = require('../services/asistencia');
 const { obtenerIncidentes } = require('../services/incidentes');
+const { SIN_JUSTIFICAR, sqlJustificado } = require('../services/justificativos');
 
 const router = express.Router();
 let db;
@@ -46,12 +47,7 @@ function obtenerReincidenciasPorMes(conexion, anio, hoy) {
       JOIN matricula m ON m.id_matricula = t.id_matricula
       WHERE t.fecha BETWEEN ? AND ?
         AND t.justificado_portal = 0
-        AND NOT EXISTS (
-          SELECT 1 FROM justificativo j
-          WHERE j.rut_alumno = m.rut_alumno
-            AND j.estado_documento = 'APROBADO'
-            AND t.fecha BETWEEN j.fecha_inicio AND j.fecha_fin
-        )
+        AND NOT ${sqlJustificado('m.rut_alumno', 't.fecha', 'atraso')}
       GROUP BY substr(t.fecha, 1, 7), m.rut_alumno
       HAVING COUNT(DISTINCT t.id_atraso) >= 3
     )
@@ -129,14 +125,16 @@ router.get('/', (req, res) => {
     const rto = conexion.prepare(`
       SELECT AVG(duracion_ms) AS promedio_ms, COUNT(duracion_ms) AS mediciones
       FROM justificativo
-    `).get();
+      WHERE tipo_documento <> @sinJustificar
+    `).get({ sinJustificar: SIN_JUSTIFICAR });
     const rtoPorMes = conexion.prepare(`
       SELECT substr(creado_en, 1, 7) AS mes, AVG(duracion_ms) AS promedio_ms
       FROM justificativo
       WHERE duracion_ms IS NOT NULL AND creado_en IS NOT NULL
+        AND tipo_documento <> @sinJustificar
       GROUP BY substr(creado_en, 1, 7)
       ORDER BY mes
-    `).all();
+    `).all({ sinJustificar: SIN_JUSTIFICAR });
     const valorTse = porcentaje(sincronizaciones.exitosas, sincronizaciones.intentos);
     const valorTadr = porcentaje(totalAlertas, totalElegibles);
     const valorRto = rto.mediciones

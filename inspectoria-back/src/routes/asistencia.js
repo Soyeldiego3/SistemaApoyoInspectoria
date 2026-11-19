@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db/conexion');
-const { abrirDb, normalizarRut } = require('../services/asistencia');
+const { abrirDb, normalizarRut, transaccion } = require('../services/asistencia');
+const { sqlJustificado, sqlUltimoTipo, recortarSuperpuestos } = require('../services/justificativos');
 
 const router = express.Router();
 let dbWritable;
@@ -10,6 +11,9 @@ function obtenerDbWritable() {
   return dbWritable;
 }
 
+// Un justificativo cubre inasistencias, atrasos o ambos (aplica_a NULL = justificativos antiguos)
+const APLICA_A = ['inasistencia', 'atraso'];
+
 router.get('/alumnos', (req, res) => {
   try {
     const alumnos = db.prepare(`
@@ -17,18 +21,12 @@ router.get('/alumnos', (req, res) => {
         (SELECT COUNT(*) FROM atraso t
           WHERE t.id_matricula = m.id_matricula
             AND t.justificado_portal = 0
-            AND NOT EXISTS (SELECT 1 FROM justificativo j
-                            WHERE j.rut_alumno = a.rut
-                              AND j.estado_documento = 'APROBADO'
-                              AND t.fecha BETWEEN j.fecha_inicio AND j.fecha_fin)
+            AND NOT ${sqlJustificado('a.rut', 't.fecha', 'atraso')}
         ) AS atrasos,
         (SELECT COUNT(*) FROM asistencia s
           WHERE s.id_matricula = m.id_matricula
             AND s.estado IN ('A', 'F')
-            AND NOT EXISTS (SELECT 1 FROM justificativo j
-                            WHERE j.rut_alumno = a.rut
-                              AND j.estado_documento = 'APROBADO'
-                              AND s.fecha BETWEEN j.fecha_inicio AND j.fecha_fin)
+            AND NOT ${sqlJustificado('a.rut', 's.fecha', 'inasistencia')}
         ) AS pendientes
       FROM alumno a
       JOIN matricula m ON m.rut_alumno = a.rut
@@ -48,7 +46,7 @@ router.get('/alumnos/:rut', (req, res) => {
   try {
     const rut = normalizarRut(req.params.rut);
     const alumno = db.prepare(`
-      SELECT a.rut, a.nombres, a.apellidos, c.nombre AS curso, m.anio
+      SELECT a.rut, a.nombres, a.apellidos, c.nombre AS curso, m.anio, m.id_matricula
       FROM alumno a
       JOIN matricula m ON m.rut_alumno = a.rut
       JOIN curso c ON c.id_curso = m.id_curso
@@ -57,57 +55,49 @@ router.get('/alumnos/:rut', (req, res) => {
     `).get(rut);
 
     if (!alumno) return res.status(404).json({ error: 'No se encontró el alumno.' });
+    const parametros = { rut: alumno.rut, id_matricula: alumno.id_matricula };
 
-    const dias = db.prepare(`
-      WITH fechas AS (
-        SELECT fecha FROM asistencia WHERE id_matricula = (
-          SELECT m.id_matricula FROM matricula m
-          WHERE m.rut_alumno = ? AND m.anio = ?
-          LIMIT 1
-        )
-        UNION
-        SELECT fecha FROM atraso WHERE id_matricula = (
-          SELECT m.id_matricula FROM matricula m
-          WHERE m.rut_alumno = ? AND m.anio = ?
-          LIMIT 1
-        )
+    // Solo los días con inasistencia (A o F); los días presentes no se listan
+    const inasistencias = db.prepare(`
+      SELECT s.fecha, s.estado,
+        ${sqlJustificado('@rut', 's.fecha', 'inasistencia')} AS justificado,
+        ${sqlUltimoTipo('@rut', 's.fecha', 'inasistencia')} AS motivo
+      FROM asistencia s
+      WHERE s.id_matricula = @id_matricula AND s.estado IN ('A', 'F')
+      ORDER BY s.fecha DESC
+    `).all(parametros);
+
+    // Cada atraso por separado (puede haber más de uno el mismo día)
+    const atrasos = db.prepare(`
+      SELECT id_atraso, fecha, hora_llegada, justificado_portal, justificado_doc, motivo,
+        CASE WHEN justificado_portal = 1 OR justificado_doc = 1 THEN 1 ELSE 0 END AS justificado
+      FROM (
+        SELECT t.id_atraso, t.fecha, t.hora_llegada, t.justificado_portal,
+          ${sqlJustificado('@rut', 't.fecha', 'atraso')} AS justificado_doc,
+          ${sqlUltimoTipo('@rut', 't.fecha', 'atraso')} AS motivo
+        FROM atraso t
+        WHERE t.id_matricula = @id_matricula
       )
-      SELECT f.fecha,
-        CASE
-          WHEN EXISTS (
-            SELECT 1 FROM asistencia s
-            JOIN matricula m ON m.id_matricula = s.id_matricula
-            WHERE m.rut_alumno = ? AND m.anio = ? AND s.fecha = f.fecha
-              AND s.estado IN ('A', 'F')
-          ) THEN 'ausente'
-          WHEN EXISTS (
-            SELECT 1 FROM atraso t
-            JOIN matricula m ON m.id_matricula = t.id_matricula
-            WHERE m.rut_alumno = ? AND m.anio = ? AND t.fecha = f.fecha
-          ) THEN 'atraso'
-          ELSE 'presente'
-        END AS estado,
-        CASE WHEN EXISTS (
-          SELECT 1 FROM justificativo j
-          WHERE j.rut_alumno = ? AND j.estado_documento = 'APROBADO'
-            AND f.fecha BETWEEN j.fecha_inicio AND j.fecha_fin
-        ) THEN 1 ELSE 0 END AS justificado,
-        (SELECT t.hora_llegada FROM atraso t
-          JOIN matricula m ON m.id_matricula = t.id_matricula
-          WHERE m.rut_alumno = ? AND m.anio = ? AND t.fecha = f.fecha
-          ORDER BY t.hora_llegada LIMIT 1) AS hora_llegada
-      FROM fechas f
-      ORDER BY f.fecha DESC
-    `).all(
-      alumno.rut, alumno.anio,
-      alumno.rut, alumno.anio,
-      alumno.rut, alumno.anio,
-      alumno.rut, alumno.anio,
-      alumno.rut,
-      alumno.rut, alumno.anio,
-    );
+      ORDER BY fecha DESC, hora_llegada DESC
+    `).all(parametros);
 
-    res.json({ alumno, dias });
+    const { diasRegistrados } = db.prepare(
+      'SELECT COUNT(*) AS diasRegistrados FROM asistencia WHERE id_matricula = @id_matricula',
+    ).get(parametros);
+
+    const resumen = {
+      diasRegistrados,
+      inasistencias: inasistencias.length,
+      inasistenciasSinJustificar: inasistencias.filter((d) => !d.justificado).length,
+      atrasos: atrasos.length,
+      atrasosSinJustificar: atrasos.filter((t) => !t.justificado).length,
+      porcentajeAsistencia: diasRegistrados
+        ? (diasRegistrados - inasistencias.length) / diasRegistrados
+        : null,
+    };
+
+    delete alumno.id_matricula;
+    res.json({ alumno, resumen, inasistencias, atrasos });
   } catch (error) {
     console.error('Error al consultar detalle del alumno:', error.message);
     res.status(500).json({ error: 'No se pudo cargar el detalle del alumno.' });
@@ -116,27 +106,36 @@ router.get('/alumnos/:rut', (req, res) => {
 
 router.post('/alumnos/:rut/justificativos', (req, res) => {
   try {
-    const { tipo, desde, hasta, duracionMs } = req.body ?? {};
+    const { tipo, desde, hasta, duracionMs, aplicaA } = req.body ?? {};
     if (typeof tipo !== 'string' || !tipo.trim() ||
       !/^\d{4}-\d{2}-\d{2}$/.test(desde) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < desde) {
       return res.status(400).json({ error: 'Tipo y rango de fechas inválidos.' });
     }
-    if (duracionMs !== undefined && (!Number.isSafeInteger(duracionMs) || duracionMs < 0)) {
+    if (duracionMs !== undefined && duracionMs !== null && (!Number.isSafeInteger(duracionMs) || duracionMs < 0)) {
       return res.status(400).json({ error: 'La duración del registro no es válida.' });
+    }
+    if (aplicaA !== undefined && aplicaA !== null && !APLICA_A.includes(aplicaA)) {
+      return res.status(400).json({ error: 'El justificativo debe aplicar a inasistencias o atrasos.' });
     }
 
     const rut = normalizarRut(req.params.rut);
     const alumno = db.prepare('SELECT rut FROM alumno WHERE rut = ?').get(rut);
     if (!alumno) return res.status(404).json({ error: 'No se encontró el alumno.' });
 
-    const insert = obtenerDbWritable().prepare(`
-      INSERT INTO justificativo
-        (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento, duracion_ms, creado_en)
-      VALUES (?, ?, ?, ?, 'APROBADO', ?, ?)
-    `);
-    const resultado = insert.run(alumno.rut, tipo.trim(), desde, hasta, duracionMs ?? null, new Date().toISOString());
-    res.status(201).json({ id: resultado.lastInsertRowid });
+    // El nuevo justificativo sobrescribe a los anteriores del mismo tipo en esas fechas
+    const dbw = obtenerDbWritable();
+    const id = transaccion(dbw, () => {
+      const { lastInsertRowid } = dbw.prepare(`
+        INSERT INTO justificativo
+          (rut_alumno, tipo_documento, fecha_inicio, fecha_fin, estado_documento, duracion_ms, creado_en, aplica_a)
+        VALUES (?, ?, ?, ?, 'APROBADO', ?, ?, ?)
+      `).run(alumno.rut, tipo.trim(), desde, hasta, duracionMs ?? null, new Date().toISOString(), aplicaA ?? null);
+      const nuevo = dbw.prepare('SELECT * FROM justificativo WHERE id_justificativo = ?').get(lastInsertRowid);
+      recortarSuperpuestos(dbw, nuevo);
+      return lastInsertRowid;
+    });
+    res.status(201).json({ id });
   } catch (error) {
     console.error('Error al crear justificativo:', error.message);
     res.status(500).json({ error: 'No se pudo guardar el justificativo.' });

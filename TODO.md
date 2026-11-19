@@ -4,8 +4,6 @@
 
 - Seccion de Graficos (barras, torta, etc.)
 
-- Dejar más explícita la asistencia y los atrasos de los estudiantes (¿separarlos en ventanas distintas?)
-
 - Importar y exportar asistencia y atrasos como Excel
 
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
@@ -16,9 +14,9 @@
 
 ## En progreso
 
-
-
 ## Completado
+
+- Dejar más explícita la asistencia y los atrasos de los estudiantes de la seccion de alumnos: ficha con resumen y pestañas Inasistencias/Atrasos; cada justificativo aplica solo a su tipo
 
 - Añadir un usuario admin y su panel correspondiente
 

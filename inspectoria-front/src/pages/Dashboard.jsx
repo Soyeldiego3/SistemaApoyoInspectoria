@@ -125,7 +125,7 @@ export default function Dashboard() {
           ayuda={datosDashboard?.kpis?.rto.ayuda || 'Meta < 10 s'} />
       </div>
 
-      <Link to="/auditar" className="card row">
+      <Link to="/alumnos?filtro=atrasos3"className="card row">
         <div><h2>Reincidencias</h2><p className="muted">Alumnos con 3 o más atrasos sin justificar</p></div>
         <span className="tag">{datosDashboard?.reincidencias ?? '—'}</span>
       </Link>
