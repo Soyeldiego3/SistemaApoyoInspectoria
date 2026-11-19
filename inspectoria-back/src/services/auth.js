@@ -34,8 +34,12 @@ function verificarCredenciales(nombre, password) {
   return u && u.activo && ok ? { id: u.id, nombre: u.nombre, rol: u.rol } : null;
 }
 
+// Huella de la contraseña guardada: si la contraseña cambia o la cuenta se borra y se vuelve a crear, los tokens anteriores dejan de servir.
+const huella = (passwordHash) => crypto.createHash('sha256').update(String(passwordHash)).digest('base64url').slice(0, 16);
+
+// Recibe la fila del usuario (id y password_hash).
 function crearToken(usuario) {
-  const cuerpo = b64(JSON.stringify({ u: usuario, exp: Date.now() + DURACION_MS }));
+  const cuerpo = b64(JSON.stringify({ id: usuario.id, h: huella(usuario.password_hash), exp: Date.now() + DURACION_MS }));
   return `${cuerpo}.${firmar(cuerpo)}`;
 }
 
@@ -46,7 +50,7 @@ function leerToken(token) {
   if (esperada.length !== recibida.length || !crypto.timingSafeEqual(esperada, recibida)) return null;
   try {
     const datos = JSON.parse(Buffer.from(cuerpo, 'base64url').toString());
-    return datos.exp > Date.now() ? { usuario: datos.u } : null;
+    return datos.exp > Date.now() && Number.isInteger(datos.id) ? { id: datos.id, huella: datos.h } : null;
   } catch { return null; }
 }
 
@@ -67,6 +71,7 @@ module.exports = {
   verificarCredenciales,
   crearToken,
   leerToken,
+  huella,
   bloqueado,
   registrarFallo,
   limpiarFallos,

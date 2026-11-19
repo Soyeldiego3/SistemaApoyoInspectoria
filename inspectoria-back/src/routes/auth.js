@@ -22,7 +22,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
   }
   auth.limpiarFallos(req.ip);
-  res.json({ token: auth.crearToken(u.nombre), usuario: u.nombre, rol: u.rol, expiraEnMs: auth.DURACION_MS });
+  res.json({ token: auth.crearToken(usuarios.buscar(u.nombre)), usuario: u.nombre, rol: u.rol, expiraEnMs: auth.DURACION_MS });
 });
 
 // Sirve para que el front compruebe si su sesión sigue vigente.

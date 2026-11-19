@@ -2,11 +2,9 @@
 
 ## Pendiente
 
-
 - Animación de carga al importar datos de alumnos
 
 - Probar más paletas de colores
-
 
 - Seccion de Graficos (barras, torta, etc.)
 
@@ -43,3 +41,5 @@
 - Sincronizar al iniciar el programa o la sesión (proceso semiautomático)
 
 - Dejar de mostrar el skeleton cuando no hay datos (parece que está cargando algo)
+
+- El token de sesión guarda el nombre del usuario, no su id. Ver auth.js:25 y sesion.js:9.

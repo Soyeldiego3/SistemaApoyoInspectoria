@@ -23,6 +23,7 @@ db.exec("UPDATE usuario SET rol = 'inspector' WHERE rol IS NULL OR rol NOT IN ('
 
 const q = {
   buscar: db.prepare('SELECT id, nombre, password_hash, activo, rol FROM usuario WHERE nombre = ?'),
+  buscarPorId: db.prepare('SELECT id, nombre, password_hash, activo, rol FROM usuario WHERE id = ?'),
   cantidad: db.prepare('SELECT COUNT(*) AS n FROM usuario'),
   actualizarNombre: db.prepare('UPDATE usuario SET nombre = ? WHERE id = ?'),
   crear: db.prepare('INSERT INTO usuario (nombre, password_hash, rol) VALUES (?, ?, ?)'),
@@ -36,6 +37,7 @@ const q = {
 
 module.exports = {
   buscar: (nombre) => q.buscar.get(String(nombre).trim()),
+  buscarPorId: (id) => q.buscarPorId.get(id),
   hayUsuarios: () => q.cantidad.get().n > 0,
   hayAdmins: () => q.adminsActivos.get().n > 0,
   cantidadAdminsActivos: () => q.adminsActivos.get().n,
