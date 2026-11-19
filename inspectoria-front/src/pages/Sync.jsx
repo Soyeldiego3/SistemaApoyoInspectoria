@@ -311,29 +311,27 @@ export default function Sync() {
     <>
       {esPc && (
         <section className="card" style={{ marginBottom: 16 }}>
-          <div className="row">
-            <div>
-              <h2>Credenciales del portal</h2>
-              {estadoPortal === 'cargando' && <p className="muted">Consultando estado…</p>}
-              {estadoPortal === 'vacio' && <p className="muted">No configuradas.</p>}
-              {estadoPortal === 'ok' && (
-                <p className="muted">
-                  Configuradas para <strong>{portal?.usuario}</strong>
-                  {portal?.enMemoria ? ' · solo en memoria' : ''}
-                </p>
-              )}
-              {estadoPortal === 'invalidas' && (
-                <p role="alert" style={{ color: 'var(--bad)' }}>
-                  Las credenciales guardadas están inválidas. Actualízalas para continuar.
-                </p>
-              )}
-              {portal?.urlPortal && <p className="muted">Portal: {portal.urlPortal}</p>}
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn ghost" onClick={() => abrirModal('guardar')}>Modificar</button>
-              <button className="btn ghost" onClick={() => abrirModal('probar')}>Probar conexión</button>
-              {guardadas && <button className="btn ghost" onClick={olvidar}>Olvidar</button>}
-            </div>
+          <div>
+            <h2>Credenciales del portal</h2>
+            {estadoPortal === 'cargando' && <p className="muted">Consultando estado…</p>}
+            {estadoPortal === 'vacio' && <p className="muted">No configuradas.</p>}
+            {estadoPortal === 'ok' && (
+              <p className="muted">
+                Configuradas para <strong>{portal?.usuario}</strong>
+                {portal?.enMemoria ? ' · solo en memoria' : ''}
+              </p>
+            )}
+            {estadoPortal === 'invalidas' && (
+              <p role="alert" style={{ color: 'var(--bad)' }}>
+                Las credenciales guardadas están inválidas. Actualízalas para continuar.
+              </p>
+            )}
+            {portal?.urlPortal && <p className="muted">Portal: {portal.urlPortal}</p>}
+          </div>
+          <div className="portal-acciones">
+            <button className="btn" onClick={() => abrirModal('guardar')}>Modificar</button>
+            <button className="btn outline" onClick={() => abrirModal('probar')}>Probar conexión</button>
+            {guardadas && <button className="btn peligro" onClick={olvidar}>Olvidar</button>}
           </div>
         </section>
       )}
@@ -369,7 +367,7 @@ export default function Sync() {
 
       {estado === 'ok' && <p className="msg" role="status">{mensaje || 'Asistencia actualizada.'}</p>}
       {estado === 'error' && (
-        <p className="msg" style={{ color: 'var(--bad)', background: 'rgba(255,90,95,.12)' }} role="alert">
+        <p className="msg" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }} role="alert">
           {mensaje}
         </p>
       )}

@@ -2,13 +2,7 @@
 
 ## Pendiente
 
-- Animación de carga al importar datos de alumnos
-
-- Probar más paletas de colores
-
 - Seccion de Graficos (barras, torta, etc.)
-
-- Añadir sección de ajustes: paleta de colores, tamaño de texto, modo claro/oscuro, personalización
 
 - Dejar más explícita la asistencia y los atrasos de los estudiantes (¿separarlos en ventanas distintas?)
 
@@ -24,6 +18,8 @@
 ## En progreso
 
 - Arreglar seccion de sincronizacion de inicio.
+
+
 
 ## Completado
 
@@ -53,3 +49,7 @@
 
 - Animación de carga al importar datos de alumnos
 - El token de sesión guarda el nombre del usuario, no su id. Ver auth.js:25 y sesion.js:9.
+
+- Probar más paletas de colores
+
+- Añadir sección de ajustes: paleta de colores, tamaño de texto, modo claro/oscuro, personalización

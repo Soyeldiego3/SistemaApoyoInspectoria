@@ -8,16 +8,14 @@ const tabs = [
   { to: '/alumnos', label: 'Alumnos', Icon: Users },
   { to: '/datos', label: 'Datos', Icon: Database },
   { to: '/usuarios', label: 'Usuarios', Icon: UserPlus },
-  // Al fondo del menú lateral; solo desde el PC (sus ajustes requieren loopback)
+  // Al fondo del menú lateral. En el teléfono solo muestra Apariencia (lo demás requiere el PC)
   { to: '/ajustes', label: 'Ajustes', Icon: Settings, abajo: true },
 ];
 
 export default function BottomNav() {
   const { esAdmin } = useAuth();
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const visibleTabs = tabs.filter((tab) => {
     if (tab.to === '/usuarios') return esAdmin;
-    if (tab.to === '/ajustes') return esPc;
     return true;
   });
   return (

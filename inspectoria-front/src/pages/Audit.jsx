@@ -368,7 +368,7 @@ export default function Audit() {
       {ultimaTexto && <p className="muted audit-last-sync">Última sincronización: {ultimaTexto}</p>}
       {avisoRango && <p className="msg" role="status">{avisoRango}</p>}
       {datos && <p className="muted">Rango consultado: {mostrarRango(datos)}</p>}
-      {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'rgba(255,90,95,.12)' }}>{error}</p>}
+      {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
 
       {!cargando && !tieneDatos ? (
         <section className="card" role="status">
