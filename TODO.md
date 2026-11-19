@@ -21,7 +21,7 @@
 
 ## En progreso
 
-
+- Pasar el inicio de sesion en la url hacia el telefono.
 
 ## Completado
 
