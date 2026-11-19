@@ -75,8 +75,16 @@ a { color: inherit; text-decoration: none; }
 .form { display: grid; gap: 14px; }
 
 .list { display: grid; gap: 8px; }
+/* Tantas columnas como quepan (mín. 380px c/u): 1 en teléfono/tablet, 2 en escritorio.
+   min(100%, …) evita que la grilla se desborde y aparezca scroll horizontal. */
+.list.cols { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
 .item { background: var(--card); border-radius: 18px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.item > :first-child { min-width: 0; overflow-wrap: anywhere; }
 .item b { display: block; }
+/* Tarjeta de alumno: si nombre y etiquetas no caben en una línea, las etiquetas bajan */
+.item.alumno { flex-wrap: wrap; row-gap: 8px; }
+.item.alumno > div:first-child { flex: 1 1 200px; }
+.item.alumno .tags { flex: 0 1 auto; margin-left: auto; }
 .tag { font-size: .75rem; padding: 4px 10px; border-radius: 20px; background: var(--card-2); white-space: nowrap; }
 .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); } .tag.bad { color: var(--bad); }
 .msg { padding: 12px 14px; border-radius: 14px; background: var(--ok-soft); color: var(--ok); font-size: .9rem; }
@@ -120,6 +128,7 @@ a { color: inherit; text-decoration: none; }
 .seg button { flex: 1; border: 0; background: none; padding: 10px 6px; border-radius: 10px; font-size: .85rem; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--card-2); color: var(--text); font-weight: 600; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+/* Teléfono: hoja inferior. Tablet: diálogo centrado. Escritorio: panel lateral. */
 .sheet { width: 100%; max-width: 480px; min-height: 70dvh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; align-content: start; background: var(--card); border-radius: 26px 26px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
 /* Selector desplegable propio: los textos largos hacen salto de línea en vez de cortarse */
 .selector { position: relative; }
@@ -153,9 +162,13 @@ a { color: inherit; text-decoration: none; }
   .app { max-width: none; }
   .nav { max-width: none; }
   .topbar, .content { width: 100%; max-width: 760px; margin: 0 auto; }
-  .list.cols { grid-template-columns: 1fr 1fr; }
   .kpis { grid-template-columns: repeat(3, 1fr); }
   .kpis > :last-child { grid-column: auto; }
+  /* Paneles (justificar, credenciales) como diálogo centrado, del alto de su contenido.
+     overflow visible: la lista de "Tipo" flota sobre el diálogo sin cortarse ni estirarlo. */
+  .overlay { align-items: center; padding: 24px; }
+  .sheet { max-width: 520px; min-height: 0; max-height: none; overflow: visible; border-radius: 26px; padding: 24px; }
+  .grab { display: none; }
 }
 
 /* ---------- Escritorio ---------- */
@@ -177,7 +190,6 @@ a { color: inherit; text-decoration: none; }
   .kpis > :last-child { grid-column: auto; }
   .charts { grid-template-columns: repeat(3, 1fr); }
   .cols2 { grid-template-columns: 1fr 1fr; }
-  .list.cols { grid-template-columns: 1fr 1fr; }
   .filters { grid-template-columns: 1fr auto; align-items: end; }
   .filters .btn { width: auto; padding-inline: 32px; }
   .content > input.input { max-width: 480px; }
@@ -187,8 +199,8 @@ a { color: inherit; text-decoration: none; }
   .audit-filter-grid select:last-child { grid-column: auto; }
 
   /* El panel de justificativo es un cajón lateral: la lista sigue visible */
-  .overlay { align-items: stretch; justify-content: flex-end; }
-  .sheet { max-width: 480px; height: 100%; max-height: none; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
+  .overlay { align-items: stretch; justify-content: flex-end; padding: 0; }
+  .sheet { max-width: 480px; height: 100%; max-height: none; overflow-y: auto; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
   .grab { display: none; }
 }
 

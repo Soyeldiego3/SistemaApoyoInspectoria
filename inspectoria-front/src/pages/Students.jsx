@@ -241,7 +241,7 @@ export default function Students() {
             <Link key={a.rut}
               to={`/alumnos/${encodeURIComponent(a.rut)}${VISTA_POR_FILTRO[base] ? `?vista=${VISTA_POR_FILTRO[base]}` : ''}`}
               state={{ returnTo: rutaRetorno }}
-              className="item">
+              className="item alumno">
               <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
               <div className="tags">
                 {verInasist && a.pendientes > 0 && (
