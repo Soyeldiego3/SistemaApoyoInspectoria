@@ -9,7 +9,10 @@
     "build:front": "npm --prefix ../inspectoria-front run build",
     "prepare:back": "node scripts/prepare-back.js",
     "pack": "npm run build:front && npm run prepare:back && electron-builder --dir",
-    "dist": "npm run build:front && npm run prepare:back && electron-builder"
+    "dist": "npm run build:front && npm run prepare:back && electron-builder",
+    "dist:win": "npm run build:front && npm run prepare:back && electron-builder --win",
+    "dist:linux": "npm run build:front && npm run prepare:back && electron-builder --linux",
+    "//dist:linux": "Correr dist:linux en Linux: better-sqlite3 se compila para el sistema donde se ejecuta prepare-back"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
@@ -45,10 +48,6 @@
       {
         "from": "front-dist",
         "to": "front-dist"
-      },
-      {
-        "from": "browsers",
-        "to": "browsers"
       }
     ],
     "win": {
@@ -56,6 +55,12 @@
       "icon": "assets/icons/icon.ico"
     },
     "linux": {
+      "extraResources": [
+        {
+          "from": "browsers",
+          "to": "browsers"
+        }
+      ],
       "target": "AppImage",
       "category": "Utility",
       "icon": "assets/icons/icon.png"

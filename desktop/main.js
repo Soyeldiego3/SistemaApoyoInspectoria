@@ -23,6 +23,10 @@ function startBackend() {
   delete backendEnv.PASS;
   delete backendEnv.AUTH_SECRET;
 
+  // Firefox incluido (solo en el build de Linux); en Windows se usa Edge del sistema
+  const browsersDir = path.join(process.resourcesPath, 'browsers');
+  if (fs.existsSync(browsersDir)) backendEnv.PLAYWRIGHT_BROWSERS_PATH = browsersDir;
+
   const proceso = fork(path.join(backendDir, 'src', 'index.js'), [], {
     cwd: backendDir,
     silent: true,
@@ -31,7 +35,6 @@ function startBackend() {
       PORT: String(PORT),
       DATA_DIR: app.getPath('userData'),
       FRONT_DIR: path.join(process.resourcesPath, 'front-dist'),
-      PLAYWRIGHT_BROWSERS_PATH: path.join(process.resourcesPath, 'browsers'), // <- nueva línea
       NODE_ENV: 'production',
     },
   });
