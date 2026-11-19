@@ -336,10 +336,6 @@ export default function Audit() {
     <>
       <div className="audit-header">
         <h2>Auditar</h2>
-        <button type="button" className="iconbtn audit-sync" onClick={sincronizar} disabled={sincronizando}
-          aria-label={sincronizando ? 'Sincronizando datos' : 'Sincronizar datos'} title="Sincronizar">
-          <RefreshCw size={20} className={sincronizando ? 'audit-spin' : ''} />
-        </button>
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">

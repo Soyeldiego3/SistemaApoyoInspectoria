@@ -159,10 +159,6 @@ export default function Students() {
     <>
       <div className="audit-header">
         <h2>Alumnos</h2>
-        <button type="button" className="iconbtn audit-sync" onClick={sincronizar} disabled={sincronizando}
-          aria-label={sincronizando ? 'Sincronizando datos' : 'Sincronizar datos'} title="Sincronizar">
-          <RefreshCw size={20} className={sincronizando ? 'audit-spin' : ''} />
-        </button>
       </div>
 
       {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'rgba(255,90,95,.12)' }}>{error}</p>}

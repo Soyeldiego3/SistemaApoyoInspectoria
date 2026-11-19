@@ -2,8 +2,6 @@
 
 ## Pendiente
 
-- Animación de carga al importar datos de alumnos
-
 - Probar más paletas de colores
 
 - Seccion de Graficos (barras, torta, etc.)
