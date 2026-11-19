@@ -8,6 +8,7 @@ import {
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
+import GridLoader from '../components/GridLoader.jsx';
 
 const MENSAJES_PORTAL = {
   LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
@@ -342,10 +343,17 @@ export default function Sync() {
           <h2>Extracción automática</h2>
           <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes actual.</p>
 
-          <button className="btn" onClick={extraer} disabled={estado === 'cargando'}>
-            <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />
+          <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={extraer} disabled={estado === 'cargando'}>
+            {estado === 'cargando' && !mostrarCredenciales
+              ? <GridLoader pequeno />
+              : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
             {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
           </button>
+          {estado === 'cargando' && !mostrarCredenciales && (
+            <p className="muted" role="status" style={{ marginTop: 10 }}>
+              Descargando todos los cursos desde el portal, puede tardar unos segundos.
+            </p>
+          )}
         </section>
 
         <section className="card">
