@@ -19,9 +19,15 @@ const {
   RECIENTES_MEDIA,
   ATRASOS_MEDIA,
   ATRASOS_ALTA,
+  ALERTAS,
 } = require('../config/auditoria');
 const configuracion = require('../services/configuracion');
 const { obtenerRangosFuentes } = require('../services/incidentes');
+const { abrirDb } = require('../services/asistencia');
+const {
+  detectarAlertas, aplicarGestion, TIPOS_ALERTA, ESTADOS_GESTION,
+} = require('../services/alertas');
+const auditoriaSistema = require('../services/auditoria_sistema');
 
 const router = express.Router();
 
@@ -129,6 +135,7 @@ router.get('/estado', (req, res) => {
     }
 
     res.json({
+      primeraFechaAsistencia: rangos.asistencia.desde || null,
       ultimaFechaAsistencia: rangos.asistencia.hasta || null,
       ultimaFechaAtrasos: rangos.atrasos.hasta || null,
       ultimaSincronizacionExitosa,
@@ -341,6 +348,107 @@ router.get('/cursos', (req, res) => {
   } catch (error) {
     console.error('Error en comparación de cursos:', error.message);
     res.status(500).json({ error: 'No se pudo comparar los cursos.' });
+  }
+});
+
+// ---- Alertas de patrones ----
+
+// Conexión escribible solo para la gestión de alertas; también asegura que la tabla exista.
+let dbWritable;
+function obtenerDbWritable() {
+  if (!dbWritable) dbWritable = abrirDb();
+  return dbWritable;
+}
+
+function leerGestiones() {
+  return obtenerDbWritable().prepare('SELECT * FROM alerta_gestion').all();
+}
+
+function calcularAlertas(query) {
+  const rango = resolverRango(db, { ...query, tipo: 'inasistencias' });
+  const { alertas, datosSuficientes, diasConDatos } = rango.elegido?.desde
+    ? detectarAlertas(db, { ...rango.elegido, curso: query.curso })
+    : { alertas: [], datosSuficientes: false, diasConDatos: 0 };
+  return { rango, alertas: aplicarGestion(alertas, leerGestiones()), datosSuficientes, diasConDatos };
+}
+
+router.get('/alertas', (req, res) => {
+  try {
+    const { rango, alertas, datosSuficientes, diasConDatos } = calcularAlertas(req.query);
+    const porTipo = Object.fromEntries(TIPOS_ALERTA.map((t) => [t, alertas.filter((a) => a.tipo === t).length]));
+    res.json({
+      ...metadata(rango, 'inasistencias'),
+      datosSuficientes,
+      diasConDatos,
+      minDiasRango: ALERTAS.minDiasRango,
+      resumen: {
+        total: alertas.length,
+        nuevas: alertas.filter((a) => a.estado === 'nueva').length,
+        gestionadas: alertas.filter((a) => a.estado !== 'nueva').length,
+        porTipo,
+      },
+      alertas,
+    });
+  } catch (error) {
+    console.error('Error al calcular alertas:', error.message);
+    res.status(500).json({ error: 'No se pudieron calcular las alertas.' });
+  }
+});
+
+// Alertas nuevas del rango pedido (el menú pide "este mes"); sin rango, todo lo que haya
+router.get('/alertas/conteo', (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const { alertas } = calcularAlertas(desde && hasta ? { desde, hasta } : {});
+    res.json({ nuevas: alertas.filter((a) => a.estado === 'nueva').length });
+  } catch (error) {
+    console.error('Error al contar alertas:', error.message);
+    res.status(500).json({ error: 'No se pudieron contar las alertas.' });
+  }
+});
+
+const CLAVE_ALERTA = new RegExp(`^([0-9kK.-]{3,15}):(${TIPOS_ALERTA.join('|')})(?::[0-9]{1,4})?$`);
+
+router.put('/alertas/:clave', (req, res) => {
+  try {
+    const { clave } = req.params;
+    const coincidencia = CLAVE_ALERTA.exec(clave);
+    if (!coincidencia) return res.status(400).json({ error: 'Alerta inválida.' });
+    const { estado = null, nota = '' } = req.body ?? {};
+    if (estado !== null && !ESTADOS_GESTION.includes(estado)) {
+      return res.status(400).json({ error: 'Estado de alerta inválido.' });
+    }
+    if (typeof nota !== 'string' || nota.length > 500) {
+      return res.status(400).json({ error: 'La nota debe tener como máximo 500 caracteres.' });
+    }
+    const conexion = obtenerDbWritable();
+    if (estado === null) {
+      conexion.prepare('DELETE FROM alerta_gestion WHERE clave = ?').run(clave);
+    } else {
+      conexion.prepare(`
+        INSERT INTO alerta_gestion (clave, rut, estado, nota, actualizado_en, usuario)
+        VALUES (@clave, @rut, @estado, @nota, @actualizado_en, @usuario)
+        ON CONFLICT(clave) DO UPDATE SET estado = excluded.estado, nota = excluded.nota,
+          actualizado_en = excluded.actualizado_en, usuario = excluded.usuario
+      `).run({
+        clave,
+        rut: coincidencia[1],
+        estado,
+        nota: nota.trim() || null,
+        actualizado_en: new Date().toISOString(),
+        usuario: req.usuario?.nombre || null,
+      });
+    }
+    try {
+      auditoriaSistema.registrar('auditoria.alerta_gestionada', req.usuario?.nombre, { clave, estado });
+    } catch (error) {
+      console.error('No se pudo registrar la gestión de la alerta:', error.message);
+    }
+    const gestion = conexion.prepare('SELECT * FROM alerta_gestion WHERE clave = ?').get(clave) || null;
+    res.json({ ok: true, gestion });
+  } catch (error) {
+    console.error('Error al gestionar alerta:', error.message);
+    res.status(500).json({ error: 'No se pudo guardar la gestión de la alerta.' });
   }
 });
 

@@ -43,6 +43,7 @@ const VISTA_POR_FILTRO = { inasist: 'inasistencias', atrasos: 'atrasos' };
 
 const CURSO_STORAGE_KEY = 'inspectoria.alumnos.curso';
 const FILTRO_STORAGE_KEY = 'inspectoria.alumnos.filtro';
+const BUSQUEDA_STORAGE_KEY = 'inspectoria.alumnos.busqueda';
 
 // Ignora tildes, mayúsculas, puntos y guion del RUT
 const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toLowerCase();
@@ -54,7 +55,13 @@ export default function Students() {
   const parametros = new URLSearchParams(location.search);
   // Si la URL trae filtros (ej. desde Inicio → Reincidencias), mandan ellos y no lo guardado
   const urlConFiltros = parametros.has('filtro') || parametros.has('curso');
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => {
+    if (urlConFiltros) return '';
+    try { return sessionStorage.getItem(BUSQUEDA_STORAGE_KEY) || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(BUSQUEDA_STORAGE_KEY, q); } catch { /* sin almacenamiento */ }
+  }, [q]);
   const [filtro, setFiltro] = useState(() => (
     urlConFiltros
       ? filtroValido(parametros.get('filtro')) || 'todos'

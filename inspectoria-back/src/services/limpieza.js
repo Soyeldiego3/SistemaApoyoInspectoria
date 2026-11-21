@@ -2,6 +2,8 @@ const { transaccion } = require('./asistencia');
 
 // Nota: sync_ejecucion NO se borra a propósito. Es el historial de sincronizaciones
 // que alimenta el KPI TSE y el gráfico "Sincronización diaria".
+// alerta_gestion tampoco se borra: guarda qué se hizo con cada alerta de patrones
+// (revisada, citado, descartada) para no repetir alertas ya atendidas.
 function borrarDatosSincronizados(db) {
   db.exec(`
     DELETE FROM atraso;

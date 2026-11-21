@@ -4,6 +4,8 @@ import { RefreshCw } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
+  gestionarAlerta,
+  getAlertas,
   getAuditoriaCursos,
   getAuditoriaEstado,
   getAuditoriaPrioridad,
@@ -12,8 +14,10 @@ import {
   iniciarSync,
 } from '../api.js';
 import { fechaCorta, tituloMes } from '../fechas.js';
+import { memoriaAuditar } from '../filtrosAuditar.js';
 
 const TABS = [
+  { id: 'alertas', label: 'Alertas' },
   { id: 'prioridad', label: 'A quién citar' },
   { id: 'cursos', label: 'Comparar cursos' },
 ];
@@ -71,7 +75,7 @@ function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '')
 
 function mostrarRango(datos) {
   if (!datos?.rango?.desde || !datos?.rango?.hasta) return 'Sin rango con datos suficientes';
-  return `${datos.rango.desde} a ${datos.rango.hasta}`;
+  return `${fechaCorta(datos.rango.desde)} a ${fechaCorta(datos.rango.hasta)}`;
 }
 
 function haceCuanto(fechaIso) {
@@ -199,7 +203,8 @@ function AyudaPrioridad({ criterios }) {
 }
 
 function Prioridad({ datos, tipo, rutaRetorno }) {
-  const [nivel, setNivel] = useState('todos');
+  const [nivel, setNivelEstado] = useState(memoriaAuditar.nivel);
+  const setNivel = (valor) => { memoriaAuditar.nivel = valor; setNivelEstado(valor); };
   if (!datos?.alumnos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
   // Con un tipo elegido, la ficha se abre en esa pestaña (los ids coinciden con sus vistas)
   const vista = tipo !== 'ambos' ? `?vista=${tipo}` : '';
@@ -287,18 +292,194 @@ function Cursos({ datos }) {
   );
 }
 
+// ---- Alertas de patrones ----
+
+const TIPOS_ALERTA = [
+  { id: 'mismo_dia', label: 'Falta siempre el mismo día', ayuda: 'La mayoría de sus faltas caen en un mismo día de la semana.' },
+  { id: 'fin_de_semana', label: 'Alarga fines de semana', ayuda: 'Sus faltas se pegan a fines de semana, feriados o interferiados.' },
+  { id: 'licencias', label: 'Muchas licencias médicas', ayuda: 'Varias licencias médicas aprobadas en el período, o varias de un solo día.' },
+  { id: 'caida', label: 'Caída reciente de asistencia', ayuda: 'Su asistencia de las últimas semanas es mucho menor que antes.' },
+];
+
+const ESTADOS_ALERTA = {
+  revisada: { label: 'Revisada', clase: 'ok' },
+  citado: { label: 'Apoderado citado', clase: 'ok' },
+  descartada: { label: 'Descartada', clase: '' },
+};
+
+const MAX_FECHAS = 8;
+
+function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
+  const [nota, setNota] = useState(alerta.gestion?.nota || '');
+  const [editandoNota, setEditandoNota] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const gestion = alerta.gestion;
+  const estado = ESTADOS_ALERTA[alerta.estado];
+  const fechas = alerta.evidencia || [];
+
+  const gestionar = async (nuevoEstado) => {
+    setGuardando(true);
+    setError('');
+    try {
+      const respuesta = await gestionarAlerta(alerta.clave, { estado: nuevoEstado, nota: nuevoEstado ? nota : '' });
+      setEditandoNota(false);
+      if (!nuevoEstado) setNota('');
+      onCambio(alerta.clave, respuesta.gestion);
+    } catch (e) {
+      setError(e.message || 'No se pudo guardar.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <article className="alerta">
+      <div className="alerta-cabecera">
+        <div>
+          <b>{alerta.nombres} {alerta.apellidos}</b>
+          <span className="muted audit-meta">{alerta.curso} · {formatearRut(alerta.rut)}</span>
+        </div>
+        <div className="tags">
+          <span className={`tag ${alerta.severidad === 'alta' ? 'bad' : 'warn'}`}>
+            {alerta.severidad === 'alta' ? 'Alta' : 'Media'}
+          </span>
+          {estado && <span className={`tag ${estado.clase}`}>{estado.label}</span>}
+        </div>
+      </div>
+      <div>
+        <span className="alerta-titulo">{alerta.titulo}</span>
+        {alerta.detalle && <p className="muted">{alerta.detalle}</p>}
+      </div>
+      {fechas.length > 0 && (
+        <div className="tags start">
+          {fechas.slice(-MAX_FECHAS).map((fecha) => <span key={fecha} className="tag">{fechaCorta(fecha)}</span>)}
+          {fechas.length > MAX_FECHAS && <span className="muted">y {fechas.length - MAX_FECHAS} más</span>}
+        </div>
+      )}
+      {gestion && (
+        <p className="muted">
+          {alerta.casosNuevos > 0 && (
+            <span className="tag warn" style={{ marginRight: 6 }}>
+              {plural(alerta.casosNuevos, 'caso nuevo', 'casos nuevos')} desde la gestión
+            </span>
+          )}
+          {ESTADOS_ALERTA[gestion.estado]?.label} el {fechaCorta(fechaLocal(new Date(gestion.actualizado_en)))}
+          {gestion.usuario ? ` por ${gestion.usuario}` : ''}.
+          {gestion.nota ? ` Nota: ${gestion.nota}` : ''}
+        </p>
+      )}
+      {editandoNota && (
+        <textarea value={nota} maxLength={500} onChange={(e) => setNota(e.target.value)}
+          placeholder="Nota opcional (por ejemplo: se llamó al apoderado, cita el martes)" aria-label="Nota de la alerta" />
+      )}
+      {error && <p className="muted" role="alert" style={{ color: 'var(--bad)' }}>{error}</p>}
+      <div className="alerta-acciones">
+        {/* Lista desplegable: ocupa poco espacio en pantallas medianas y pequeñas */}
+        <select className="input alerta-gestion" disabled={guardando} aria-label="Gestionar alerta"
+          value={alerta.estado === 'nueva' ? '' : alerta.estado}
+          onChange={(e) => gestionar(e.target.value === 'reabrir' ? null : e.target.value)}>
+          {alerta.estado === 'nueva'
+            ? <option value="" disabled>{guardando ? 'Guardando…' : 'Gestionar…'}</option>
+            : <option value="reabrir">Reabrir (volver a nueva)</option>}
+          <option value="citado">Apoderado citado</option>
+          <option value="revisada">Revisada</option>
+          <option value="descartada">Descartada</option>
+        </select>
+        {editandoNota && alerta.estado !== 'nueva' && (
+          <button className="linkbtn" type="button" disabled={guardando} onClick={() => gestionar(alerta.estado)}>Guardar nota</button>
+        )}
+        {!editandoNota && (
+          <button className="linkbtn" type="button" onClick={() => setEditandoNota(true)}>
+            {gestion?.nota ? 'Editar nota' : 'Agregar nota'}
+          </button>
+        )}
+        <Link className="linkbtn" to={`/alumnos/${encodeURIComponent(alerta.rut)}?vista=inasistencias`}
+          state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }}>
+          Ver ficha
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function Alertas({ datos, rutaRetorno, periodo, onEsteMes, onRangoCompleto, onCambio }) {
+  const [filtro, setFiltroEstado] = useState(memoriaAuditar.filtroAlertas);
+  const setFiltro = (valor) => { memoriaAuditar.filtroAlertas = valor; setFiltroEstado(valor); };
+  if (!datos?.alertas) return <EmptyState texto="Sin datos en este rango." filas={3} />;
+  const resumen = datos.resumen || {};
+  const opciones = [
+    { id: 'nuevas', label: `Nuevas (${resumen.nuevas ?? 0})` },
+    { id: 'gestionadas', label: `Gestionadas (${resumen.gestionadas ?? 0})` },
+    { id: 'todas', label: `Todas (${resumen.total ?? 0})` },
+  ];
+  const visibles = datos.alertas.filter((a) => (filtro === 'todas' ? true
+    : filtro === 'nuevas' ? a.estado === 'nueva' : a.estado !== 'nueva'));
+  return (
+    <>
+      {!datos.datosSuficientes && (
+        <div className="msg aviso" role="status">
+          <p>
+            Los patrones de calendario necesitan al menos {datos.minDiasRango} días de clase con datos
+            (este período tiene {datos.diasConDatos}). Amplía el período para buscarlos.
+          </p>
+          {periodo !== 'mes' ? (
+            <button className="btn" type="button" onClick={onEsteMes}>Ver este mes</button>
+          ) : onRangoCompleto && (
+            <button className="btn" type="button" onClick={onRangoCompleto}>Usar todo el rango disponible</button>
+          )}
+        </div>
+      )}
+      <details className="card audit-ayuda">
+        <summary>¿Qué detectan estas alertas?</summary>
+        <ul>
+          {TIPOS_ALERTA.map((t) => <li key={t.id}><b>{t.label}:</b> {t.ayuda}</li>)}
+        </ul>
+        <p className="muted">
+          Son señales para revisar, no confirman la causa. Al marcar una alerta como gestionada deja de
+          aparecer en "Nuevas", salvo que aparezcan casos nuevos después. La gestión se guarda aunque se
+          borren los datos al cerrar la app.
+        </p>
+      </details>
+      <Segmented valor={filtro} onChange={setFiltro} opciones={opciones} />
+      {!visibles.length && (
+        <p className="muted">
+          {filtro === 'nuevas' ? 'No hay alertas nuevas en este período.' : 'No hay alertas en esta vista.'}
+        </p>
+      )}
+      {TIPOS_ALERTA.map((tipoAlerta) => {
+        const delTipo = visibles.filter((a) => a.tipo === tipoAlerta.id);
+        if (!delTipo.length) return null;
+        return (
+          <details key={tipoAlerta.id} className="alerta-grupo" open>
+            <summary>{tipoAlerta.label} ({delTipo.length})</summary>
+            <div className="list">
+              {delTipo.map((alerta) => (
+                <TarjetaAlerta key={`${alerta.clave}:${alerta.estado}`} alerta={alerta}
+                  rutaRetorno={rutaRetorno} onCambio={onCambio} />
+              ))}
+            </div>
+          </details>
+        );
+      })}
+    </>
+  );
+}
+
 // Filtros que vienen en la URL al volver desde la ficha de un alumno (null si no hay)
 function filtrosDesdeUrl(search) {
   const p = new URLSearchParams(search);
   if (![...p.keys()].length) return null;
   const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
-  const periodo = valido(PERIODOS, p.get('periodo'), 'hoy');
+  const tab = valido(TABS, p.get('tab'), 'prioridad');
+  // Desde el badge del menú (?tab=alertas sin período) se abre "Este mes"
+  const periodo = valido(PERIODOS, p.get('periodo'), tab === 'alertas' ? 'mes' : 'hoy');
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
   const rango = periodo === 'personalizado'
     ? { desde: fecha(p.get('desde')), hasta: fecha(p.get('hasta')) }
     : rangoPeriodo(periodo);
   return {
-    tab: valido(TABS, p.get('tab'), 'prioridad'),
+    tab,
     tipo: valido(TIPOS, p.get('tipo'), 'ambos'),
     curso: p.get('curso') || '',
     periodo,
@@ -306,11 +487,22 @@ function filtrosDesdeUrl(search) {
   };
 }
 
+// Últimos filtros usados en Auditar mientras la app siga abierta (ver filtrosAuditar.js).
+// Al abrir la app no hay nada guardado, así que la primera vez Auditar parte en "Hoy".
+function filtrosRecordados() {
+  const filtros = memoriaAuditar.filtros;
+  if (!filtros) return null;
+  // Los períodos relativos (hoy, semana, mes…) se recalculan por si cambió el día
+  return filtros.periodo === 'personalizado'
+    ? filtros
+    : { ...filtros, ...rangoPeriodo(filtros.periodo) };
+}
+
 export default function Audit() {
   const navigate = useNavigate();
   const location = useLocation();
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-  const [restaurados] = useState(() => filtrosDesdeUrl(location.search));
+  const [restaurados] = useState(() => filtrosDesdeUrl(location.search) || filtrosRecordados());
   const [tab, setTab] = useState(restaurados?.tab ?? 'prioridad');
   const [tipo, setTipo] = useState(restaurados?.tipo ?? 'ambos');
   const [curso, setCurso] = useState(restaurados?.curso ?? '');
@@ -325,15 +517,62 @@ export default function Audit() {
   const [error, setError] = useState('');
   const [avisoRango, setAvisoRango] = useState('');
   const [recarga, setRecarga] = useState(0);
+  // Último día con datos cuando hoy no tiene registros (se ofrece verlo con un botón)
+  const [ultimoDia, setUltimoDia] = useState(null);
+
+  useEffect(() => {
+    memoriaAuditar.filtros = { tab, tipo, curso, periodo, desde, hasta };
+  }, [tab, tipo, curso, periodo, desde, hasta]);
   const consultaAbortRef = useRef(null);
   const syncAbortRef = useRef(null);
 
   const cargarResultados = async (parametros, signal) => {
-    const respuesta = await (tab === 'prioridad'
-      ? getAuditoriaPrioridad(parametros, { signal })
-      : getAuditoriaCursos(parametros, { signal }));
-    if (!signal?.aborted) setDatos(respuesta);
+    let respuesta;
+    if (tab === 'alertas') {
+      // Los patrones son de inasistencia: el filtro Tipo no aplica
+      const { tipo: _tipo, ...sinTipo } = parametros;
+      respuesta = await getAlertas(sinTipo, { signal });
+    } else {
+      respuesta = await (tab === 'prioridad'
+        ? getAuditoriaPrioridad(parametros, { signal })
+        : getAuditoriaCursos(parametros, { signal }));
+    }
+    if (!signal?.aborted) setDatos({ ...respuesta, tab });
   };
+
+  // Todo el rango con asistencia descargada (para buscar patrones)
+  const usarRangoCompleto = (estado = estadoDatos) => {
+    const inicio = estado?.primeraFechaAsistencia;
+    const fin = estado?.ultimaFechaAsistencia;
+    if (!inicio || !fin) return false;
+    setPeriodo('personalizado');
+    setDesde(inicio);
+    setHasta(fin);
+    setAvisoRango('');
+    return true;
+  };
+
+  // Tras gestionar una alerta se actualiza en el lugar, sin recargar la lista
+  const actualizarAlerta = (clave, gestion) => {
+    setDatos((previo) => {
+      if (!previo?.alertas) return previo;
+      const alertas = previo.alertas.map((a) => (a.clave === clave
+        ? { ...a, gestion, estado: gestion ? gestion.estado : 'nueva', casosNuevos: 0 }
+        : a));
+      const nuevas = alertas.filter((a) => a.estado === 'nueva').length;
+      return { ...previo, alertas, resumen: { ...previo.resumen, nuevas, gestionadas: alertas.length - nuevas } };
+    });
+  };
+
+  // Desde la ficha de un alumno se vuelve con los filtros en la URL; si la URL cambia
+  // estando ya en Auditar (p. ej. el badge la primera vez), se aplica la pestaña pedida
+  useEffect(() => {
+    const pedida = new URLSearchParams(location.search).get('tab');
+    if (pedida === 'alertas' && tab !== 'alertas') {
+      setTab('alertas');
+      cambiarPeriodo('mes');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     let activo = true;
@@ -352,22 +591,16 @@ export default function Audit() {
           .filter(Boolean)
           .sort()
           .at(-1) || null;
+        // Primera entrada desde que se abrió la app: siempre "Hoy"
+        setPeriodo('hoy');
+        setDesde(hoy);
+        setHasta(hoy);
         if (!ultima) {
-          setPeriodo('hoy');
-          setDesde(hoy);
-          setHasta(hoy);
           setCargando(false);
           return;
         }
-        if (ultima === hoy || [estado.ultimaFechaAsistencia, estado.ultimaFechaAtrasos].includes(hoy)) {
-          setPeriodo('hoy');
-          setDesde(hoy);
-          setHasta(hoy);
-        } else {
-          setPeriodo('personalizado');
-          setDesde(ultima);
-          setHasta(ultima);
-          setAvisoRango(`Mostrando el ${fechaCorta(ultima)}, último día sincronizado`);
+        if (ultima !== hoy && ![estado.ultimaFechaAsistencia, estado.ultimaFechaAtrasos].includes(hoy)) {
+          setUltimoDia(ultima);
         }
       })
       .catch((e) => {
@@ -421,7 +654,7 @@ export default function Audit() {
     if (tab !== 'prioridad') p.set('tab', tab);
     if (tipo !== 'ambos') p.set('tipo', tipo);
     if (curso) p.set('curso', curso);
-    if (periodo !== 'hoy') p.set('periodo', periodo);
+    p.set('periodo', periodo);
     if (periodo === 'personalizado') {
       if (desde) p.set('desde', desde);
       if (hasta) p.set('hasta', hasta);
@@ -434,6 +667,7 @@ export default function Audit() {
   const cambiarPeriodo = (nuevoPeriodo) => {
     setPeriodo(nuevoPeriodo);
     setAvisoRango('');
+    setUltimoDia(null);
     if (nuevoPeriodo !== 'personalizado') {
       const rango = rangoPeriodo(nuevoPeriodo);
       setDesde(rango.desde);
@@ -530,14 +764,16 @@ export default function Audit() {
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">
-        <div className="audit-filter-grid">
+        <div className={tab === 'alertas' ? 'audit-filter-grid sin-tipo' : 'audit-filter-grid'}>
           <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
             <option value="">Todos los cursos</option>
             {cursos.map((opcion) => <option key={opcion.curso} value={opcion.curso}>{opcion.curso}</option>)}
           </select>
-          <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo">
-            {TIPOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
-          </select>
+          {tab !== 'alertas' && (
+            <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo">
+              {TIPOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+            </select>
+          )}
           <select className="input" value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} aria-label="Período">
             {PERIODOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
           </select>
@@ -554,6 +790,19 @@ export default function Audit() {
 
       {ultimaTexto && <p className="muted audit-last-sync">Última sincronización: {ultimaTexto}</p>}
       {avisoRango && <p className="msg" role="status">{avisoRango}</p>}
+      {ultimoDia && periodo === 'hoy' && (
+        <div className="msg aviso" role="status">
+          <p>Hoy ({fechaCorta(fechaLocal(new Date()))}) no hay registros sincronizados.</p>
+          <button className="btn" type="button" onClick={() => {
+            setPeriodo('personalizado');
+            setDesde(ultimoDia);
+            setHasta(ultimoDia);
+            setUltimoDia(null);
+          }}>
+            Ver el {fechaCorta(ultimoDia)}, último día sincronizado
+          </button>
+        </div>
+      )}
       {datos && <p className="muted">Rango consultado: {mostrarRango(datos)}</p>}
       {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
 
@@ -572,10 +821,20 @@ export default function Audit() {
         <>
           <Avisos datos={datos} descargando={sincronizando}
             onDescargar={({ desde: inicio, hasta: fin }) => sincronizar({ desde: inicio, hasta: fin, soloFaltantes: true })} />
-          {datos && <Resumen datos={datos} />}
-          {tab === 'prioridad'
-            ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} />
-            : <Cursos datos={datos} />}
+          {datos && datos.tab !== tab ? (
+            <EmptyState texto="Calculando señales…" filas={4} />
+          ) : tab === 'alertas' ? (
+            <Alertas datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
+              periodo={periodo} onEsteMes={() => cambiarPeriodo('mes')}
+              onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? () => usarRangoCompleto() : null} />
+          ) : (
+            <>
+              <Resumen datos={datos} />
+              {tab === 'prioridad'
+                ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} />
+                : <Cursos datos={datos} />}
+            </>
+          )}
         </>
       )}
       <p className="muted">Estas señales no confirman la causa.</p>

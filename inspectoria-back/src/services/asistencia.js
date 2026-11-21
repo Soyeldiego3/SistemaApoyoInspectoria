@@ -177,6 +177,18 @@ function abrirDb(ruta = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS idx_sync_ejecucion_fecha ON sync_ejecucion(fecha);
 
+    -- Gestión de alertas de patrones (Auditar → Alertas). NO se borra al cerrar la app:
+    -- solo guarda qué se hizo con cada alerta, no la asistencia. Sin FK a alumno porque
+    -- esa tabla sí se vacía. clave = rut:tipo:variante
+    CREATE TABLE IF NOT EXISTS alerta_gestion (
+      clave          TEXT PRIMARY KEY,
+      rut            TEXT NOT NULL,
+      estado         TEXT NOT NULL CHECK (estado IN ('revisada','citado','descartada')),
+      nota           TEXT,
+      actualizado_en TEXT NOT NULL,
+      usuario        TEXT
+    );
+
     -- Cada atraso con: estado de asistencia ese día, justificado según el portal
     -- y justificado según TUS justificativos aprobados (para detectar desacuerdos)
     CREATE VIEW IF NOT EXISTS v_atraso AS

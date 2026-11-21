@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutGrid, ClipboardCheck, Users, Database, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
+import { getConteoAlertas } from '../api.js';
+import { hayFiltrosAuditar } from '../filtrosAuditar.js';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
@@ -22,6 +25,23 @@ export default function BottomNav() {
     if (to === '/alumnos') return isActive && !desdeAuditoria;
     return isActive;
   };
+  // Alertas de patrones nuevas (badge sobre "Auditar"); se refresca al navegar y al gestionar una
+  const [alertasNuevas, setAlertasNuevas] = useState(0);
+  useEffect(() => {
+    let activo = true;
+    // Mismo rango que abre el badge: "Este mes"
+    const hoy = new Date();
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const cargar = () => getConteoAlertas({ desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) })
+      .then((datos) => { if (activo) setAlertasNuevas(datos?.nuevas || 0); })
+      .catch(() => {});
+    cargar();
+    window.addEventListener('alertas-actualizadas', cargar);
+    return () => {
+      activo = false;
+      window.removeEventListener('alertas-actualizadas', cargar);
+    };
+  }, [pathname]);
   const visibleTabs = tabs.filter((tab) => {
     if (tab.to === '/usuarios') return esAdmin;
     return true;
@@ -29,9 +49,17 @@ export default function BottomNav() {
   return (
     <nav className="nav" aria-label="Navegación principal">
       {visibleTabs.map(({ to, label, Icon, end, abajo }) => (
-        <NavLink key={to} to={to} end={end}
+        <NavLink key={to} to={to === '/auditar' && alertasNuevas && !hayFiltrosAuditar() ? '/auditar?tab=alertas' : to} end={end}
           className={({ isActive }) => [activa(to, isActive) ? 'active' : '', abajo ? 'nav-bottom' : ''].join(' ').trim()}>
-          <Icon size={22} /><span>{label}</span>
+          <span className="nav-icono">
+            <Icon size={22} />
+            {to === '/auditar' && alertasNuevas > 0 && (
+              <span className="nav-badge" aria-label={`${alertasNuevas} alertas nuevas`}>
+                {alertasNuevas > 99 ? '99+' : alertasNuevas}
+              </span>
+            )}
+          </span>
+          <span>{label}</span>
         </NavLink>
       ))}
     </nav>

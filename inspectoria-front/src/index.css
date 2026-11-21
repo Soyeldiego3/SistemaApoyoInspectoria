@@ -297,7 +297,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Auditar: avisos, prioridad y ayuda */
 .msg.aviso { background: var(--warn-soft); color: var(--warn); display: grid; gap: 6px; }
-.msg.aviso .btn { justify-self: start; margin-top: 4px; }
+.msg.aviso .btn { justify-self: start; margin-top: 4px; width: auto; }
 .audit-meta { display: block; }
 .audit-senales { margin-top: 8px; }
 .audit-razones { display: block; margin-top: 6px; font-size: .8rem; }
@@ -306,3 +306,28 @@ a { color: inherit; text-decoration: none; }
 .audit-ayuda summary { cursor: pointer; font-weight: 600; }
 .audit-ayuda ul { margin: 10px 0 0 18px; display: grid; gap: 6px; font-size: .88rem; }
 .audit-ayuda p { margin-top: 10px; }
+
+/* Badge de alertas nuevas sobre "Auditar" */
+.nav-icono { position: relative; display: inline-grid; place-items: center; }
+.nav-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--bad); color: #fff; font-size: .65rem; font-weight: 700;
+  line-height: 18px; text-align: center; }
+
+/* Auditar → Alertas */
+.alerta-grupo { display: block; }
+.alerta-grupo + .alerta-grupo { margin-top: 6px; }
+.alerta-grupo > summary { cursor: pointer; font-weight: 600; padding: 4px 2px 10px; list-style-position: inside; }
+.alerta { display: grid; gap: 12px; background: var(--card); border-radius: 18px; padding: 18px 20px; }
+.alerta p.muted { margin-top: 4px; }
+.alerta-cabecera { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.alerta-cabecera b { display: block; }
+.alerta-titulo { font-weight: 600; }
+.alerta-acciones { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.alerta-acciones .alerta-gestion { width: auto; min-width: 200px; padding: 9px 12px; border-radius: 12px; font-size: .88rem; }
+@media (max-width: 480px) { .alerta-acciones .alerta-gestion { flex: 1 1 100%; } }
+
+.alerta textarea { width: 100%; min-height: 56px; resize: vertical; font: inherit; color: inherit;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+/* En Alertas no hay filtro Tipo: Curso y Período lado a lado */
+.audit-filter-grid.sin-tipo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.audit-filter-grid.sin-tipo select:last-child { grid-column: auto; }

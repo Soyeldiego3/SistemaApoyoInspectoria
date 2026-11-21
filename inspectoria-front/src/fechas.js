@@ -5,8 +5,8 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-// '2026-11-25' → '25/11/2026'
-export const fechaCorta = (fecha) => (fecha ? fecha.split('-').reverse().join('/') : '');
+// '2026-11-25' → '25-11-2026'
+export const fechaCorta = (fecha) => (fecha ? fecha.split('-').reverse().join('-') : '');
 
 // '2026-11-25' → 'Miércoles'
 export const diaSemana = (fecha) => {

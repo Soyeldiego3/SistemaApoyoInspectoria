@@ -97,6 +97,25 @@ export function getAuditoriaCursos(params = {}, options = {}) {
   return request(`/auditoria/cursos?${new URLSearchParams(params)}`, { signal: options.signal });
 }
 
+export function getAlertas(params = {}, options = {}) {
+  return request(`/auditoria/alertas?${new URLSearchParams(params)}`, { signal: options.signal });
+}
+
+export function getConteoAlertas(params = {}, options = {}) {
+  return request(`/auditoria/alertas/conteo?${new URLSearchParams(params)}`, { signal: options.signal });
+}
+
+// estado: 'revisada' | 'citado' | 'descartada' | null (reabrir)
+export async function gestionarAlerta(clave, datos) {
+  const respuesta = await request(`/auditoria/alertas/${encodeURIComponent(clave)}`, {
+    method: 'PUT',
+    body: JSON.stringify(datos),
+  });
+  // Avisa al menú para actualizar el contador de alertas nuevas
+  window.dispatchEvent(new Event('alertas-actualizadas'));
+  return respuesta;
+}
+
 export function getAlumno(rut) {
   return request(`/asistencia/alumnos/${encodeURIComponent(rut)}`);
 }

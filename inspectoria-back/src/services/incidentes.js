@@ -39,7 +39,7 @@ const INICIO_ANIO_ESCOLAR = 3; // marzo (1-based)
 
 function fechaCorta(iso) {
   const [anio, mes, dia] = iso.split('-');
-  return `${dia}/${mes}/${anio}`;
+  return `${dia}-${mes}-${anio}`;
 }
 
 // Meses del rango elegido (dentro del año escolar y hasta hoy) que no tienen ninguna fila
