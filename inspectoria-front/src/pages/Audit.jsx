@@ -11,7 +11,7 @@ import {
   getCursos,
   iniciarSync,
 } from '../api.js';
-import { fechaCorta } from '../fechas.js';
+import { fechaCorta, tituloMes } from '../fechas.js';
 
 const TABS = [
   { id: 'prioridad', label: 'A quién citar' },
@@ -87,6 +87,21 @@ function haceCuanto(fechaIso) {
   return `hace ${dias} día${dias === 1 ? '' : 's'}`;
 }
 
+// '25990754-3' → '25.990.754-3'
+function formatearRut(rut) {
+  const [cuerpo, dv] = String(rut).split('-');
+  if (!dv || !/^\d+$/.test(cuerpo)) return rut;
+  return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${dv}`;
+}
+
+const plural = (n, singular, pluralTexto = `${singular}s`) => `${n} ${n === 1 ? singular : pluralTexto}`;
+
+const NIVELES = {
+  alta: { label: 'Prioridad alta', clase: 'bad' },
+  media: { label: 'Prioridad media', clase: 'warn' },
+  baja: { label: 'Prioridad baja', clase: '' },
+};
+
 function Resumen({ datos }) {
   const resumen = datos?.resumen;
   const porcentaje = resumen?.incidencias
@@ -94,43 +109,163 @@ function Resumen({ datos }) {
     : '—';
   return (
     <div className="kpis">
-      <section className="card"><p className="muted">Incidencias</p><div className="big">{resumen?.incidencias ?? '—'}</div></section>
-      <section className="card"><p className="muted">% sin justificar</p><div className="big">{porcentaje}</div></section>
-      <section className="card"><p className="muted">Alumnos afectados</p><div className="big">{resumen?.alumnosAfectados ?? '—'}</div></section>
+      <section className="card">
+        <p className="muted">Incidencias</p>
+        <div className="big">{resumen?.incidencias ?? '—'}</div>
+        {resumen?.incidencias != null && (
+          <p className="muted detalle">
+            {plural(resumen.inasistencias ?? 0, 'inasistencia')} · {plural(resumen.atrasos ?? 0, 'atraso')}
+          </p>
+        )}
+      </section>
+      <section className="card">
+        <p className="muted">% sin justificar</p>
+        <div className="big">{porcentaje}</div>
+        {resumen?.incidencias ? (
+          <p className="muted detalle">{resumen.sinJustificar} de {resumen.incidencias} incidencias</p>
+        ) : null}
+      </section>
+      <section className="card">
+        <p className="muted">Alumnos con pendientes</p>
+        <div className="big">{resumen?.alumnosAfectados ?? '—'}</div>
+        <p className="muted detalle">Con al menos una incidencia sin justificar</p>
+      </section>
     </div>
   );
 }
 
-function Avisos({ datos }) {
-  return datos?.advertencias?.length
-    ? <div className="msg" role="status">{datos.advertencias.map((aviso) => <p key={aviso}>{aviso}</p>)}</div>
-    : null;
+function describirMeses(meses = []) {
+  const nombre = (clave) => tituloMes(clave).split(' ')[0].toLowerCase();
+  if (!meses.length) return '';
+  return meses.length === 1 ? nombre(meses[0]) : `${nombre(meses[0])} a ${nombre(meses.at(-1))}`;
+}
+
+// Avisos de cobertura. Si falta asistencia de algunos meses se ofrece descargarlos aparte;
+// lo de atrasos es solo informativo (el portal no entrega atrasos antiguos).
+function Avisos({ datos, onDescargar, descargando }) {
+  if (!datos?.advertencias?.length) return null;
+  const faltaAsistencia = datos.faltantes?.asistencia;
+  return (
+    <div className="msg aviso" role="status">
+      {datos.advertencias.map((aviso) => <p key={aviso}>{aviso}</p>)}
+      {faltaAsistencia && onDescargar && (
+        <button className="btn" type="button" disabled={descargando}
+          onClick={() => onDescargar(faltaAsistencia)}>
+          <RefreshCw size={16} className={descargando ? 'audit-spin' : undefined} style={{ verticalAlign: -3, marginRight: 8 }} />
+          {descargando
+            ? 'Descargando… puede tardar unos minutos'
+            : `Descargar asistencia de ${describirMeses(faltaAsistencia.meses)}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Señales cortas (chips) en vez de una frase larga
+function senales(alumno, criterios) {
+  const c = alumno.componentes;
+  const lista = [];
+  if (c.inasistenciasSinJustificar) lista.push(plural(c.inasistenciasSinJustificar, 'falta sin justificar', 'faltas sin justificar'));
+  if (c.atrasosSinJustificar) lista.push(plural(c.atrasosSinJustificar, 'atraso sin justificar', 'atrasos sin justificar'));
+  if (c.ausenciasConsecutivas > 1) lista.push(`${c.ausenciasConsecutivas} faltas seguidas`);
+  if (c.tendenciaReciente) lista.push(`${c.tendenciaReciente} en los últimos ${criterios?.diasRecientes ?? 7} días`);
+  return lista;
+}
+
+function AyudaPrioridad({ criterios }) {
+  if (!criterios) return null;
+  const p = criterios.pesos;
+  return (
+    <details className="card audit-ayuda">
+      <summary>¿Cómo se ordena esta lista?</summary>
+      <ul>
+        <li><b className="tag bad" style={{ display: 'inline' }}>Alta</b>{' '}
+          asistencia bajo {criterios.asistenciaMinima}% (mínimo para la promoción),
+          {' '}{criterios.rachaAlta} o más faltas seguidas sin justificar,
+          o {criterios.atrasosAlta} o más atrasos sin justificar.</li>
+        <li><b className="tag warn" style={{ display: 'inline' }}>Media</b>{' '}
+          asistencia bajo {criterios.asistenciaAlerta}%, {criterios.atrasosMedia} o más atrasos sin justificar,
+          o {criterios.recientesMedia} o más incidencias sin justificar en los últimos {criterios.diasRecientes} días.</li>
+        <li><b className="tag" style={{ display: 'inline' }}>Baja</b> tiene incidencias, pero no cumple lo anterior.</li>
+      </ul>
+      <p className="muted">
+        La asistencia solo se evalúa con {criterios.minDiasRegistrados} o más días registrados en el rango.
+        Dentro de cada nivel se ordena por gravedad: cada falta sin justificar suma {p.inasistencia},
+        cada atraso sin justificar {p.atraso}, cada falta de la racha más larga {p.racha}
+        y cada incidencia reciente {p.reciente}. Las faltas justificadas no suman.
+      </p>
+    </details>
+  );
 }
 
 function Prioridad({ datos, tipo, rutaRetorno }) {
+  const [nivel, setNivel] = useState('todos');
   if (!datos?.alumnos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
   // Con un tipo elegido, la ficha se abre en esa pestaña (los ids coinciden con sus vistas)
   const vista = tipo !== 'ambos' ? `?vista=${tipo}` : '';
+  const criterios = datos.criterios;
+  const niveles = datos.resumen?.niveles;
+  const opciones = [
+    { id: 'todos', label: `Todos (${datos.alumnos.length})` },
+    { id: 'alta', label: `Alta (${niveles?.alta ?? 0})` },
+    { id: 'media', label: `Media (${niveles?.media ?? 0})` },
+  ];
+  const visibles = nivel === 'todos' ? datos.alumnos : datos.alumnos.filter((a) => a.nivel === nivel);
   return (
-    <div className="list">
-      {datos.alumnos.map((alumno) => (
-        <Link key={alumno.rut} to={`/alumnos/${encodeURIComponent(alumno.rut)}${vista}`}
-          state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }} className="item">
-          <div>
-            <b>{alumno.nombres} {alumno.apellidos}</b>
-            <span className="muted">{alumno.curso} · {alumno.rut}</span>
-            <span className="muted">{alumno.motivo || 'Sin señales pendientes.'}</span>
-          </div>
-          <div className="tags"><span className="tag bad">Puntaje {alumno.puntaje}</span></div>
-        </Link>
-      ))}
-    </div>
+    <>
+      <AyudaPrioridad criterios={criterios} />
+      <Segmented valor={nivel} onChange={setNivel} opciones={opciones} />
+      {!visibles.length && <p className="muted">Ningún alumno en este nivel.</p>}
+      <div className="list">
+        {visibles.map((alumno) => {
+          const info = NIVELES[alumno.nivel] || NIVELES.baja;
+          const pct = alumno.porcentajeAsistencia;
+          const clasePct = pct == null || !criterios ? ''
+            : pct < criterios.asistenciaMinima ? 'bad'
+              : pct < criterios.asistenciaAlerta ? 'warn' : '';
+          const chips = senales(alumno, criterios);
+          return (
+            <Link key={alumno.rut} to={`/alumnos/${encodeURIComponent(alumno.rut)}${vista}`}
+              state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }} className="item alumno">
+              <div>
+                <b>{alumno.nombres} {alumno.apellidos}</b>
+                <span className="muted audit-meta">{alumno.curso} · {formatearRut(alumno.rut)}</span>
+                {chips.length > 0 && (
+                  <div className="tags start audit-senales">
+                    {chips.map((chip) => <span key={chip} className="tag">{chip}</span>)}
+                  </div>
+                )}
+                {alumno.razonesNivel?.length > 0 && (
+                  <span className="muted audit-razones">Motivo: {alumno.razonesNivel.join('; ')}.</span>
+                )}
+              </div>
+              <div className="tags audit-nivel">
+                <span className={`tag ${info.clase}`}>{info.label}</span>
+                {pct != null && tipo !== 'atrasos' && (
+                  <span className={`tag ${clasePct}`}
+                    title={`${alumno.diasRegistrados} días registrados en el rango`}>
+                    Asistencia {pct}%
+                  </span>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
 function Cursos({ datos }) {
   if (!datos?.cursos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
   return (
+    <>
+    {datos.promedioGeneralInasistencia != null && (
+      <p className="muted">
+        Desvío: puntos porcentuales de inasistencia sobre (+) o bajo (−) el promedio del colegio
+        ({datos.promedioGeneralInasistencia}%).
+      </p>
+    )}
     <div className="list">
       {datos.cursos.map((curso) => (
         <section className="item" key={curso.curso}>
@@ -148,6 +283,7 @@ function Cursos({ datos }) {
         </section>
       ))}
     </div>
+    </>
   );
 }
 
@@ -188,6 +324,7 @@ export default function Audit() {
   const [sincronizando, setSincronizando] = useState(false);
   const [error, setError] = useState('');
   const [avisoRango, setAvisoRango] = useState('');
+  const [recarga, setRecarga] = useState(0);
   const consultaAbortRef = useRef(null);
   const syncAbortRef = useRef(null);
 
@@ -271,7 +408,7 @@ export default function Audit() {
       clearTimeout(temporizador);
       consultaAbortRef.current?.abort();
     };
-  }, [parametros, tab]);
+  }, [parametros, tab, recarga]);
 
   useEffect(() => () => {
     consultaAbortRef.current?.abort();
@@ -304,22 +441,37 @@ export default function Audit() {
     }
   };
 
-  const sincronizar = async () => {
+  // Sin argumentos: sincronización normal (mes anterior + actual) y se vuelve a "Hoy".
+  // Con `cuerpo` ({ desde, hasta, soloFaltantes }): descarga a pedido de meses antiguos;
+  // se mantienen los filtros y solo se recalculan los resultados.
+  const sincronizar = async (cuerpo) => {
+    const aPedido = Boolean(cuerpo);
     setSincronizando(true);
     setError('');
     syncAbortRef.current?.abort();
     const controller = new AbortController();
     syncAbortRef.current = controller;
+    const terminar = async (respuesta) => {
+      const estado = await getAuditoriaEstado({ signal: controller.signal });
+      setEstadoDatos(estado);
+      if (aPedido) {
+        const meses = respuesta?.meses?.length || 0;
+        const avisos = respuesta?.advertencias?.length ? ` ${respuesta.advertencias.length} aviso(s): ${respuesta.advertencias.join(' ')}` : '';
+        setAvisoRango(meses
+          ? `Se descargó la asistencia de ${plural(meses, 'mes', 'meses')}.${avisos}`
+          : (respuesta?.mensaje || 'No había meses pendientes.'));
+        setRecarga((n) => n + 1);
+        return;
+      }
+      const hoy = fechaLocal(new Date());
+      setPeriodo('hoy');
+      setDesde(hoy);
+      setHasta(hoy);
+      setAvisoRango('');
+    };
     try {
       if (!esPc) {
-        await iniciarSync(undefined, { signal: controller.signal });
-        const estado = await getAuditoriaEstado({ signal: controller.signal });
-        setEstadoDatos(estado);
-        const hoy = fechaLocal(new Date());
-        setPeriodo('hoy');
-        setDesde(hoy);
-        setHasta(hoy);
-        setAvisoRango('');
+        await terminar(await iniciarSync(cuerpo, { signal: controller.signal }));
         return;
       }
       const credenciales = await getCredencialesPortal();
@@ -345,14 +497,7 @@ export default function Audit() {
         }
         return;
       }
-      await iniciarSync(undefined, { signal: controller.signal });
-      const estado = await getAuditoriaEstado({ signal: controller.signal });
-      setEstadoDatos(estado);
-      const hoy = fechaLocal(new Date());
-      setPeriodo('hoy');
-      setDesde(hoy);
-      setHasta(hoy);
-      setAvisoRango('');
+      await terminar(await iniciarSync(cuerpo, { signal: controller.signal }));
     } catch (e) {
       if (e.name === 'AbortError') return;
       if (!esPc && (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO')) {
@@ -416,7 +561,7 @@ export default function Audit() {
         <section className="card" role="status">
           <h2>Sin datos sincronizados</h2>
           <p className="muted" style={{ margin: '8px 0 14px' }}>Sincroniza el portal para comenzar a auditar.</p>
-          <button className="btn" type="button" onClick={sincronizar} disabled={sincronizando}>
+          <button className="btn" type="button" onClick={() => sincronizar()} disabled={sincronizando}>
             <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />
             {sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}
           </button>
@@ -425,7 +570,8 @@ export default function Audit() {
         <EmptyState texto="Calculando señales…" filas={4} />
       ) : (
         <>
-          <Avisos datos={datos} />
+          <Avisos datos={datos} descargando={sincronizando}
+            onDescargar={({ desde: inicio, hasta: fin }) => sincronizar({ desde: inicio, hasta: fin, soloFaltantes: true })} />
           {datos && <Resumen datos={datos} />}
           {tab === 'prioridad'
             ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} />

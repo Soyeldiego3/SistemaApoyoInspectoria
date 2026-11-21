@@ -92,10 +92,10 @@ export default function RegistroMaster({ version = 0, sincronizando = false, onS
     }
   };
 
-  // Si solo hay datos del mes actual, el Excel no tendrá el año completo
+  // Si los datos no parten en marzo, el Excel no tendrá el año completo
   const hoy = new Date();
   const soloMesActual = rango?.desde
-    && Number(rango.desde.slice(5, 7)) === hoy.getMonth() + 1
+    && Number(rango.desde.slice(5, 7)) > 3
     && hoy.getMonth() > 2;
 
   return (
@@ -127,7 +127,7 @@ export default function RegistroMaster({ version = 0, sincronizando = false, onS
         {rango?.desde
           ? `Datos cargados: ${fechaCorta(rango.desde)} a ${fechaCorta(rango.hasta)} (${rango.dias} días).`
           : 'Aún no hay asistencia cargada.'}
-        {soloMesActual && ' Solo está el mes actual: para exportar el año completo, sincroniza el año escolar.'}
+        {soloMesActual && ' Faltan meses: para exportar el año completo, sincroniza el año escolar.'}
       </p>
       {onSincronizarAnio && (
         <button type="button" className="linkbtn" onClick={onSincronizarAnio} disabled={sincronizando}>

@@ -3,7 +3,7 @@ import { Copy } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { getAjustes, getRedInfo, setNavegadorHeadless, setRedEnabled } from '../api.js';
 import { useAuth } from '../auth.jsx';
-import { MODOS, PALETAS, useTema } from '../tema.jsx';
+import { MODOS, PALETAS, TAMANOS, useTema } from '../tema.jsx';
 import Segmented from '../components/Segmented.jsx';
 import Chips from '../components/Chips.jsx';
 import CredencialesPortal from '../components/CredencialesPortal.jsx';
@@ -16,7 +16,9 @@ const OPCIONES_PALETA = PALETAS.map((p) => ({
 
 export default function Settings() {
   const { esAdmin } = useAuth();
-  const { modo, paleta, cambiarModo, cambiarPaleta } = useTema();
+  const {
+    modo, paleta, texto, cambiarModo, cambiarPaleta, cambiarTexto,
+  } = useTema();
   // Apariencia funciona en cualquier dispositivo; red y sincronización solo desde el PC
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [mensaje, setMensaje] = useState('');
@@ -99,6 +101,8 @@ export default function Settings() {
         <Segmented opciones={MODOS} valor={modo} onChange={cambiarModo} />
         <p className="muted" style={{ margin: '14px 0 8px' }}>Paleta de colores</p>
         <Chips opciones={OPCIONES_PALETA} valor={paleta} onChange={cambiarPaleta} />
+        <p className="muted" style={{ margin: '14px 0 8px' }}>Tamaño del texto</p>
+        <Segmented opciones={TAMANOS} valor={texto} onChange={cambiarTexto} />
       </section>
 
       {esPc && <CredencialesPortal />}

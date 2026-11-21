@@ -115,7 +115,7 @@ export default function Sync() {
       setEstado('error');
       setMensaje('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
       setMensajeModal('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
-    }, anual ? 600000 : 45000); // el año completo descarga varios meses por curso
+    }, anual ? 600000 : 120000); // el año completo descarga varios meses por curso
     try {
       const cuerpo = anual ? { ...(datos || {}), periodo: 'anio' } : datos;
       const data = await iniciarSync(cuerpo, { signal: controllerRef.current.signal });
@@ -293,7 +293,7 @@ export default function Sync() {
     <>
       <section className="card sync-card">
           <h2>Extracción automática</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes actual.</p>
+          <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes anterior y el actual.</p>
 
           <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={() => extraer('mes')} disabled={estado === 'cargando'}>
             {estado === 'cargando' && !mostrarCredenciales

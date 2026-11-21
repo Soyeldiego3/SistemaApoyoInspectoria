@@ -57,3 +57,5 @@
 - Añadir efecto hover en los botones para seleccionar secciones. (inicio, auditar, alumnos, etc.)
 
 - Importar y exportar asistencia como Excel
+
+- Aumentado el rango de sincronizacion por defecto. ultimos 2 meses. al consultar datos fuera de rango intenta una sincronizacion nueva. 

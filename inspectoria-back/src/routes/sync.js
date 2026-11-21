@@ -7,7 +7,6 @@ const { extraerCursos } = require('../extractores/extraer_cursos');
 const { parsearAsistencia, abrirDb, guardar, transaccion } = require('../services/asistencia');
 const { parsearAtrasos, guardarAtrasos } = require('../services/atrasos');
 const credencialesPortal = require('../services/credenciales_portal');
-const { borrarDatosSincronizados } = require('../services/limpieza');
 const configuracion = require('../services/configuracion');
 
 const router = express.Router();
@@ -20,6 +19,51 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 function obtenerDbWritable() {
   if (!dbWritable) dbWritable = abrirDb();
   return dbWritable;
+}
+
+const INICIO_ANIO_ESCOLAR = 2; // marzo (índice 0-based)
+const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+// Decide qué meses descargar (índices 0-based del año en curso).
+// - por defecto: mes anterior + mes actual (sin bajar de marzo)
+// - periodo 'anio': de marzo al mes actual
+// - desde/hasta: los meses del rango dentro de marzo..mes actual; con soloFaltantes
+//   se omiten los que ya tienen asistencia guardada
+function calcularMeses(db, { periodo, desde, hasta, soloFaltantes }, ahora = new Date()) {
+  const anio = ahora.getFullYear();
+  const actual = ahora.getMonth();
+  const advertencias = [];
+  const rango = (inicio, fin) => {
+    const lista = [];
+    for (let m = inicio; m <= fin; m += 1) lista.push(m);
+    return lista;
+  };
+
+  if (FECHA_ISO.test(desde || '') && FECHA_ISO.test(hasta || '')) {
+    const [anioDesde, mesDesde] = desde.split('-').map(Number);
+    const [anioHasta, mesHasta] = hasta.split('-').map(Number);
+    let inicio = anioDesde < anio ? 0 : mesDesde - 1;
+    let fin = anioHasta > anio ? 11 : mesHasta - 1;
+    if (anioDesde < anio || inicio < INICIO_ANIO_ESCOLAR) {
+      advertencias.push('El portal solo entrega el año escolar en curso (desde marzo).');
+      inicio = Math.max(inicio, INICIO_ANIO_ESCOLAR);
+    }
+    if (anioHasta > anio || fin > actual) fin = actual;
+    let meses = inicio <= fin && anioHasta >= anio ? rango(inicio, fin) : [];
+    if (soloFaltantes && meses.length) {
+      const conDatos = new Set(db.prepare(`
+        SELECT DISTINCT substr(fecha, 1, 7) AS mes FROM asistencia
+      `).all().map((fila) => fila.mes));
+      meses = meses.filter((m) => !conDatos.has(`${anio}-${String(m + 1).padStart(2, '0')}`));
+    }
+    return { modo: 'rango', meses, advertencias };
+  }
+
+  if (periodo === 'anio' && actual > INICIO_ANIO_ESCOLAR) {
+    return { modo: 'anio', meses: rango(INICIO_ANIO_ESCOLAR, actual), advertencias };
+  }
+  const inicio = actual > INICIO_ANIO_ESCOLAR ? actual - 1 : actual;
+  return { modo: 'normal', meses: rango(inicio, actual), advertencias };
 }
 
 function registrarEjecucion(exitosa) {
@@ -66,7 +110,9 @@ router.post('/descargar-e-importar', async (req, res) => {
     return res.status(estado).json(datos);
   };
   try {
-    const { usuario, pass, recordar, enMemoria, urlPortal, periodo } = req.body ?? {};
+    const {
+      usuario, pass, recordar, enMemoria, urlPortal, periodo, desde, hasta, soloFaltantes,
+    } = req.body ?? {};
     const tieneCredencialesBody = typeof usuario === 'string' && usuario.trim()
       && typeof pass === 'string' && pass;
     if (usuario !== undefined || pass !== undefined) {
@@ -101,14 +147,28 @@ router.post('/descargar-e-importar', async (req, res) => {
     if (!credenciales.urlPortal) credenciales.urlPortal = URL_PORTAL_CONFIGURADA;
 
     // TODO: convertir a job asíncrono
-    const mesActual = new Date().getMonth();
-    const mes = MESES[mesActual];
-    // periodo 'anio': año escolar completo, de marzo al mes actual (útil para el Master de registro)
-    const INICIO_ANIO_ESCOLAR = 2; // marzo
-    const meses = periodo === 'anio' && mesActual > INICIO_ANIO_ESCOLAR
-      ? MESES.slice(INICIO_ANIO_ESCOLAR, mesActual + 1)
-      : [mes];
-    const advertencias = [];
+    const mes = MESES[new Date().getMonth()];
+    const db = obtenerDbWritable();
+    const plan = calcularMeses(db, { periodo, desde, hasta, soloFaltantes });
+    const advertencias = [...plan.advertencias];
+    const meses = plan.meses.map((m) => MESES[m]);
+    // A pedido (rango): el mes actual no es obligatorio y los atrasos no se vuelven a leer,
+    // porque el portal solo entrega una ventana de ~1 mes de atrasos.
+    const aPedido = plan.modo === 'rango';
+    if (aPedido && !meses.length) {
+      return responder(200, {
+        mensaje: 'No hay meses pendientes por descargar en ese rango.',
+        mes,
+        meses: [],
+        advertencias,
+        totalCursos: 0,
+        cursosProcesados: 0,
+        totalAlumnos: 0,
+        filasAsistencia: 0,
+        filasAtrasos: 0,
+        errores: [],
+      }, true);
+    }
     sesion = await abrirSesion(credenciales);
     credencialesPortal.registrarExito(credenciales);
     if (recordar) credencialesPortal.guardar(credenciales);
@@ -122,22 +182,25 @@ router.post('/descargar-e-importar', async (req, res) => {
       });
     }
 
-    const db = obtenerDbWritable();
     const paquetes = [];
 
     for (const curso of cursos) {
       try {
         // Meses anteriores: si el portal no los entrega se avisa, pero no se cae la sincronización.
-        // El mes actual sí es obligatorio, igual que antes.
+        // En modo normal/anual el mes actual sí es obligatorio, igual que antes.
         const datosMeses = [];
         for (const m of meses) {
           try {
             datosMeses.push(parsearAsistencia(await descargarAsistencia(sesion.page, curso, m)));
           } catch (error) {
-            if (m === mes) throw error;
+            if (!aPedido && m === mes) throw error;
             advertencias.push(`${curso}: no se pudo descargar ${m}.`);
-            console.error(`Sincronización anual, ${curso} ${m}:`, error.message);
+            console.error(`Sincronización, ${curso} ${m}:`, error.message);
           }
+        }
+        if (aPedido) {
+          if (datosMeses.length) paquetes.push({ data: datosMeses.at(-1), anteriores: datosMeses.slice(0, -1), atrasos: null });
+          continue;
         }
         const data = datosMeses.at(-1);
         const atrasos = parsearAtrasos(await extraerTablaAtrasos(sesion.page, curso));
@@ -163,16 +226,26 @@ router.post('/descargar-e-importar', async (req, res) => {
       }
     }
 
+    if (aPedido && !paquetes.length) {
+      const fallo = new Error('No se pudo descargar ningún mes del rango pedido.');
+      fallo.code = 'SYNC_FAILED';
+      throw fallo;
+    }
+
     let totalAlumnos = 0;
     let filasAsistencia = 0;
     let filasAtrasos = 0;
+    // No se borra lo anterior: guardar() reemplaza curso+mes y guardarAtrasos() su ventana,
+    // así los meses ya descargados (p. ej. a pedido desde Auditar) se conservan.
+    // El borrado total sigue ocurriendo al cerrar la app (limpiarAlCerrar).
     transaccion(db, () => {
-      borrarDatosSincronizados(db);
       for (const paquete of paquetes) {
         for (const anterior of paquete.anteriores) filasAsistencia += guardar(db, anterior, { transaccionar: false });
         filasAsistencia += guardar(db, paquete.data, { transaccionar: false });
         totalAlumnos += paquete.data.alumnos.length;
-        filasAtrasos += guardarAtrasos(db, paquete.atrasos, { ...paquete.rango, transaccionar: false });
+        if (paquete.atrasos) {
+          filasAtrasos += guardarAtrasos(db, paquete.atrasos, { ...paquete.rango, transaccionar: false });
+        }
       }
     });
 
@@ -229,3 +302,4 @@ router.post('/descargar-e-importar', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.calcularMeses = calcularMeses;

@@ -33,23 +33,72 @@ function rangoPorTipo(rangos, tipo) {
   return interseccion([rangos.asistencia, rangos.atrasos]);
 }
 
+const NOMBRES_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const INICIO_ANIO_ESCOLAR = 3; // marzo (1-based)
+
+function fechaCorta(iso) {
+  const [anio, mes, dia] = iso.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
+// Meses del rango elegido (dentro del año escolar y hasta hoy) que no tienen ninguna fila
+// de asistencia. Se mira mes a mes porque MIN/MAX no detecta huecos en medio.
+function mesesSinAsistencia(db, elegido, hoy = new Date()) {
+  if (!elegido?.desde || !elegido?.hasta) return [];
+  const conDatos = new Set(db.prepare(`
+    SELECT DISTINCT substr(fecha, 1, 7) AS mes FROM asistencia
+  `).all().map((fila) => fila.mes));
+  const limite = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+  let [anio, mes] = elegido.desde.split('-').map(Number);
+  const [anioFin, mesFin] = elegido.hasta.split('-').map(Number);
+  const faltantes = [];
+  while (anio < anioFin || (anio === anioFin && mes <= mesFin)) {
+    const clave = `${anio}-${String(mes).padStart(2, '0')}`;
+    if (clave > limite) break;
+    if (mes >= INICIO_ANIO_ESCOLAR && !conDatos.has(clave)) faltantes.push(clave);
+    mes += 1;
+    if (mes > 12) { mes = 1; anio += 1; }
+  }
+  return faltantes;
+}
+
+function describirMeses(meses) {
+  const nombre = (clave) => NOMBRES_MES[Number(clave.slice(5, 7)) - 1];
+  if (meses.length === 1) return nombre(meses[0]);
+  return `${nombre(meses[0])} a ${nombre(meses.at(-1))}`;
+}
+
 function resolverRango(db, { desde, hasta, tipo }) {
   const tipoNormalizado = normalizarTipo(tipo);
   const fuentes = obtenerRangosFuentes(db);
   const sugerido = rangoPorTipo(fuentes, tipoNormalizado);
   const elegido = desde && hasta ? { desde, hasta } : sugerido;
   const advertencias = [];
+  // Datos estructurados para que el front ofrezca descargar lo que falta (asistencia)
+  // o explique el límite del portal (atrasos).
+  const faltantes = { asistencia: null, atrasos: null };
   const fuentesUsadas = tipoNormalizado === 'ambos'
     ? ['asistencia', 'atrasos']
     : [tipoNormalizado === 'inasistencias' ? 'asistencia' : 'atrasos'];
 
   for (const fuente of fuentesUsadas) {
     const rangoFuente = fuentes[fuente];
+    if (fuente === 'asistencia') {
+      const meses = mesesSinAsistencia(db, elegido);
+      if (meses.length) {
+        faltantes.asistencia = { meses, desde: `${meses[0]}-01`, hasta: elegido.hasta };
+        advertencias.push(`Falta descargar la asistencia de ${describirMeses(meses)}.`);
+      } else if (!rangoFuente.desde) {
+        advertencias.push('No hay datos de asistencia en la base.');
+      }
+      continue;
+    }
     if (!rangoFuente.desde || !rangoFuente.hasta) {
-      advertencias.push(`No hay datos de ${fuente} en la base.`);
-    } else if (elegido?.desde && elegido?.hasta &&
-      (elegido.desde < rangoFuente.desde || elegido.hasta > rangoFuente.hasta)) {
-      advertencias.push(`El rango elegido excede la cobertura disponible de ${fuente} (${rangoFuente.desde} a ${rangoFuente.hasta}).`);
+      advertencias.push('No hay datos de atrasos en la base.');
+    } else if (elegido?.desde && elegido.desde < rangoFuente.desde) {
+      faltantes.atrasos = { desde: elegido.desde, hasta: rangoFuente.desde, disponibleDesde: rangoFuente.desde };
+      advertencias.push(`El portal solo entrega atrasos desde el ${fechaCorta(rangoFuente.desde)}; antes de esa fecha solo se analizan inasistencias.`);
     }
   }
 
@@ -63,6 +112,7 @@ function resolverRango(db, { desde, hasta, tipo }) {
     sugerido,
     elegido,
     advertencias,
+    faltantes,
     coberturaCompleta: advertencias.length === 0,
   };
 }
@@ -134,7 +184,9 @@ function obtenerRegistrosAsistencia(db, { desde, hasta, curso }) {
     parametros.curso = curso;
   }
   return db.prepare(`
-    SELECT s.fecha, s.estado, a.rut, c.nombre AS curso
+    SELECT s.fecha, s.estado, a.rut, c.nombre AS curso,
+      CASE WHEN s.estado IN ('A', 'F') AND ${sqlJustificado('a.rut', 's.fecha', 'inasistencia')}
+        THEN 1 ELSE 0 END AS justificado
     FROM asistencia s
     JOIN matricula m ON m.id_matricula = s.id_matricula
     JOIN alumno a ON a.rut = m.rut_alumno
