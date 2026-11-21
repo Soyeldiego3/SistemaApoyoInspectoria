@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { rateLimit } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const authRouter = require('./routes/auth');
 const asistenciaRouter = require('./routes/asistencia');
 const syncRouter = require('./routes/sync');
@@ -18,7 +18,7 @@ const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { requerirRol } = require('./middleware/roles');
 const { requerirLoopback } = require('./middleware/loopback');
-const { origenPermitido } = require('./services/red');
+const { origenPermitido, ipCliente } = require('./services/red');
 const path = require('path');
 const { abrirDb } = require('./services/asistencia');
 
@@ -63,9 +63,13 @@ const loginRateLimit = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  // Por el túnel todas las peticiones llegan desde 127.0.0.1: se limita por la IP real del teléfono
+  keyGenerator: (req) => ipKeyGenerator(ipCliente(req)),
 });
 
-app.use('/api/auth', loginRateLimit, authRouter);
+// Solo login y canje de código: /auth/codigo se renueva cada pocos segundos desde el PC
+app.use(['/api/auth/login', '/api/auth/canjear'], loginRateLimit);
+app.use('/api/auth', authRouter);
 app.use('/api/setup', requerirLoopback, setupRouter);
 app.use('/api/asistencia', requerirSesion, asistenciaRouter);
 app.use('/api/sync', requerirSesion, syncRouter);

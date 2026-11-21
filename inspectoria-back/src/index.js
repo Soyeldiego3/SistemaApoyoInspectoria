@@ -3,6 +3,7 @@ const { iniciarServidor } = require('./services/servidor');
 const { abrirDb } = require('./services/asistencia');
 const { limpiarDatosSincronizados } = require('./services/limpieza');
 const { leer } = require('./services/configuracion');
+const { detenerTunel } = require('./services/tunel');
 
 iniciarServidor();
 
@@ -16,8 +17,12 @@ process.on('uncaughtException', (error) => {
   console.error('Excepción no controlada:', mensaje);
 });
 
+// Si Electron se cierra (se corta el canal IPC), no dejar cloudflared corriendo
+process.on('disconnect', () => detenerTunel());
+
 process.on('message', (message) => {
   if (message?.type !== 'limpiar-datos') return;
+  detenerTunel();
   try {
     if (leer().limpiarAlCerrar !== false) {
       const db = abrirDb();

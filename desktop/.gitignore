@@ -3,3 +3,4 @@ back-build
 release
 node_modules
 browsers
+bin

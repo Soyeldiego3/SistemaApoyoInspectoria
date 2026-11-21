@@ -1,7 +1,8 @@
 const { esLoopback } = require('../services/red');
 
 function requerirLoopback(req, res, next) {
-  if (!esLoopback(req.socket.remoteAddress)) {
+  // Lo que entra por el túnel también llega desde 127.0.0.1, pero viene de fuera del PC
+  if (req.viaTunel || !esLoopback(req.socket.remoteAddress)) {
     return res.status(403).json({
       ok: false,
       codigo: 'SOLO_PC',

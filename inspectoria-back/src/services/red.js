@@ -28,6 +28,16 @@ function esRedPermitida(ip) {
   return esLoopback(ip) || esPrivada(ip);
 }
 
+// IP real del cliente. Por el túnel todo llega desde 127.0.0.1, así que se usa la que informa Cloudflare
+// (solo se confía en ese header en el listener del túnel, que no es accesible desde la red).
+function ipCliente(req) {
+  if (req.viaTunel) {
+    const ip = String(req.headers['cf-connecting-ip'] || '').trim();
+    if (ip) return ip;
+  }
+  return normalizarIp(req.socket.remoteAddress);
+}
+
 function origenPermitido(origen) {
   if (!origen || origen === 'null') return true;
   try {
@@ -82,6 +92,7 @@ module.exports = {
   esLoopback,
   esPrivada,
   esRedPermitida,
+  ipCliente,
   origenPermitido,
   obtenerInfo,
   redHabilitada,

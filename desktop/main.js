@@ -7,6 +7,14 @@ const { fork } = require('child_process');
 const PORT = 3005;
 let mainWindow = null;
 let backend = null;
+let tunelPid = null; // cloudflared lanzado por el backend (acceso desde otra red)
+
+// En Windows el hijo no muere con el padre: si el backend se cierra, cloudflared quedaría corriendo
+function cerrarTunel() {
+  if (!tunelPid) return;
+  try { process.kill(tunelPid); } catch { /* ya terminó */ }
+  tunelPid = null;
+}
 
 // Evita abrir dos instancias (y dos backends)
 if (!app.requestSingleInstanceLock()) {
@@ -27,6 +35,9 @@ function startBackend() {
   const browsersDir = path.join(process.resourcesPath, 'browsers');
   if (fs.existsSync(browsersDir)) backendEnv.PLAYWRIGHT_BROWSERS_PATH = browsersDir;
 
+  const cloudflared = path.join(process.resourcesPath, 'bin', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
+  if (fs.existsSync(cloudflared)) backendEnv.CLOUDFLARED_PATH = cloudflared;
+
   const proceso = fork(path.join(backendDir, 'src', 'index.js'), [], {
     cwd: backendDir,
     silent: true,
@@ -43,9 +54,13 @@ function startBackend() {
   proceso.stdout.on('data', (d) => console.log('[back]', d.toString()));
   proceso.stderr.on('data', (d) => console.error('[back]', d.toString()));
   proceso.on('error', (error) => console.error('Error del backend:', error.message));
+  proceso.on('message', (message) => {
+    if (message?.type === 'tunel:pid') tunelPid = Number.isInteger(message.pid) ? message.pid : null;
+  });
   proceso.on('exit', (code) => {
     console.log('Backend terminó con código', code);
     backend = null;
+    cerrarTunel();
   });
 }
 
@@ -75,7 +90,7 @@ function waitForBackend(retries = 40) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
-    height: 800,
+    height: 900,
     backgroundColor: '#1c1c1e', // evita el destello blanco al abrir
     icon: path.join(__dirname, 'assets', 'icons', 'icon.png'),
     webPreferences: {
@@ -206,6 +221,8 @@ app.on('before-quit', (event) => {
     terminar();
   }
 });
+
+app.on('will-quit', cerrarTunel);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

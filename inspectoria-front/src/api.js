@@ -51,6 +51,21 @@ export async function login(usuario, password) {
   return data;
 }
 
+// Inicio de sesión en el teléfono con el código de un solo uso del QR
+export async function canjearCodigo(codigo) {
+  const data = await request('/auth/canjear', {
+    method: 'POST',
+    body: JSON.stringify({ codigo }),
+  });
+  localStorage.setItem('token', data.token);
+  return data;
+}
+
+// Solo desde el PC: código para el QR (dura 60 s y sirve una vez)
+export function crearCodigoAcceso() {
+  return request('/auth/codigo', { method: 'POST' });
+}
+
 export function getSetupEstado() {
   return request('/setup/estado');
 }
@@ -199,6 +214,18 @@ export function setRedEnabled(habilitada) {
   return request('/red/config', {
     method: 'PUT',
     body: JSON.stringify({ habilitada }),
+  });
+}
+
+// Acceso desde otra red (experimental): túnel de Cloudflare
+export function getTunel() {
+  return request('/red/tunel');
+}
+
+export function setTunel(activo) {
+  return request('/red/tunel', {
+    method: 'PUT',
+    body: JSON.stringify({ activo }),
   });
 }
 

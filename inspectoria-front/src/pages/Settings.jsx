@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Copy } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
-import { getAjustes, getRedInfo, setNavegadorHeadless, setRedEnabled } from '../api.js';
+import {
+  getAjustes, getRedInfo, getTunel, setNavegadorHeadless, setRedEnabled, setTunel,
+} from '../api.js';
+import QrAcceso from '../components/QrAcceso.jsx';
 import { useAuth } from '../auth.jsx';
 import { MODOS, PALETAS, TAMANOS, useTema } from '../tema.jsx';
 import Segmented from '../components/Segmented.jsx';
@@ -28,6 +29,10 @@ export default function Settings() {
   const [red, setRed] = useState(null);
   const [redCargando, setRedCargando] = useState(false);
 
+  // Acceso desde otra red (experimental, túnel de Cloudflare)
+  const [tunel, setTunelInfo] = useState(null);
+  const [tunelCargando, setTunelCargando] = useState(false);
+
   // Modo headless de Playwright (solo admin)
   const [headless, setHeadless] = useState(null);
   const [headlessCargando, setHeadlessCargando] = useState(false);
@@ -43,6 +48,22 @@ export default function Settings() {
       .catch((e) => { if (activo) mostrarError(e.message || 'No se pudo consultar el acceso en red.'); });
     return () => { activo = false; };
   }, [esPc]);
+
+  // Estado del túnel; mientras está activo se revisa cada 15 s por si se cae
+  const tunelActivo = tunel?.estado === 'activo';
+  useEffect(() => {
+    if (!esPc) return undefined;
+    let activo = true;
+    const consultar = () => getTunel()
+      .then((info) => { if (activo) setTunelInfo(info); })
+      .catch(() => { /* el error se muestra al intentar cambiarlo */ });
+    consultar();
+    const intervalo = tunelActivo ? setInterval(consultar, 15_000) : null;
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+    };
+  }, [esPc, tunelActivo]);
 
   useEffect(() => {
     if (!esAdmin || !esPc) return undefined;
@@ -65,13 +86,17 @@ export default function Settings() {
     }
   };
 
-  const copiarUrl = async () => {
-    if (!red?.principal) return;
+  const cambiarTunel = async (activo) => {
+    setTunelCargando(true);
+    if (activo) setTunelInfo((t) => ({ ...t, estado: 'iniciando', error: null }));
     try {
-      await navigator.clipboard.writeText(red.principal);
-      mostrarMensaje('URL copiada.');
-    } catch {
-      mostrarError('No se pudo copiar la URL. Cópiala manualmente.');
+      setTunelInfo(await setTunel(activo));
+      setError('');
+    } catch (e) {
+      mostrarError(e.message || 'No se pudo cambiar el acceso desde otra red.');
+      getTunel().then(setTunelInfo).catch(() => {});
+    } finally {
+      setTunelCargando(false);
     }
   };
 
@@ -121,19 +146,47 @@ export default function Settings() {
             </label>
           </div>
           {red?.habilitada && red.principal ? (
-            <div className="row" style={{ alignItems: 'center', marginTop: 16 }}>
-              <div>
-                <p className="big" style={{ fontSize: '1.2rem', margin: 0 }}>{red.principal}</p>
-                <button className="btn ghost" onClick={copiarUrl} style={{ marginTop: 10 }}>
-                  <Copy size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Copiar URL
-                </button>
-              </div>
-              <QRCodeCanvas value={red.principal} size={140} includeMargin />
-            </div>
+            <QrAcceso base={red.principal} onMensaje={mostrarMensaje} onError={mostrarError} />
           ) : red ? (
             <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar una URL y un código QR.</p>
           ) : (
             <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
+          )}
+        </section>
+      )}
+
+      {esPc && (
+        <section className="card">
+          <div className="row">
+            <div>
+              <h2>Acceso desde otra red <span className="tag warn" style={{ verticalAlign: 3 }}>Experimental</span></h2>
+              <p className="muted">
+                Conecta el teléfono a través de un túnel temporal de Cloudflare, aunque la red del colegio bloquee la
+                conexión directa o el teléfono use datos móviles. Los datos siguen solo en este PC.
+              </p>
+            </div>
+            <button className={`btn${tunelActivo ? ' ghost' : ''}`}
+              disabled={tunelCargando || !tunel || tunel.estado === 'iniciando'}
+              onClick={() => cambiarTunel(!tunelActivo)}>
+              {tunel?.estado === 'iniciando' ? 'Iniciando…' : tunelActivo ? 'Desactivar túnel' : 'Activar túnel'}
+            </button>
+          </div>
+          {tunelActivo && tunel.url ? (
+            <>
+              <QrAcceso base={tunel.url} onMensaje={mostrarMensaje} onError={mostrarError} />
+              <p className="muted" style={{ marginTop: 12, fontSize: '.85rem' }}>
+                La URL es pública mientras el túnel esté activo y solo se puede entrar escaneando el QR.
+                Si no carga de inmediato, espera unos segundos. Desactívalo al terminar.
+              </p>
+            </>
+          ) : tunel?.estado === 'iniciando' ? (
+            <p className="muted" style={{ marginTop: 16 }}>Conectando con Cloudflare… puede tardar unos segundos.</p>
+          ) : tunel?.estado === 'error' ? (
+            <p style={{ marginTop: 16, color: 'var(--bad)' }} role="alert">{tunel.error}</p>
+          ) : (
+            <p className="muted" style={{ marginTop: 16 }}>
+              Función en prueba. Al activarla se genera una URL temporal que deja de existir al desactivarla o al cerrar la app.
+            </p>
           )}
         </section>
       )}

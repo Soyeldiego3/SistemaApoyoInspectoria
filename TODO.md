@@ -10,15 +10,14 @@
 
 - Seccion de Graficos (barras, torta, etc.)
 
-- Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
-
-- Pasar el inicio de sesion en la url hacia el telefono.
-
 ## En progreso
 
+- Acceso desde otra red (experimental): túnel temporal de Cloudflare (cloudflared) en vez de Vercel/Railway; los datos siguen en el PC. Falta probarlo en la red del colegio y decidir si reemplaza al acceso en red local.
 
 
 ## Completado
+
+- Inicio de sesión en el teléfono desde el QR: código de un solo uso (60 s) en la URL, nunca el token
 
 - Dejar más explícita la asistencia y los atrasos de los estudiantes de la seccion de alumnos: ficha con resumen y pestañas Inasistencias/Atrasos; cada justificativo aplica solo a su tipo
 

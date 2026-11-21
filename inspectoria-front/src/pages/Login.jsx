@@ -10,11 +10,13 @@ export default function Login() {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
-  const { ingresar } = useAuth();
+  const { ingresar, avisoAcceso } = useAuth();
   const [requiereAdmin, setRequiereAdmin] = useState(false);
   const [modoSetup, setModoSetup] = useState(false);
   const [adminPass2, setAdminPass2] = useState('');
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  // Por el túnel (acceso desde otra red) no se acepta contraseña: solo el código del QR
+  const viaTunel = window.location.hostname.endsWith('.trycloudflare.com');
 
   useEffect(() => {
     if (!esPc) return;
@@ -25,6 +27,18 @@ export default function Login() {
 
   // Si ya hay una sesión iniciada, no se vuelve a mostrar el login.
   if (getToken()) return <Navigate to="/" replace />;
+
+  if (viaTunel) {
+    return (
+      <div className="app center">
+        <div className="form card">
+          <h1>Inspectoría</h1>
+          <p className="muted">Para entrar desde otra red, abre <b>Ajustes</b> en el PC y escanea con el teléfono el código QR de <b>Acceso desde otra red</b>.</p>
+          {avisoAcceso && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{avisoAcceso}</p>}
+        </div>
+      </div>
+    );
+  }
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -77,7 +91,7 @@ export default function Login() {
           <div className="field"><label htmlFor="p2">Confirmar contraseña</label>
             <input id="p2" type="password" className="input" value={adminPass2} onChange={(e) => setAdminPass2(e.target.value)} autoComplete="new-password" /></div>
         )}
-        {error && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{error}</p>}
+        {(error || avisoAcceso) && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{error || avisoAcceso}</p>}
         <button className="btn" disabled={cargando}>{cargando
           ? (modoSetup ? 'Creando…' : 'Ingresando…')
           : (modoSetup ? 'Crear administrador' : 'Ingresar')}</button>
