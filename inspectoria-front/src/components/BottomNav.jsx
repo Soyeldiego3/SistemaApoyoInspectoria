@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutGrid, ClipboardCheck, Users, Database, UserPlus, Settings } from 'lucide-react';
+import { LayoutGrid, ClipboardCheck, Users, BarChart3, Database, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 import { getConteoAlertas } from '../api.js';
 import { hayFiltrosAuditar } from '../filtrosAuditar.js';
@@ -9,6 +9,7 @@ const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
   { to: '/auditar', label: 'Auditar', Icon: ClipboardCheck },
   { to: '/alumnos', label: 'Alumnos', Icon: Users },
+  { to: '/graficos', label: 'Gráficos', Icon: BarChart3 },
   { to: '/datos', label: 'Datos', Icon: Database },
   { to: '/usuarios', label: 'Usuarios', Icon: UserPlus },
   // Al fondo del menú lateral. En el teléfono solo muestra Apariencia (lo demás requiere el PC)

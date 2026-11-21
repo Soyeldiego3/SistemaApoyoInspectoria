@@ -1,19 +1,37 @@
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from 'recharts';
 import { Skeleton } from './Skeleton.jsx';
 import { useTema } from '../tema.jsx';
 
 // data: [{ dia, <dataKey> }]. Vacío => bloque gris.
 // color: nombre de un color del tema (accent, ok, warn, bad), así cambia con el modo y la paleta.
-export default function BarsChart({ data = [], dataKey = 'atrasos', color = 'accent' }) {
+// ejeX: campo de la categoría (por defecto "dia"; en Gráficos también "curso").
+// horizontal: barras acostadas, una fila por categoría. valores: muestra el número sin pasar el mouse.
+// sufijo: texto tras el número (ej. "%").
+export default function BarsChart({
+  data = [], dataKey = 'atrasos', color = 'accent', ejeX = 'dia',
+  horizontal = false, valores = false, sufijo = '',
+}) {
   const { colores } = useTema();
   if (!data.length) return <Skeleton h={160} />;
+  const alto = horizontal ? Math.max(160, data.length * 30 + 16) : 160;
+  const estiloEje = { stroke: colores.muted, tickLine: false, axisLine: false, fontSize: 12 };
   return (
-    <div style={{ height: 160 }}>
+    <div style={{ height: alto }}>
       <ResponsiveContainer>
-        <BarChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
-          <XAxis dataKey="dia" stroke={colores.muted} tickLine={false} axisLine={false} fontSize={12} />
+        <BarChart data={data} layout={horizontal ? 'vertical' : 'horizontal'}
+          margin={{ top: valores && !horizontal ? 20 : 8, right: valores && horizontal ? 40 : 0, left: 0, bottom: 0 }}>
+          {/* Recharts no busca ejes dentro de fragmentos: van como elementos sueltos */}
+          {horizontal && <XAxis type="number" hide />}
+          {horizontal
+            ? <YAxis type="category" dataKey={ejeX} width={56} {...estiloEje} />
+            : <XAxis dataKey={ejeX} {...estiloEje} />}
           <Tooltip cursor={{ fill: colores.hover }} contentStyle={{ background: colores['card-2'], border: 0, borderRadius: 10 }} />
-          <Bar dataKey={dataKey} fill={colores[color]} radius={[8, 8, 0, 0]} />
+          <Bar dataKey={dataKey} fill={colores[color]} radius={horizontal ? [0, 8, 8, 0] : [8, 8, 0, 0]}>
+            {valores && (
+              <LabelList dataKey={dataKey} position={horizontal ? 'right' : 'top'} fill={colores.muted} fontSize={12}
+                formatter={(v) => `${v}${sufijo}`} />
+            )}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>

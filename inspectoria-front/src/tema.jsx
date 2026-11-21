@@ -73,6 +73,9 @@ function leerColores() {
     muted: color('muted'),
     'card-2': color('card-2'),
     hover: color('hover'),
+    'graf-1': color('graf-1'),
+    'graf-2': color('graf-2'),
+    'graf-3': color('graf-3'),
   };
 }
 

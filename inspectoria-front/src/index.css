@@ -33,6 +33,16 @@
 /* En claro el texto amarillo sobre blanco no se lee: la pestaña activa queda en azul */
 :root[data-modo="claro"][data-paleta="lasalle"] { --accent: #003a8c; --accent-2: #f2b800; --nav-activo: var(--accent); }
 
+/* Colores de gráficos (Gráficos): cada paleta define 3 que combinan entre sí; --graf-1 es el color principal */
+:root { --graf-1: var(--accent); --graf-2: #64d2ff; --graf-3: #bf5af2; }                 /* Azul */
+:root[data-modo="claro"] { --graf-2: #0091c2; --graf-3: #8e44c9; }
+:root[data-paleta="lavanda"] { --graf-2: #f28fb3; --graf-3: #5ec8c0; }                   /* rosa y turquesa suaves */
+:root[data-modo="claro"][data-paleta="lavanda"] { --graf-2: #c2477a; --graf-3: #2a8f88; }
+:root[data-paleta="oficina"] { --graf-2: #8fa3b8; --graf-3: #b08d57; }                   /* gris azulado y ocre, sobrios */
+:root[data-modo="claro"][data-paleta="oficina"] { --graf-2: #5f7488; --graf-3: #8a6a35; }
+:root[data-paleta="lasalle"] { --graf-2: #ffcc00; --graf-3: #8fb3ff; }                   /* amarillo y celeste institucional */
+:root[data-modo="claro"][data-paleta="lasalle"] { --graf-2: #f2b800; --graf-3: #4a78c2; }
+
 * { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
 /* Tamaño del texto (Ajustes → Apariencia). Todo usa rem, así que escala la app completa. */
@@ -192,6 +202,8 @@ a { color: inherit; text-decoration: none; }
   .kpis { grid-template-columns: repeat(3, 1fr); }
   .kpis > :last-child { grid-column: auto; }
   .charts { grid-template-columns: repeat(3, 1fr); }
+  /* Inasistencias día a día usa 2 columnas; el Top 5 queda a su lado */
+  .charts .grafico-ancho { grid-column: span 2; }
   .cols2 { grid-template-columns: 1fr 1fr; }
   .filters { grid-template-columns: 1fr auto; align-items: end; }
   .filters .btn { width: auto; padding-inline: 32px; }
@@ -219,6 +231,7 @@ a { color: inherit; text-decoration: none; }
 .curso { padding: 10px 14px; }
 .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .iconbtn { border: 0; cursor: pointer; color: var(--muted); }
+.iconbtn:disabled { opacity: .4; cursor: default; }
 .audit-header { display: flex; align-items: center; justify-content: space-between; }
 .audit-header h2 { font-size: 1.05rem; }
 .audit-sync { width: 44px; height: 44px; border-radius: 14px; background: var(--card-2); display: grid; place-items: center; }

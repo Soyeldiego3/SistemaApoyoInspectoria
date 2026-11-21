@@ -81,6 +81,13 @@ export function getDashboard() {
   return request('/dashboard');
 }
 
+export function getGraficos({ curso, desde, hasta } = {}) {
+  const p = new URLSearchParams();
+  if (curso) p.set('curso', curso);
+  if (desde && hasta) { p.set('desde', desde); p.set('hasta', hasta); }
+  return request(`/graficos${p.toString() ? `?${p}` : ''}`);
+}
+
 export function getCursos() {
   return request('/cursos');
 }

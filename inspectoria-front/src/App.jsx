@@ -8,6 +8,7 @@ import StudentDetail from './pages/StudentDetail.jsx';
 import Sync from './pages/Sync.jsx';
 import Users from './pages/Users.jsx';
 import Settings from './pages/Settings.jsx';
+import Charts from './pages/Charts.jsx';
 import { getToken } from './api.js';
 import { useAuth } from './auth.jsx';
 
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="auditar" element={<Audit />} />
         <Route path="alumnos" element={<Students />} />
         <Route path="alumnos/:rut" element={<StudentDetail />} />
+        <Route path="graficos" element={<Charts />} />
         <Route path="datos" element={<Sync />} />
         <Route path="usuarios" element={<AdminGuard><Users /></AdminGuard>} />
         <Route path="ajustes" element={<Settings />} />
