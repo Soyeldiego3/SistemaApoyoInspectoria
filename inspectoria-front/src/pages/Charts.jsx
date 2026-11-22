@@ -1,17 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import BarsChart from '../components/BarsChart.jsx';
 import DonutChart from '../components/DonutChart.jsx';
+import CalendarioInasistencias from '../components/CalendarioInasistencias.jsx';
+import InasistenciasDiaSheet from '../components/InasistenciasDiaSheet.jsx';
 import Segmented from '../components/Segmented.jsx';
 import { getCursos, getGraficos } from '../api.js';
 import { useTema } from '../tema.jsx';
 
 const CURSO_STORAGE_KEY = 'inspectoria.graficos.curso';
+const ESCALA_STORAGE_KEY = 'inspectoria.graficos.escala';
+const DESPLAZAMIENTO_STORAGE_KEY = 'inspectoria.graficos.desplazamiento';
 const ESCALAS = [
   { id: 'semana', label: 'Semana' },
   { id: 'mes', label: 'Mes' },
 ];
+
+// Lee/guarda en sessionStorage sin romper la página si el navegador no lo permite
+const leerSesion = (clave) => {
+  try { return sessionStorage.getItem(clave); } catch { return null; }
+};
+const guardarSesion = (clave, valor) => {
+  try { sessionStorage.setItem(clave, String(valor)); } catch { /* sin almacenamiento: solo se pierde al volver */ }
+};
 
 const fechaLocal = (fecha) => {
   const y = fecha.getFullYear();
@@ -45,14 +57,28 @@ function rangoDe(escala, desplazamiento) {
 // Gráficos de los datos sincronizados, filtrables por semana o mes y por curso
 export default function Charts() {
   const { colores } = useTema();
-  const [escala, setEscala] = useState('mes');
-  const [desplazamiento, setDesplazamiento] = useState(0);
+  // Escala y período se recuerdan en la sesión: al volver desde la ficha de un alumno se ve lo mismo
+  const [escala, setEscala] = useState(() => (
+    ESCALAS.some((e) => e.id === leerSesion(ESCALA_STORAGE_KEY)) ? leerSesion(ESCALA_STORAGE_KEY) : 'mes'
+  ));
+  const [desplazamiento, setDesplazamiento] = useState(() => {
+    const guardado = Number(leerSesion(DESPLAZAMIENTO_STORAGE_KEY));
+    return Number.isInteger(guardado) && guardado <= 0 ? guardado : 0;
+  });
   const rango = rangoDe(escala, desplazamiento);
+
+  useEffect(() => {
+    guardarSesion(ESCALA_STORAGE_KEY, escala);
+    guardarSesion(DESPLAZAMIENTO_STORAGE_KEY, desplazamiento);
+  }, [escala, desplazamiento]);
   const [curso, setCurso] = useState(() => sessionStorage.getItem(CURSO_STORAGE_KEY) || '');
   const [cursos, setCursos] = useState([]);
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  // Día elegido en el calendario: abre el panel con los alumnos inasistentes
+  const [diaElegido, setDiaElegido] = useState(null);
+  const cerrarDia = useCallback(() => setDiaElegido(null), []);
 
   useEffect(() => {
     getCursos()
@@ -149,8 +175,8 @@ export default function Charts() {
           </section>
           <section className="card grafico-ancho">
             <h2>Inasistencias día a día</h2>
-            <p className="muted" style={{ marginBottom: 8 }}>Ausencias y faltas por fecha</p>
-            <BarsChart data={datos?.inasistenciasPorDia || []} dataKey="inasistencias" valores color="graf-3" />
+            <p className="muted" style={{ marginBottom: 8 }}>Cada día muestra su fecha (arriba) y la cantidad de inasistencias (abajo)</p>
+            <CalendarioInasistencias desde={rango.desde} hasta={rango.hasta} dias={datos?.inasistenciasPorDia || []} onElegirDia={setDiaElegido} />
           </section>
           <section className="card">
             <h2>Más atrasos sin justificar</h2>
@@ -158,7 +184,8 @@ export default function Charts() {
             {top.length ? (
               <div className="list">
                 {top.map((a) => (
-                  <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`} className="item" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6, background: 'var(--card-2)' }}>
+                  <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}?vista=atrasos`}
+                    state={{ returnTo: '/graficos', returnLabel: 'Gráficos' }} className="item" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6, background: 'var(--card-2)' }}>
                     <div className="row">
                       <span><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso}</span></span>
                       <span className="tag warn">{a.atrasos}</span>
@@ -173,6 +200,8 @@ export default function Charts() {
           </section>
         </div>
       )}
+
+      <InasistenciasDiaSheet fecha={diaElegido} curso={curso} onCerrar={cerrarDia} />
     </div>
   );
 }

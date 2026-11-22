@@ -21,9 +21,12 @@ export default function BottomNav() {
   const { pathname, state } = useLocation();
   // La ficha de un alumno abierta desde Auditoría sigue resaltando "Auditar"
   const desdeAuditoria = pathname.startsWith('/alumnos/') && Boolean(state?.returnTo?.startsWith('/auditar'));
+  // Igual con Gráficos: la ficha abierta desde el Top 5 sigue resaltando "Gráficos"
+  const desdeGraficos = pathname.startsWith('/alumnos/') && Boolean(state?.returnTo?.startsWith('/graficos'));
   const activa = (to, isActive) => {
     if (to === '/auditar') return isActive || desdeAuditoria;
-    if (to === '/alumnos') return isActive && !desdeAuditoria;
+    if (to === '/graficos') return isActive || desdeGraficos;
+    if (to === '/alumnos') return isActive && !desdeAuditoria && !desdeGraficos;
     return isActive;
   };
   // Alertas de patrones nuevas (badge sobre "Auditar"); se refresca al navegar y al gestionar una

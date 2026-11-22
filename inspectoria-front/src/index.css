@@ -344,3 +344,31 @@ a { color: inherit; text-decoration: none; }
 /* En Alertas no hay filtro Tipo: Curso y Período lado a lado */
 .audit-filter-grid.sin-tipo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .audit-filter-grid.sin-tipo select:last-child { grid-column: auto; }
+
+/* Calendario de inasistencias (Gráficos): lunes a domingo, una fila por semana */
+.calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.calendario-cab { font-size: .75rem; color: var(--muted); text-align: center; }
+.calendario-dia { position: relative; overflow: hidden; border-radius: 4px; background: var(--card-2);
+  min-height: 48px; padding: 6px 8px; display: grid; align-content: space-between; }
+.calendario-dia .intensidad { position: absolute; inset: 0; background: var(--graf-3); }
+.calendario-dia > span, .calendario-dia > b { position: relative; }
+.calendario-dia > span { font-size: .75rem; color: var(--text); opacity: .75; }
+.calendario-dia.sin-registro { background: var(--card-2); opacity: .6; border: 1px dashed var(--muted); }
+.calendario-dia.finde { background: transparent; border: 1px solid var(--line); }
+.calendario-dia.finde > span { opacity: .5; }
+.calendario-unidad { font-size: .65rem; font-weight: 400; opacity: .75; }
+/* Día actual: borde con el color principal (outline se dibuja encima de la capa de color) */
+.calendario-dia.hoy { outline: 2px solid var(--accent); outline-offset: -2px; opacity: 1; }
+.calendario-dia.hoy > span { font-weight: 700; opacity: 1; }
+/* Días del calendario con inasistencias: se pueden abrir para ver los alumnos */
+button.calendario-dia { border: 0; color: inherit; text-align: left; cursor: pointer; }
+button.calendario-dia:hover { outline: 2px solid var(--text); outline-offset: -2px; }
+.calendario-dia.hoy:hover { outline-color: var(--accent); }
+/* Panel centrado (inasistencias del día): igual en teléfono y escritorio.
+   El panel entero hace scroll si la lista es larga, así no hay dos scrolls anidados. */
+.overlay.centrado { align-items: center; justify-content: center; padding: 16px; }
+.sheet.modal { max-width: 480px; height: auto; min-height: 0; max-height: 85dvh; overflow-y: auto;
+  border-radius: 20px; padding: 20px; }
+.calendario-dia.vacio { visibility: hidden; }
+.calendario-leyenda { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: .75rem; color: var(--muted); }
+.calendario-leyenda i { width: 14px; height: 14px; border-radius: 3px; background: var(--graf-3); }
