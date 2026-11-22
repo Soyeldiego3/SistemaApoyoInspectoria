@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowDownUp, RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
@@ -31,13 +31,15 @@ const ejecutarSyncAutomatica = async () => {
       codigo: error.code || '',
       mensaje: error.message || (deLogin
         ? 'No se pudo iniciar sesión en el portal.'
-        : 'No se pudo sincronizar. Puedes reintentar desde Datos.'),
+        : 'No se pudo sincronizar. Puedes reintentar desde Ajustes.'),
     };
   }
 };
 
 export default function Dashboard() {
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  const [exportarAbierto, setExportarAbierto] = useState(false);
+  const cerrarExportar = useCallback(() => setExportarAbierto(false), []);
   const [syncEstado, setSyncEstado] = useState('cargando');
   const [syncMensaje, setSyncMensaje] = useState('');
   const [syncCodigo, setSyncCodigo] = useState('');
@@ -86,7 +88,7 @@ export default function Dashboard() {
         <div className="big" style={{ margin: '14px 0' }}>
           {datosDashboard?.inasistenciasSemana ?? '—'}<small>inasistencias</small>
         </div>
-        <div className="row">
+        <div className="row inicio-fila">
           <p className="muted">
             {syncEstado === 'cargando' ? 'Sincronizando…' :
               syncEstado === 'ok' ? syncMensaje :
@@ -94,17 +96,19 @@ export default function Dashboard() {
               syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
               'Sin datos sincronizados todavía'}
           </p>
-          <Link to="/datos" state={{
-            abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error',
-            accionModal: syncEstado === 'error' ? 'guardar' : 'sync',
-            mensaje: syncEstado === 'error' ? syncMensaje : '',
-          }}
-            className="btn dark" style={{ width: 'auto' }}>
-            {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />
-              {syncCodigo === 'LOGIN_RECHAZADO' || syncCodigo === 'CREDENCIALES_REQUERIDAS'
-                ? 'Actualizar credenciales' : 'Reintentar'}</> :
-              syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
-          </Link>
+          <div className="inicio-acciones">
+            <Link to="/ajustes" state={{
+              abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error',
+              accionModal: syncEstado === 'error' ? 'guardar' : 'sync',
+              mensaje: syncEstado === 'error' ? syncMensaje : '',
+            }}
+              className="btn dark" style={{ width: 'auto' }}>
+              {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />
+                {syncCodigo === 'LOGIN_RECHAZADO' || syncCodigo === 'CREDENCIALES_REQUERIDAS'
+                  ? 'Actualizar credenciales' : 'Reintentar'}</> :
+                syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
+            </Link>
+          </div>
         </div>
       </section>
       {syncEstado === 'requiere' && syncMensaje && (

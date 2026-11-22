@@ -258,10 +258,22 @@ function importarMaster(db, cursoElegido, buffer, { transaccion }) {
     throw new ErrorRegistro(400, 'No se pudo leer el archivo. Debe ser un Excel (.xlsx).');
   }
   const master = wb.Sheets.MASTER;
-  if (!master) throw new ErrorRegistro(400, 'El archivo no tiene la hoja MASTER del registro de inasistencias.');
+  if (!master) {
+    throw new ErrorRegistro(400, 'Este archivo no es un Master de registro de inasistencias justificadas (no tiene la hoja MASTER).');
+  }
 
   const cursoArchivo = cursoDesdeTexto(String(valor(master, 'B2') ?? ''));
-  if (cursoArchivo && claveCurso(cursoArchivo) !== claveCurso(cursoElegido)) {
+  if (!cursoElegido) {
+    // Sin curso elegido se usa el del archivo, con el nombre tal como está en la app
+    const enApp = cursoArchivo && db.prepare('SELECT nombre FROM curso').all()
+      .map((c) => c.nombre).find((n) => claveCurso(n) === claveCurso(cursoArchivo));
+    if (!enApp) {
+      throw new ErrorRegistro(400, cursoArchivo
+        ? `El archivo es del curso ${cursoArchivo}, que no está cargado en la app. Sincroniza primero.`
+        : 'No se pudo detectar el curso del archivo (celda B2 de la hoja MASTER).');
+    }
+    cursoElegido = enApp;
+  } else if (cursoArchivo && claveCurso(cursoArchivo) !== claveCurso(cursoElegido)) {
     throw new ErrorRegistro(409, `El archivo parece ser del curso ${cursoArchivo}, pero elegiste ${cursoElegido}.`,
       { cursoArchivo });
   }

@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard.jsx';
 import Audit from './pages/Audit.jsx';
 import Students from './pages/Students.jsx';
 import StudentDetail from './pages/StudentDetail.jsx';
-import Sync from './pages/Sync.jsx';
 import Users from './pages/Users.jsx';
 import Settings from './pages/Settings.jsx';
 import Charts from './pages/Charts.jsx';
@@ -33,7 +32,8 @@ export default function App() {
         <Route path="alumnos" element={<Students />} />
         <Route path="alumnos/:rut" element={<StudentDetail />} />
         <Route path="graficos" element={<Charts />} />
-        <Route path="datos" element={<Sync />} />
+        {/* La antigua página Datos: la sincronización está en Ajustes y exportar/importar en Inicio y Alumnos */}
+        <Route path="datos" element={<Navigate to="/ajustes" replace />} />
         <Route path="usuarios" element={<AdminGuard><Users /></AdminGuard>} />
         <Route path="ajustes" element={<Settings />} />
       </Route>

@@ -1,7 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarX, Clock, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowDownUp, CalendarX, Clock, RefreshCw, Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
+import ExportarImportarSheet from '../components/ExportarImportarSheet.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
 
@@ -76,6 +77,8 @@ export default function Students() {
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const [error, setError] = useState('');
+  const [exportarAbierto, setExportarAbierto] = useState(false);
+  const cerrarExportar = useCallback(() => setExportarAbierto(false), []);
 
   const cargarAlumnos = async () => {
     setCargando(true);
@@ -105,7 +108,7 @@ export default function Students() {
       }
       const credenciales = await getCredencialesPortal();
       if (!credenciales.guardadas && !credenciales.enMemoria) {
-        navigate('/datos', {
+        navigate('/ajustes', {
           replace: false,
           state: {
             abrirCredenciales: true,
@@ -116,7 +119,7 @@ export default function Students() {
         return;
       }
       if (credenciales.invalidas) {
-        navigate('/datos', {
+        navigate('/ajustes', {
           replace: false,
           state: {
             abrirCredenciales: true,
@@ -134,7 +137,7 @@ export default function Students() {
       } else if (MENSAJES_PORTAL[e.code]) {
         setError(MENSAJES_PORTAL[e.code]);
         if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
-          navigate('/datos', {
+          navigate('/ajustes', {
             replace: false,
             state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
           });
@@ -192,7 +195,12 @@ export default function Students() {
     <>
       <div className="audit-header">
         <h2>Alumnos</h2>
+        <button type="button" className="btn ghost alumnos-exportar" onClick={() => setExportarAbierto(true)}>
+          <ArrowDownUp size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Exportar / Importar
+        </button>
       </div>
+      {/* Tras importar justificaciones cambian los pendientes: se recarga la lista */}
+      <ExportarImportarSheet abierto={exportarAbierto} onCerrar={cerrarExportar} onImportado={cargarAlumnos} />
 
       {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
       <div className="searchbox">

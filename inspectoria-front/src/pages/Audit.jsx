@@ -32,9 +32,22 @@ const PERIODOS = [
   { id: 'hoy', label: 'Hoy' },
   { id: 'ayer', label: 'Ayer' },
   { id: 'semana', label: 'Esta semana' },
+  { id: '30dias', label: 'Últimos 30 días' },
   { id: 'mes', label: 'Este mes' },
+  { id: '2meses', label: 'Últimos 2 meses' },
   { id: 'personalizado', label: 'Personalizado…' },
 ];
+
+// Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
+// más cortos. "Este mes" tampoco, porque a fin de mes recién llega al mínimo.
+const PERIODOS_ALERTAS = ['30dias', '2meses', 'personalizado'];
+const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'personalizado'];
+const periodosDe = (tab) => {
+  const ids = tab === 'alertas' ? PERIODOS_ALERTAS : PERIODOS_GENERALES;
+  return PERIODOS.filter((p) => ids.includes(p.id));
+};
+
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 const MENSAJES_PORTAL = {
   LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
@@ -67,10 +80,48 @@ function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '')
   if (periodo === 'mes') {
     return { desde: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`, hasta: fin };
   }
+  if (periodo === '30dias') {
+    const inicio = new Date(hoy);
+    inicio.setDate(hoy.getDate() - 29);
+    return { desde: fechaLocal(inicio), hasta: fin };
+  }
+  if (periodo === '2meses') {
+    // Mes anterior + actual: lo mismo que se sincroniza por defecto
+    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)), hasta: fin };
+  }
   if (periodo === 'personalizado') {
     return { desde: personalizadoDesde, hasta: personalizadoHasta };
   }
   return { desde: fin, hasta: fin };
+}
+
+// Si el rango es un solo día y cae en sábado o domingo, devuelve esa fecha (si no, null)
+function diaFinDeSemana(desde, hasta) {
+  if (!desde || desde !== hasta) return null;
+  const dia = new Date(`${desde}T00:00:00`).getDay();
+  return dia === 0 || dia === 6 ? desde : null;
+}
+
+function FinDeSemana({ fecha, onVerViernes }) {
+  const dia = new Date(`${fecha}T00:00:00`);
+  const viernes = new Date(dia);
+  viernes.setDate(dia.getDate() - (dia.getDay() === 0 ? 2 : 1));
+  const fechaViernes = fechaLocal(viernes);
+  const nombre = DIAS_SEMANA[dia.getDay()];
+  const esHoy = fecha === fechaLocal(new Date());
+  return (
+    <section className="card" role="status">
+      <h2>Fin de semana</h2>
+      <p className="muted" style={{ margin: '8px 0 14px' }}>
+        {esHoy
+          ? `Hoy es ${nombre} (${fechaCorta(fecha)}): no hay actividades programadas.`
+          : `El ${nombre} ${fechaCorta(fecha)} no hay actividades programadas.`}
+      </p>
+      <button className="btn" type="button" onClick={() => onVerViernes(fechaViernes)}>
+        Ver el viernes {fechaCorta(fechaViernes)}
+      </button>
+    </section>
+  );
 }
 
 function mostrarRango(datos) {
@@ -176,32 +227,6 @@ function senales(alumno, criterios) {
   return lista;
 }
 
-function AyudaPrioridad({ criterios }) {
-  if (!criterios) return null;
-  const p = criterios.pesos;
-  return (
-    <details className="card audit-ayuda">
-      <summary>¿Cómo se ordena esta lista?</summary>
-      <ul>
-        <li><b className="tag bad" style={{ display: 'inline' }}>Alta</b>{' '}
-          asistencia bajo {criterios.asistenciaMinima}% (mínimo para la promoción),
-          {' '}{criterios.rachaAlta} o más faltas seguidas sin justificar,
-          o {criterios.atrasosAlta} o más atrasos sin justificar.</li>
-        <li><b className="tag warn" style={{ display: 'inline' }}>Media</b>{' '}
-          asistencia bajo {criterios.asistenciaAlerta}%, {criterios.atrasosMedia} o más atrasos sin justificar,
-          o {criterios.recientesMedia} o más incidencias sin justificar en los últimos {criterios.diasRecientes} días.</li>
-        <li><b className="tag" style={{ display: 'inline' }}>Baja</b> tiene incidencias, pero no cumple lo anterior.</li>
-      </ul>
-      <p className="muted">
-        La asistencia solo se evalúa con {criterios.minDiasRegistrados} o más días registrados en el rango.
-        Dentro de cada nivel se ordena por gravedad: cada falta sin justificar suma {p.inasistencia},
-        cada atraso sin justificar {p.atraso}, cada falta de la racha más larga {p.racha}
-        y cada incidencia reciente {p.reciente}. Las faltas justificadas no suman.
-      </p>
-    </details>
-  );
-}
-
 function Prioridad({ datos, tipo, rutaRetorno }) {
   const [nivel, setNivelEstado] = useState(memoriaAuditar.nivel);
   const setNivel = (valor) => { memoriaAuditar.nivel = valor; setNivelEstado(valor); };
@@ -218,7 +243,9 @@ function Prioridad({ datos, tipo, rutaRetorno }) {
   const visibles = nivel === 'todos' ? datos.alumnos : datos.alumnos.filter((a) => a.nivel === nivel);
   return (
     <>
-      <AyudaPrioridad criterios={criterios} />
+      <p className="muted audit-nota">
+        Ordenados de mayor a menor prioridad según asistencia, faltas seguidas y atrasos sin justificar.
+      </p>
       <Segmented valor={nivel} onChange={setNivel} opciones={opciones} />
       {!visibles.length && <p className="muted">Ningún alumno en este nivel.</p>}
       <div className="list">
@@ -295,10 +322,10 @@ function Cursos({ datos }) {
 // ---- Alertas de patrones ----
 
 const TIPOS_ALERTA = [
-  { id: 'mismo_dia', label: 'Falta siempre el mismo día', ayuda: 'La mayoría de sus faltas caen en un mismo día de la semana.' },
-  { id: 'fin_de_semana', label: 'Alarga fines de semana', ayuda: 'Sus faltas se pegan a fines de semana, feriados o interferiados.' },
-  { id: 'licencias', label: 'Muchas licencias médicas', ayuda: 'Varias licencias médicas aprobadas en el período, o varias de un solo día.' },
-  { id: 'caida', label: 'Caída reciente de asistencia', ayuda: 'Su asistencia de las últimas semanas es mucho menor que antes.' },
+  { id: 'mismo_dia', label: 'Falta siempre el mismo día' },
+  { id: 'fin_de_semana', label: 'Alarga fines de semana' },
+  { id: 'licencias', label: 'Muchas licencias médicas' },
+  { id: 'caida', label: 'Caída reciente de asistencia' },
 ];
 
 const ESTADOS_ALERTA = {
@@ -403,7 +430,7 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
   );
 }
 
-function Alertas({ datos, rutaRetorno, periodo, onEsteMes, onRangoCompleto, onCambio }) {
+function Alertas({ datos, rutaRetorno, periodo, onUltimos30, onRangoCompleto, onCambio }) {
   const [filtro, setFiltroEstado] = useState(memoriaAuditar.filtroAlertas);
   const setFiltro = (valor) => { memoriaAuditar.filtroAlertas = valor; setFiltroEstado(valor); };
   if (!datos?.alertas) return <EmptyState texto="Sin datos en este rango." filas={3} />;
@@ -423,24 +450,13 @@ function Alertas({ datos, rutaRetorno, periodo, onEsteMes, onRangoCompleto, onCa
             Los patrones de calendario necesitan al menos {datos.minDiasRango} días de clase con datos
             (este período tiene {datos.diasConDatos}). Amplía el período para buscarlos.
           </p>
-          {periodo !== 'mes' ? (
-            <button className="btn" type="button" onClick={onEsteMes}>Ver este mes</button>
+          {periodo !== '30dias' && periodo !== '2meses' ? (
+            <button className="btn" type="button" onClick={onUltimos30}>Ver últimos 30 días</button>
           ) : onRangoCompleto && (
             <button className="btn" type="button" onClick={onRangoCompleto}>Usar todo el rango disponible</button>
           )}
         </div>
       )}
-      <details className="card audit-ayuda">
-        <summary>¿Qué detectan estas alertas?</summary>
-        <ul>
-          {TIPOS_ALERTA.map((t) => <li key={t.id}><b>{t.label}:</b> {t.ayuda}</li>)}
-        </ul>
-        <p className="muted">
-          Son señales para revisar, no confirman la causa. Al marcar una alerta como gestionada deja de
-          aparecer en "Nuevas", salvo que aparezcan casos nuevos después. La gestión se guarda aunque se
-          borren los datos al cerrar la app.
-        </p>
-      </details>
       <Segmented valor={filtro} onChange={setFiltro} opciones={opciones} />
       {!visibles.length && (
         <p className="muted">
@@ -472,8 +488,8 @@ function filtrosDesdeUrl(search) {
   if (![...p.keys()].length) return null;
   const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
   const tab = valido(TABS, p.get('tab'), 'prioridad');
-  // Desde el badge del menú (?tab=alertas sin período) se abre "Este mes"
-  const periodo = valido(PERIODOS, p.get('periodo'), tab === 'alertas' ? 'mes' : 'hoy');
+  // Desde el badge del menú (?tab=alertas sin período) se abre "Últimos 30 días"
+  const periodo = valido(periodosDe(tab), p.get('periodo'), tab === 'alertas' ? '30dias' : 'hoy');
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
   const rango = periodo === 'personalizado'
     ? { desde: fecha(p.get('desde')), hasta: fecha(p.get('hasta')) }
@@ -492,6 +508,7 @@ function filtrosDesdeUrl(search) {
 function filtrosRecordados() {
   const filtros = memoriaAuditar.filtros;
   if (!filtros) return null;
+  if (!periodosDe(filtros.tab).some((p) => p.id === filtros.periodo)) return null;
   // Los períodos relativos (hoy, semana, mes…) se recalculan por si cambió el día
   return filtros.periodo === 'personalizado'
     ? filtros
@@ -570,7 +587,7 @@ export default function Audit() {
     const pedida = new URLSearchParams(location.search).get('tab');
     if (pedida === 'alertas' && tab !== 'alertas') {
       setTab('alertas');
-      cambiarPeriodo('mes');
+      cambiarPeriodo('30dias');
     }
   }, [location.search]);
 
@@ -675,6 +692,23 @@ export default function Audit() {
     }
   };
 
+  // Cada pestaña tiene sus períodos: al cambiar se ajusta el período si no está disponible
+  const cambiarTab = (nuevoTab) => {
+    if (nuevoTab === tab) return;
+    const disponibles = periodosDe(nuevoTab).map((p) => p.id);
+    // Si el período no existe en la otra pestaña, se usa su primera opción
+    // (Alertas → "Últimos 30 días"; A quién citar / Comparar cursos → "Hoy")
+    if (!disponibles.includes(periodo)) cambiarPeriodo(disponibles[0]);
+    setTab(nuevoTab);
+  };
+
+  const verDia = (fecha) => {
+    setPeriodo('personalizado');
+    setDesde(fecha);
+    setHasta(fecha);
+    setUltimoDia(null);
+  };
+
   // Sin argumentos: sincronización normal (mes anterior + actual) y se vuelve a "Hoy".
   // Con `cuerpo` ({ desde, hasta, soloFaltantes }): descarga a pedido de meses antiguos;
   // se mantienen los filtros y solo se recalculan los resultados.
@@ -697,11 +731,7 @@ export default function Audit() {
         setRecarga((n) => n + 1);
         return;
       }
-      const hoy = fechaLocal(new Date());
-      setPeriodo('hoy');
-      setDesde(hoy);
-      setHasta(hoy);
-      setAvisoRango('');
+      cambiarPeriodo(tab === 'alertas' ? '30dias' : 'hoy');
     };
     try {
       if (!esPc) {
@@ -711,7 +741,7 @@ export default function Audit() {
       const credenciales = await getCredencialesPortal();
       if (!credenciales.guardadas && !credenciales.enMemoria) {
         if (esPc) {
-          navigate('/datos', {
+          navigate('/ajustes', {
             replace: false,
             state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: 'Configura las credenciales del portal para sincronizar.' },
           });
@@ -722,7 +752,7 @@ export default function Audit() {
       }
       if (credenciales.invalidas) {
         if (esPc) {
-          navigate('/datos', {
+          navigate('/ajustes', {
             replace: false,
             state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: 'Las credenciales guardadas están inválidas. Actualízalas para continuar.' },
           });
@@ -741,7 +771,7 @@ export default function Audit() {
       } else if (MENSAJES_PORTAL[e.code]) {
         setError(MENSAJES_PORTAL[e.code]);
         if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
-          navigate('/datos', {
+          navigate('/ajustes', {
             replace: false,
             state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
           });
@@ -756,6 +786,8 @@ export default function Audit() {
 
   const tieneDatos = Boolean(estadoDatos?.ultimaFechaAsistencia || estadoDatos?.ultimaFechaAtrasos);
   const ultimaTexto = haceCuanto(estadoDatos?.ultimaSincronizacionExitosa);
+  const rangoActual = rangoPeriodo(periodo, desde, hasta);
+  const finDeSemana = tab !== 'alertas' ? diaFinDeSemana(rangoActual.desde, rangoActual.hasta) : null;
 
   return (
     <>
@@ -775,7 +807,7 @@ export default function Audit() {
             </select>
           )}
           <select className="input" value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} aria-label="Período">
-            {PERIODOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+            {periodosDe(tab).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
           </select>
         </div>
         {periodo === 'personalizado' && (
@@ -786,19 +818,14 @@ export default function Audit() {
         )}
       </section>
 
-      <Segmented valor={tab} onChange={setTab} opciones={TABS} />
+      <Segmented valor={tab} onChange={cambiarTab} opciones={TABS} />
 
       {ultimaTexto && <p className="muted audit-last-sync">Última sincronización: {ultimaTexto}</p>}
       {avisoRango && <p className="msg" role="status">{avisoRango}</p>}
-      {ultimoDia && periodo === 'hoy' && (
+      {ultimoDia && periodo === 'hoy' && !finDeSemana && (
         <div className="msg aviso" role="status">
           <p>Hoy ({fechaCorta(fechaLocal(new Date()))}) no hay registros sincronizados.</p>
-          <button className="btn" type="button" onClick={() => {
-            setPeriodo('personalizado');
-            setDesde(ultimoDia);
-            setHasta(ultimoDia);
-            setUltimoDia(null);
-          }}>
+          <button className="btn" type="button" onClick={() => verDia(ultimoDia)}>
             Ver el {fechaCorta(ultimoDia)}, último día sincronizado
           </button>
         </div>
@@ -815,6 +842,8 @@ export default function Audit() {
             {sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}
           </button>
         </section>
+      ) : finDeSemana ? (
+        <FinDeSemana fecha={finDeSemana} onVerViernes={verDia} />
       ) : cargando ? (
         <EmptyState texto="Calculando señales…" filas={4} />
       ) : (
@@ -825,7 +854,7 @@ export default function Audit() {
             <EmptyState texto="Calculando señales…" filas={4} />
           ) : tab === 'alertas' ? (
             <Alertas datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
-              periodo={periodo} onEsteMes={() => cambiarPeriodo('mes')}
+              periodo={periodo} onUltimos30={() => cambiarPeriodo('30dias')}
               onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? () => usarRangoCompleto() : null} />
           ) : (
             <>

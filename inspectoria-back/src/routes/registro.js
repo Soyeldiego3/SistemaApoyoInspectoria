@@ -1,8 +1,8 @@
-// Importar / exportar el "Master de registro inasistencia justificadas" (Excel por curso)
+// Importar el "Master de registro inasistencia justificadas" (Excel por curso)
 const express = require('express');
 const db = require('../db/conexion');
 const { abrirDb, transaccion } = require('../services/asistencia');
-const { ErrorRegistro, exportarMaster, importarMaster } = require('../services/registroMaster');
+const { ErrorRegistro, importarMaster } = require('../services/registroMaster');
 
 const router = express.Router();
 let dbWritable;
@@ -34,32 +34,17 @@ router.get('/rango', (req, res) => {
   }
 });
 
-router.get('/exportar', async (req, res) => {
-  const { curso } = req.query;
-  if (!cursoValido(curso)) return res.status(400).json({ error: 'Elige un curso para exportar.' });
-  try {
-    const { buffer, nombreArchivo, advertencias } = await exportarMaster(db, curso.trim());
-    const ascii = nombreArchivo.normalize('NFD').replace(/[^\x20-\x7E]/g, '').replace(/"/g, '');
-    res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nombreArchivo)}`,
-      'Access-Control-Expose-Headers': 'Content-Disposition, X-Advertencias',
-    });
-    if (advertencias.length) res.set('X-Advertencias', encodeURIComponent(JSON.stringify(advertencias)));
-    res.send(buffer);
-  } catch (error) {
-    responderError(res, error, 'Error al exportar el registro');
-  }
-});
+// La exportación está en routes/exportar.js (asistencia, atrasos y Master)
 
+// ?curso= es opcional: sin él, el curso se detecta desde el archivo (MASTER!B2)
 router.post('/importar', express.raw({ type: 'application/octet-stream', limit: '10mb' }), (req, res) => {
   const { curso } = req.query;
-  if (!cursoValido(curso)) return res.status(400).json({ error: 'Elige el curso del archivo a importar.' });
+  if (curso != null && !cursoValido(curso)) return res.status(400).json({ error: 'Curso no válido.' });
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error: 'No se recibió ningún archivo.' });
   }
   try {
-    const resumen = importarMaster(obtenerDbWritable(), curso.trim(), req.body, { transaccion });
+    const resumen = importarMaster(obtenerDbWritable(), curso ? curso.trim() : null, req.body, { transaccion });
     res.json(resumen);
   } catch (error) {
     responderError(res, error, 'Error al importar el registro');

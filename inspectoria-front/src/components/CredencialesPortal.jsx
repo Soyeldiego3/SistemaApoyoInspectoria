@@ -11,7 +11,8 @@ const TIMEOUT_MS = 45000;
 const VACIAS = { usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false };
 
 // Tarjeta de Ajustes: estado de las credenciales del portal y acciones Modificar / Probar / Olvidar.
-export default function CredencialesPortal() {
+// `version` cambia cuando otra tarjeta (Extracción automática) modifica las credenciales.
+export default function CredencialesPortal({ version = 0 }) {
   const [estadoPortal, setEstadoPortal] = useState('cargando'); // cargando | vacio | ok | invalidas | error
   const [portal, setPortal] = useState(null);
   const [modal, setModal] = useState(null); // null | 'guardar' | 'probar'
@@ -36,13 +37,14 @@ export default function CredencialesPortal() {
     }
   };
 
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    controllerRef.current?.abort();
+  }, []);
+
   useEffect(() => {
     cargarEstadoPortal();
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      controllerRef.current?.abort();
-    };
-  }, []);
+  }, [version]);
 
   const limpiarTimeout = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);

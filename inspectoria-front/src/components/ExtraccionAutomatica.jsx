@@ -1,21 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CalendarRange, RefreshCw } from 'lucide-react';
 import {
   getCredencialesPortal,
+  getRangoDatos,
   guardarCredencialesPortal,
   iniciarSync,
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
-import GridLoader from '../components/GridLoader.jsx';
-import CredencialesSheet, { MENSAJES_PORTAL } from '../components/CredencialesSheet.jsx';
-import RegistroMaster from '../components/RegistroMaster.jsx';
+import { fechaCorta } from '../fechas.js';
+import GridLoader from './GridLoader.jsx';
+import CredencialesSheet, { MENSAJES_PORTAL } from './CredencialesSheet.jsx';
 
-// RF-01: obtener asistencia por extracción automática (Playwright) e importar/exportar el Master de registro
-export default function Sync() {
+// RF-01: obtener asistencia por extracción automática (Playwright). Tarjeta de Ajustes.
+// Otras pantallas llegan a Ajustes con state { abrirCredenciales, accionModal, mensaje }
+// para abrir aquí el modal de credenciales.
+export default function ExtraccionAutomatica({ onSincronizado }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const tarjetaRef = useRef(null);
+  const [rango, setRango] = useState(null);
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [estado, setEstado] = useState('inactivo'); // inactivo | cargando | ok | error
   const [mensaje, setMensaje] = useState('');
@@ -56,6 +61,13 @@ export default function Sync() {
   }, [esPc]);
 
   useEffect(() => {
+    getRangoDatos().then(setRango).catch(() => setRango(null));
+  }, [versionDatos]);
+
+  useEffect(() => {
+    if (location.state?.abrirCredenciales || location.state?.mensaje) {
+      tarjetaRef.current?.scrollIntoView({ block: 'center' });
+    }
     if (location.state?.abrirCredenciales) {
       setMostrarCredenciales(true);
       if (location.state.accionModal) setAccionModal(location.state.accionModal);
@@ -128,6 +140,7 @@ export default function Sync() {
       setVersionDatos((v) => v + 1);
       setMostrarCredenciales(false);
       if (datos?.recordar) setGuardadas(true);
+      onSincronizado?.();
     } catch (e) {
       if (controllerRef.current?.signal.aborted) {
         setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -207,6 +220,7 @@ export default function Sync() {
         setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
+        onSincronizado?.();
       } catch (error) {
         if (controllerRef.current?.signal.aborted) {
           setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -238,6 +252,7 @@ export default function Sync() {
         setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
+        onSincronizado?.();
       } catch (error) {
         if (controllerRef.current?.signal.aborted) {
           setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -284,50 +299,59 @@ export default function Sync() {
       setCredenciales({ usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false });
       setMensaje('Credenciales olvidadas en este equipo.');
       setEstado('ok');
+      onSincronizado?.();
     } catch (e) {
       mostrarError(e);
     }
   };
 
+  const sincronizandoFuera = estado === 'cargando' && !mostrarCredenciales;
+  // Si los datos no parten en marzo, faltan meses del año escolar (p. ej. para el Master)
+  const hoy = new Date();
+  const faltanMeses = rango?.desde && Number(rango.desde.slice(5, 7)) > 3 && hoy.getMonth() > 2;
+
   return (
     <>
-      <section className="card sync-card">
-          <h2>Extracción automática</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes anterior y el actual.</p>
+      <section className="card sync-card" ref={tarjetaRef}>
+        <h2>Extracción automática</h2>
+        <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes anterior y el actual.</p>
 
-          <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={() => extraer('mes')} disabled={estado === 'cargando'}>
-            {estado === 'cargando' && !mostrarCredenciales
-              ? <GridLoader pequeno />
-              : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
-            {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
-          </button>
-          {estado === 'cargando' && !mostrarCredenciales && (
-            <p className="muted" role="status" style={{ marginTop: 10 }}>
-              {periodoRef.current === 'anio'
-                ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
-                : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}
-            </p>
-          )}
-          {esPc && (
-            <Link to="/ajustes" className="muted sync-ajustes">
-              Configurar credenciales en Ajustes
-            </Link>
-          )}
-      </section>
+        <button className={sincronizandoFuera ? 'btn sincronizando' : 'btn'} onClick={() => extraer('mes')} disabled={estado === 'cargando'}>
+          {sincronizandoFuera
+            ? <GridLoader pequeno />
+            : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
+          {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
+        </button>
+        {sincronizandoFuera && (
+          <p className="muted" role="status" style={{ marginTop: 10 }}>
+            {periodoRef.current === 'anio'
+              ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
+              : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}
+          </p>
+        )}
 
-      <RegistroMaster version={versionDatos} sincronizando={estado === 'cargando'}
-        onSincronizarAnio={() => {
+        <p className="muted sync-rango">
+          <CalendarRange size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+          {rango?.desde
+            ? `Datos cargados: ${fechaCorta(rango.desde)} a ${fechaCorta(rango.hasta)} (${rango.dias} días).`
+            : 'Aún no hay asistencia cargada.'}
+          {faltanMeses && ' Faltan meses del año escolar.'}
+        </p>
+        <button type="button" className="linkbtn" disabled={estado === 'cargando'} onClick={() => {
           if (window.confirm('Se descargará la asistencia de marzo a hoy de todos los cursos. Puede tardar varios minutos. ¿Continuar?')) {
             extraer('anio');
           }
-        }} />
+        }}>
+          Sincronizar año escolar (marzo a hoy)
+        </button>
 
-      {estado === 'ok' && <p className="msg" role="status">{mensaje || 'Asistencia actualizada.'}</p>}
-      {estado === 'error' && (
-        <p className="msg" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }} role="alert">
-          {mensaje}
-        </p>
-      )}
+        {estado === 'ok' && <p className="msg" role="status" style={{ marginTop: 12 }}>{mensaje || 'Asistencia actualizada.'}</p>}
+        {estado === 'error' && mensaje && (
+          <p className="msg" style={{ color: 'var(--bad)', background: 'var(--bad-soft)', marginTop: 12 }} role="alert">
+            {mensaje}
+          </p>
+        )}
+      </section>
 
       {mostrarCredenciales && (
         <CredencialesSheet

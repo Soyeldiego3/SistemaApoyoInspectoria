@@ -7,6 +7,7 @@ import { MODOS, PALETAS, TAMANOS, useTema } from '../tema.jsx';
 import Segmented from '../components/Segmented.jsx';
 import Chips from '../components/Chips.jsx';
 import CredencialesPortal from '../components/CredencialesPortal.jsx';
+import ExtraccionAutomatica from '../components/ExtraccionAutomatica.jsx';
 
 // Opciones del selector de paleta, con una muestra de color antes del nombre
 const OPCIONES_PALETA = PALETAS.map((p) => ({
@@ -23,6 +24,8 @@ export default function Settings() {
   const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
+  // Sube tras sincronizar o cambiar credenciales, para refrescar la tarjeta de credenciales
+  const [versionPortal, setVersionPortal] = useState(0);
 
   // Acceso en red (conexión desde el teléfono)
   const [red, setRed] = useState(null);
@@ -94,18 +97,9 @@ export default function Settings() {
     <div className="dash">
       <h2>Ajustes</h2>
 
-      <section className="card">
-        <h2>Apariencia</h2>
-        <p className="muted">Se guarda solo en este dispositivo.</p>
-        <p className="muted" style={{ margin: '14px 0 8px' }}>Modo</p>
-        <Segmented opciones={MODOS} valor={modo} onChange={cambiarModo} />
-        <p className="muted" style={{ margin: '14px 0 8px' }}>Paleta de colores</p>
-        <Chips opciones={OPCIONES_PALETA} valor={paleta} onChange={cambiarPaleta} />
-        <p className="muted" style={{ margin: '14px 0 8px' }}>Tamaño del texto</p>
-        <Segmented opciones={TAMANOS} valor={texto} onChange={cambiarTexto} />
-      </section>
+      <ExtraccionAutomatica onSincronizado={() => setVersionPortal((v) => v + 1)} />
 
-      {esPc && <CredencialesPortal />}
+      {esPc && <CredencialesPortal version={versionPortal} />}
 
       {esPc && (
         <section className="card">
@@ -137,6 +131,17 @@ export default function Settings() {
           )}
         </section>
       )}
+
+      <section className="card">
+        <h2>Apariencia</h2>
+        <p className="muted">Se guarda solo en este dispositivo.</p>
+        <p className="muted" style={{ margin: '14px 0 8px' }}>Modo</p>
+        <Segmented opciones={MODOS} valor={modo} onChange={cambiarModo} />
+        <p className="muted" style={{ margin: '14px 0 8px' }}>Paleta de colores</p>
+        <Chips opciones={OPCIONES_PALETA} valor={paleta} onChange={cambiarPaleta} />
+        <p className="muted" style={{ margin: '14px 0 8px' }}>Tamaño del texto</p>
+        <Segmented opciones={TAMANOS} valor={texto} onChange={cambiarTexto} />
+      </section>
 
       {esAdmin && esPc && (
         <section className="card">

@@ -134,15 +134,17 @@ export function crearJustificativo(rut, datos) {
   });
 }
 
-// ---------- Master de registro de inasistencias (Excel por curso) ----------
+// ---------- Exportar / importar (ventana "Exportar / Importar") ----------
 export function getRangoDatos() {
   return request('/registro/rango');
 }
 
-// Devuelve { blob, nombre, advertencias } para descargar el Excel del curso
-export async function exportarRegistro(curso) {
+// { documento: 'asistencia'|'atrasos'|'master', curso?, formato: 'excel'|'pdf', desde?, hasta? }
+// Devuelve { blob, nombre, advertencias } para descargar el archivo
+export async function exportarDocumento(params) {
   const token = getToken();
-  const response = await fetch(`${API_URL}${API_BASE}/registro/exportar?${new URLSearchParams({ curso })}`, {
+  const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
+  const response = await fetch(`${API_URL}${API_BASE}/exportar?${query}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -152,14 +154,16 @@ export async function exportarRegistro(curso) {
   const disposicion = response.headers.get('content-disposition') || '';
   const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposicion);
   const simple = /filename="([^"]+)"/i.exec(disposicion);
-  const nombre = utf8 ? decodeURIComponent(utf8[1]) : simple?.[1] || 'Master de registro.xlsx';
+  const nombre = utf8 ? decodeURIComponent(utf8[1]) : simple?.[1] || 'Exportación';
   let advertencias = [];
   try { advertencias = JSON.parse(decodeURIComponent(response.headers.get('x-advertencias') || '[]')); } catch { /* sin avisos */ }
   return { blob: await response.blob(), nombre, advertencias };
 }
 
-export function importarRegistro(curso, archivo) {
-  return request(`/registro/importar?${new URLSearchParams({ curso })}`, {
+// Importa un Master de registro. Sin curso, el backend lo detecta desde el archivo.
+export function importarRegistro(archivo, curso) {
+  const query = curso ? `?${new URLSearchParams({ curso })}` : '';
+  return request(`/registro/importar${query}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: archivo,

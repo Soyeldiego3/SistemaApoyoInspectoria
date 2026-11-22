@@ -128,7 +128,7 @@ export default function Charts() {
       {sinDatos ? (
         <section className="card" role="status">
           <h2>No hay datos para este período</h2>
-          <p className="muted" style={{ marginTop: 8 }}>Prueba otro período o sincroniza desde Datos.</p>
+          <p className="muted" style={{ marginTop: 8 }}>Prueba otro período o sincroniza desde Ajustes.</p>
         </section>
       ) : (
         <div className="charts">

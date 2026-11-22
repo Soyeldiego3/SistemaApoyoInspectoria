@@ -246,21 +246,26 @@ a { color: inherit; text-decoration: none; }
 .audit-last-sync { text-align: right; }
 @media (min-width: 900px) { .filterbar { grid-template-columns: 1fr 220px; align-items: center; } }
 
-/* Datos → link a Ajustes: debajo del botón en el teléfono, al lado (con espacio) en escritorio */
-.sync-ajustes { display: inline-block; margin-top: 10px; font-size: .85rem; }
-
-/* Datos → Registro de inasistencias justificadas (Master Excel) */
-.registro-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.registro-fila select { grid-column: 1 / -1; }
-.registro-fila .btn { padding: 12px 10px; }
-.registro-rango { margin-top: 12px; }
-.registro details ul { margin: 6px 0 0 18px; font-size: .85rem; }
+/* Ajustes → Extracción automática */
+.sync-rango { margin: 14px 0 2px; font-size: .85rem; }
 @media (min-width: 900px) {
   .sync-card .btn { width: auto; min-width: 240px; padding-inline: 28px; vertical-align: middle; }
-  .sync-ajustes { margin: 0 0 0 18px; vertical-align: middle; }
-  .registro-fila { grid-template-columns: 220px auto auto; justify-content: start; }
-  .registro-fila select { grid-column: auto; }
-  .registro-fila .btn { width: auto; padding-inline: 22px; }
+}
+
+/* Ventana Exportar / Importar (Inicio y Alumnos) */
+.exportar-modo { display: flex; justify-content: space-between; gap: 12px; padding: 4px 2px; }
+.exportar-modo label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.exportar-modo input { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+.exportar-modo .exportar { color: var(--ok); } .exportar-modo .exportar input { accent-color: var(--ok); }
+.exportar-modo .importar { color: var(--bad); } .exportar-modo .importar input { accent-color: var(--bad); }
+.exportar-nota { font-size: .85rem; }
+.exportar-archivos { margin: 0 0 0 18px; font-size: .9rem; display: grid; gap: 4px; }
+.exportar-resultado details ul { margin: 6px 0 0 18px; font-size: .85rem; }
+.alumnos-exportar { width: auto; padding: 10px 16px; font-size: .9rem; }
+.inicio-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+@media (max-width: 599px) {
+  .inicio-fila { flex-direction: column; align-items: stretch; }
+  .inicio-acciones > * { flex: 1; text-align: center; }
 }
 
 /* Interruptor "Solo 3 o más" (solo escritorio; en el teléfono lo cubre el desplegable) */
@@ -316,9 +321,7 @@ a { color: inherit; text-decoration: none; }
 .audit-razones { display: block; margin-top: 6px; font-size: .8rem; }
 .audit-nivel { flex-direction: column; align-items: flex-end; }
 .kpis .card .detalle { margin-top: 8px; font-size: .8rem; }
-.audit-ayuda summary { cursor: pointer; font-weight: 600; }
-.audit-ayuda ul { margin: 10px 0 0 18px; display: grid; gap: 6px; font-size: .88rem; }
-.audit-ayuda p { margin-top: 10px; }
+.audit-nota { font-size: .85rem; }
 
 /* Badge de alertas nuevas sobre "Auditar" */
 .nav-icono { position: relative; display: inline-grid; place-items: center; }
