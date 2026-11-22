@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowDownUp, CalendarX, Clock, RefreshCw, Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
 import ExportarImportarSheet from '../components/ExportarImportarSheet.jsx';
+import RangoSlider from '../components/RangoSlider.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
 
@@ -17,34 +18,41 @@ const MENSAJES_PORTAL = {
 // { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
 //   atrasos    = atrasos acumulados sin justificar
 //   pendientes = inasistencias sin justificar
-// Filtro = estado base + sufijo '3' cuando está activo "Solo 3 o más" (ej. 'atrasos3')
+// Filtro = estado (chips). Con inasistencias o atrasos se elige además un rango de cantidad
+// con el slider (ej. de 3 a 20). En la URL: ?filtro=atrasos&min=3&max=20
 const CHIPS = [
   { id: 'todos', label: 'Todos' },
   { id: 'inasist', label: 'Inasistencias pendientes' },
   { id: 'atrasos', label: 'Atrasos pendientes' },
   { id: 'ok', label: 'Al día' },
 ];
-// En el teléfono no hay interruptor: el desplegable lista todas las combinaciones
-const OPCIONES_SELECT = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'inasist', label: 'Inasistencias pendientes' },
-  { id: 'inasist3', label: '3+ inasistencias' },
-  { id: 'atrasos', label: 'Atrasos pendientes' },
-  { id: 'atrasos3', label: '3+ atrasos (reincidentes)' },
-  { id: 'ok', label: 'Al día' },
-];
-const CON_MINIMO = ['inasist', 'atrasos'];
-// 'reinc' era el filtro antiguo de reincidentes (links y sessionStorage guardados)
-const filtroValido = (f) => {
-  if (f === 'reinc') return 'atrasos3';
-  return OPCIONES_SELECT.some((o) => o.id === f) ? f : null;
-};
+const CON_RANGO = ['inasist', 'atrasos'];
+const CAMPO_RANGO = { inasist: 'pendientes', atrasos: 'atrasos' };
+const RANGO_INICIAL = { desde: 1, hasta: null }; // hasta null = hasta el máximo registrado
+
+// Filtros antiguos: 'reinc' (reincidentes) y el sufijo '3' de "Solo 3 o más" (ej. 'atrasos3')
+function leerFiltro(f) {
+  if (f === 'reinc') return { filtro: 'atrasos', desde: 3 };
+  const base = (f || '').replace(/3$/, '');
+  if (!CHIPS.some((o) => o.id === base)) return null;
+  return { filtro: base, desde: f.endsWith('3') ? 3 : 1 };
+}
+const entero = (v) => (/^\d+$/.test(v || '') ? Number(v) : null);
 // Con un filtro de inasistencias o atrasos, la ficha se abre directo en esa pestaña
 const VISTA_POR_FILTRO = { inasist: 'inasistencias', atrasos: 'atrasos' };
 
 const CURSO_STORAGE_KEY = 'inspectoria.alumnos.curso';
 const FILTRO_STORAGE_KEY = 'inspectoria.alumnos.filtro';
 const BUSQUEDA_STORAGE_KEY = 'inspectoria.alumnos.busqueda';
+const RANGO_STORAGE_KEY = 'inspectoria.alumnos.rango';
+
+function rangoGuardado() {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(RANGO_STORAGE_KEY) || 'null');
+    if (r && Number.isInteger(r.desde) && (r.hasta === null || Number.isInteger(r.hasta))) return r;
+  } catch { /* sin almacenamiento */ }
+  return null;
+}
 
 // Ignora tildes, mayúsculas, puntos y guion del RUT
 const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toLowerCase();
@@ -63,11 +71,24 @@ export default function Students() {
   useEffect(() => {
     try { sessionStorage.setItem(BUSQUEDA_STORAGE_KEY, q); } catch { /* sin almacenamiento */ }
   }, [q]);
-  const [filtro, setFiltro] = useState(() => (
-    urlConFiltros
-      ? filtroValido(parametros.get('filtro')) || 'todos'
-      : filtroValido(sessionStorage.getItem(FILTRO_STORAGE_KEY)) || 'todos'
-  ));
+  const [inicial] = useState(() => {
+    if (urlConFiltros) {
+      const leido = leerFiltro(parametros.get('filtro')) || { filtro: 'todos', desde: 1 };
+      return {
+        filtro: leido.filtro,
+        rango: { desde: entero(parametros.get('min')) || leido.desde, hasta: entero(parametros.get('max')) },
+      };
+    }
+    const leido = leerFiltro(sessionStorage.getItem(FILTRO_STORAGE_KEY)) || { filtro: 'todos', desde: 1 };
+    return { filtro: leido.filtro, rango: rangoGuardado() || { ...RANGO_INICIAL, desde: leido.desde } };
+  });
+  const [filtro, setFiltroEstado] = useState(inicial.filtro);
+  const [rango, setRango] = useState(inicial.rango);
+  // Al cambiar de estado el rango vuelve a "1 hasta el máximo"
+  const setFiltro = (nuevo) => {
+    setFiltroEstado(nuevo);
+    if (nuevo !== filtro) setRango(RANGO_INICIAL);
+  };
   const [curso, setCurso] = useState(() => (
     urlConFiltros
       ? parametros.get('curso') || ''
@@ -158,38 +179,55 @@ export default function Students() {
   }, [curso]);
 
   useEffect(() => {
-    if (filtro !== 'todos') sessionStorage.setItem(FILTRO_STORAGE_KEY, filtro);
-    else sessionStorage.removeItem(FILTRO_STORAGE_KEY);
-  }, [filtro]);
+    try {
+      if (filtro !== 'todos') sessionStorage.setItem(FILTRO_STORAGE_KEY, filtro);
+      else sessionStorage.removeItem(FILTRO_STORAGE_KEY);
+      sessionStorage.setItem(RANGO_STORAGE_KEY, JSON.stringify(rango));
+    } catch { /* sin almacenamiento */ }
+  }, [filtro, rango]);
+
+  const base = filtro;
+  const conRango = CON_RANGO.includes(base);
+  // Límite del slider: la mayor cantidad registrada en el curso elegido (mínimo 1)
+  const maximo = useMemo(() => {
+    if (!conRango) return 1;
+    const campo = CAMPO_RANGO[base];
+    return Math.max(1, ...alumnos.filter((a) => !curso || a.curso === curso).map((a) => a[campo] || 0));
+  }, [alumnos, base, conRango, curso]);
+  const desde = Math.min(Math.max(rango.desde, 1), maximo);
+  const hasta = rango.hasta == null ? maximo : Math.min(Math.max(rango.hasta, desde), maximo);
+  const rangoCambiado = conRango && (desde > 1 || hasta < maximo);
+  // Si se deja la manija en el máximo, sigue al máximo aunque cambien los datos o el curso
+  const cambiarRango = (r) => setRango({ desde: r.desde, hasta: r.hasta >= maximo ? null : r.hasta });
 
   const rutaRetorno = useMemo(() => {
     const retorno = new URLSearchParams();
     if (curso) retorno.set('curso', curso);
     if (filtro !== 'todos') retorno.set('filtro', filtro);
+    if (conRango && rango.desde > 1) retorno.set('min', rango.desde);
+    if (conRango && rango.hasta != null) retorno.set('max', rango.hasta);
     return retorno.toString() ? `/alumnos?${retorno}` : '/alumnos';
-  }, [curso, filtro]);
-
-  const base = filtro.replace(/3$/, '');
-  const minimo = filtro.endsWith('3') ? 3 : 1;
+  }, [curso, filtro, conRango, rango]);
 
   // Se recalcula en cada tecla; no necesita ir al back
   const lista = useMemo(() => {
     const t = limpiar(q.trim());
+    const enRango = (n) => n >= desde && n <= hasta;
     return alumnos.filter((a) =>
       (!t || limpiar(`${a.rut} ${a.nombres} ${a.apellidos} ${a.curso}`).includes(t)) &&
       (!curso || a.curso === curso) &&
       (base === 'todos' ||
-        (base === 'inasist' && a.pendientes >= minimo) ||
-        (base === 'atrasos' && a.atrasos >= minimo) ||
+        (base === 'inasist' && enRango(a.pendientes)) ||
+        (base === 'atrasos' && enRango(a.atrasos)) ||
         (base === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
-  }, [alumnos, q, base, minimo, curso]);
+  }, [alumnos, q, base, desde, hasta, curso]);
 
   // Con un filtro activo, cada tarjeta muestra solo el dato de ese filtro
   const verInasist = base === 'todos' || base === 'inasist';
   const verAtrasos = base === 'todos' || base === 'atrasos';
 
-  const hayFiltros = q || curso || filtro !== 'todos';
-  const limpiarTodo = () => { setQ(''); setCurso(''); setFiltro('todos'); };
+  const hayFiltros = q || curso || filtro !== 'todos' || rangoCambiado;
+  const limpiarTodo = () => { setQ(''); setCurso(''); setFiltro('todos'); setRango(RANGO_INICIAL); };
 
   return (
     <>
@@ -213,7 +251,7 @@ export default function Students() {
       <div className="filterbar con-select">
         <Chips opciones={CHIPS} valor={base} onChange={setFiltro} />
         <select className="input filtro-select" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar por estado">
-          {OPCIONES_SELECT.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          {CHIPS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
         </select>
         <select className="input curso" value={curso} onChange={(e) => setCurso(e.target.value)} disabled={!cursos.length} aria-label="Filtrar por curso">
           <option value="">Todos los cursos</option>
@@ -221,17 +259,14 @@ export default function Students() {
         </select>
       </div>
 
+      {conRango && alumnos.length > 0 && (
+        <RangoSlider min={1} max={maximo} desde={desde} hasta={hasta} onChange={cambiarRango}
+          etiqueta={base === 'inasist' ? 'Cantidad de inasistencias' : 'Cantidad de atrasos'}
+          unidad={base === 'inasist' ? (hasta === 1 ? 'inasistencia' : 'inasistencias') : (hasta === 1 ? 'atraso' : 'atrasos')} />
+      )}
+
       <div className="row muted">
-        <span className="row" style={{ gap: 16 }}>
-          {lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}
-          {CON_MINIMO.includes(base) && (
-            <label className="switch solo-pc">
-              <input type="checkbox" checked={minimo === 3}
-                onChange={(e) => setFiltro(e.target.checked ? `${base}3` : base)} />
-              Solo 3 o más
-            </label>
-          )}
-        </span>
+        <span>{lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}</span>
         {hayFiltros &&<button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
       </div>
 

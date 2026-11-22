@@ -2,8 +2,6 @@
 
 ## Pendiente
 
-- eliminar hoy, ayer, semana de pestaña auditoria
-
 - Comprobar que datos locales se puedan exportar o realizar copias de seguridad para evitar perdida de trabajo
 
 - Imporatar y exportar notas de alertas en auditoria
@@ -13,6 +11,14 @@
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
 
 - Pasar el inicio de sesion en la url hacia el telefono.
+
+- aparte de mostrat top 5 atrasos. mostrar top 5 de inasistencias. 
+
+- grafico de top curso, etc. 
+
+- busqueda por nombre, rut, etc. de alumnos en auditoria.
+
+- agregar boton de auditar dentro de los detalles del alumno.
 
 ## En progreso
 
@@ -65,3 +71,5 @@
 - En auditoria enfocarse en la idea de poder detectar patrones de inasistencia y jusitificaciones. ej: alumno falta siempre el mismo dia, alumno falta mucho, razon multiples certificados medicos. asi poder iniciar alertas en casos especificos y hacer llamados de atención. 
 
 - Seccion de Graficos (barras, torta, etc.)
+
+- eliminar hoy, ayer, semana de pestaña auditoria

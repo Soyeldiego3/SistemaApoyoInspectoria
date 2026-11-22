@@ -97,10 +97,6 @@ export default function Settings() {
     <div className="dash">
       <h2>Ajustes</h2>
 
-      <ExtraccionAutomatica onSincronizado={() => setVersionPortal((v) => v + 1)} />
-
-      {esPc && <CredencialesPortal version={versionPortal} />}
-
       {esPc && (
         <section className="card">
           <div className="row">
@@ -130,7 +126,11 @@ export default function Settings() {
             <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
           )}
         </section>
-      )}
+      )}      
+
+      <ExtraccionAutomatica onSincronizado={() => setVersionPortal((v) => v + 1)} />
+
+      {esPc && <CredencialesPortal version={versionPortal} />}
 
       <section className="card">
         <h2>Apariencia</h2>

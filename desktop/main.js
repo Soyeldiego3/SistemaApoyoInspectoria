@@ -75,7 +75,7 @@ function waitForBackend(retries = 40) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
-    height: 800,
+    height: 1000,
     backgroundColor: '#1c1c1e', // evita el destello blanco al abrir
     icon: path.join(__dirname, 'assets', 'icons', 'icon.png'),
     webPreferences: {
