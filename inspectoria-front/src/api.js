@@ -88,6 +88,12 @@ export function getGraficos({ curso, desde, hasta } = {}) {
   return request(`/graficos${p.toString() ? `?${p}` : ''}`);
 }
 
+export function getInasistenciasDia({ fecha, curso }) {
+  const p = new URLSearchParams({ fecha });
+  if (curso) p.set('curso', curso);
+  return request(`/graficos/dia?${p}`);
+}
+
 export function getCursos() {
   return request('/cursos');
 }

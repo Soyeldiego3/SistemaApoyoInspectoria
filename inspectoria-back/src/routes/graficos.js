@@ -77,9 +77,15 @@ router.get('/', (req, res) => {
     const inasistencias = obtenerIncidentes(db, { ...rangoAsistencia, curso: filtroCurso, tipo: 'inasistencias' });
     const atrasos = obtenerIncidentes(db, { ...rangoAtrasos, curso: filtroCurso, tipo: 'atrasos' });
 
-    // obtenerIncidentes ya viene ordenado por fecha; "2026-11-03" -> "03-11"
-    const inasistenciasPorDia = [...contarPor(inasistencias, (i) => i.fecha).entries()]
-      .map(([fecha, total]) => ({ dia: `${fecha.slice(8, 10)}-${fecha.slice(5, 7)}`, inasistencias: total }));
+    // Todos los días con registro de asistencia (aunque tengan 0 inasistencias), ordenados por fecha.
+    // Así el calendario distingue "0 inasistencias" de "sin datos ese día". "2026-11-03" -> "03-11"
+    const porFecha = contarPor(inasistencias, (i) => i.fecha);
+    const fechasConRegistro = [...new Set(registros.map((r) => r.fecha))].sort();
+    const inasistenciasPorDia = fechasConRegistro.map((fecha) => ({
+      fecha,
+      dia: `${fecha.slice(8, 10)}-${fecha.slice(5, 7)}`,
+      inasistencias: porFecha.get(fecha) || 0,
+    }));
 
     const atrasosPorCurso = [...contarPor(atrasos, (a) => a.curso).entries()]
       .map(([nombre, total]) => ({ curso: nombre, atrasos: total }))
@@ -118,6 +124,33 @@ router.get('/', (req, res) => {
   } catch (error) {
     console.error('Error al consultar datos de gráficos:', error.message);
     res.status(500).json({ error: 'No se pudieron cargar los gráficos.' });
+  }
+});
+
+// Alumnos con inasistencia en un día (panel que se abre al hacer clic en el calendario)
+router.get('/dia', (req, res) => {
+  const { fecha, curso } = req.query;
+  if (!FECHA_OK.test(String(fecha))) {
+    return res.status(400).json({ error: 'La fecha indicada no es válida.' });
+  }
+  if (curso !== undefined && (typeof curso !== 'string' || curso.length > 50)) {
+    return res.status(400).json({ error: 'El curso indicado no es válido.' });
+  }
+
+  try {
+    const alumnos = obtenerIncidentes(db, { desde: fecha, hasta: fecha, curso: curso || undefined, tipo: 'inasistencias' })
+      .map((i) => ({
+        rut: i.rut,
+        nombres: i.nombres,
+        apellidos: i.apellidos,
+        curso: i.curso,
+        justificado: Boolean(i.justificado),
+      }))
+      .sort((a, b) => ordenCurso(a, b) || a.apellidos.localeCompare(b.apellidos));
+    res.json({ fecha, alumnos });
+  } catch (error) {
+    console.error('Error al consultar inasistencias del día:', error.message);
+    res.status(500).json({ error: 'No se pudieron cargar las inasistencias del día.' });
   }
 });
 
