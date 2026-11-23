@@ -8,6 +8,7 @@ import InasistenciasDiaSheet from '../components/InasistenciasDiaSheet.jsx';
 import Segmented from '../components/Segmented.jsx';
 import { getCursos, getGraficos } from '../api.js';
 import { useTema } from '../tema.jsx';
+import { fechaLocal } from '../fechas.js';
 
 const CURSO_STORAGE_KEY = 'inspectoria.graficos.curso';
 const ESCALA_STORAGE_KEY = 'inspectoria.graficos.escala';
@@ -23,13 +24,6 @@ const leerSesion = (clave) => {
 };
 const guardarSesion = (clave, valor) => {
   try { sessionStorage.setItem(clave, String(valor)); } catch { /* sin almacenamiento: solo se pierde al volver */ }
-};
-
-const fechaLocal = (fecha) => {
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, '0');
-  const d = String(fecha.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 };
 
 // "2026-11-03" -> "03-11"
@@ -149,7 +143,7 @@ export default function Charts() {
         </p>
       )}
 
-      {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+      {error && <p className="msg error" role="alert">{error}</p>}
 
       {sinDatos ? (
         <section className="card" role="status">

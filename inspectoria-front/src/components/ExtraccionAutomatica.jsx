@@ -11,7 +11,8 @@ import {
 } from '../api.js';
 import { fechaCorta } from '../fechas.js';
 import GridLoader from './GridLoader.jsx';
-import CredencialesSheet, { MENSAJES_PORTAL } from './CredencialesSheet.jsx';
+import CredencialesSheet from './CredencialesSheet.jsx';
+import { MENSAJES_PORTAL, esPc, marcarSyncExitosa } from '../portal.js';
 
 // RF-01: obtener asistencia por extracción automática (Playwright). Tarjeta de Ajustes.
 // Otras pantallas llegan a Ajustes con state { abrirCredenciales, accionModal, mensaje }
@@ -21,7 +22,6 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
   const navigate = useNavigate();
   const tarjetaRef = useRef(null);
   const [rango, setRango] = useState(null);
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [estado, setEstado] = useState('inactivo'); // inactivo | cargando | ok | error
   const [mensaje, setMensaje] = useState('');
   const [mostrarCredenciales, setMostrarCredenciales] = useState(false);
@@ -58,7 +58,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
 
   useEffect(() => {
     cargarEstadoPortal();
-  }, [esPc]);
+  }, []);
 
   useEffect(() => {
     getRangoDatos().then(setRango).catch(() => setRango(null));
@@ -137,6 +137,8 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
       const detalleAvisos = data.advertencias?.length ? ` ${data.advertencias.length} meses no se pudieron descargar.` : '';
       setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleMeses}${detalleAvisos}${detalleErrores}`);
       setEstado(errores ? 'error' : 'ok');
+      // Inicio deja de mostrar "Reintentar" si la sincronización automática había fallado
+      if (!errores) marcarSyncExitosa();
       setVersionDatos((v) => v + 1);
       setMostrarCredenciales(false);
       if (datos?.recordar) setGuardadas(true);
@@ -236,6 +238,8 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
         setCredenciales((actuales) => ({ ...actuales, pass: '' }));
       }
     } else if (accionModal === 'guardar') {
+      // En esta tarjeta el panel se abre en 'guardar' cuando se quería sincronizar (desde Inicio,
+      // Auditar, Alumnos o por credenciales inválidas): al guardarlas, se sincroniza solo.
       setEstado('cargando');
       setProcesando(true);
       setMensajeModal('');
@@ -245,14 +249,13 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
       timeoutRef.current = setTimeout(() => {
         controllerRef.current?.abort();
       }, 45000);
+      let guardadasOk = false;
       try {
         await guardarCredencialesPortal(datos, { signal: controllerRef.current.signal });
-        setMensaje('Credenciales guardadas y verificadas.');
-        setEstado('ok');
+        guardadasOk = true;
         setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
-        onSincronizado?.();
       } catch (error) {
         if (controllerRef.current?.signal.aborted) {
           setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -266,6 +269,10 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
         timeoutRef.current = null;
         setProcesando(false);
         setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+      }
+      if (guardadasOk) {
+        onSincronizado?.(); // refresca la tarjeta "Credenciales del portal"
+        await sincronizar(); // mismo período que se pidió (mes, o año escolar)
       }
     } else {
       await sincronizar({
@@ -347,7 +354,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
 
         {estado === 'ok' && <p className="msg" role="status" style={{ marginTop: 12 }}>{mensaje || 'Asistencia actualizada.'}</p>}
         {estado === 'error' && mensaje && (
-          <p className="msg" style={{ color: 'var(--bad)', background: 'var(--bad-soft)', marginTop: 12 }} role="alert">
+          <p className="msg error" style={{ marginTop: 12 }} role="alert">
             {mensaje}
           </p>
         )}
@@ -361,6 +368,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
           procesando={procesando}
           mensajeError={estado === 'error' ? mensajeModal : ''}
           guardadas={guardadas}
+          sincronizaAlGuardar
           passRef={passRef}
           onSubmit={enviarCredenciales}
           onCerrar={() => setMostrarCredenciales(false)}

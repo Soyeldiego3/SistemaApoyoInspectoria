@@ -1,48 +1,19 @@
-import { Link } from 'react-router-dom';
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownUp, RefreshCw } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
-import { getCredencialesPortal, getDashboard, iniciarSync } from '../api.js';
-
-// La sincronización automática se ejecuta una sola vez por sesión de la app. Se guarda la
-// promesa (no solo un indicador) para que, si el Inicio se vuelve a montar (al volver desde
-// otra pantalla), pueda leer el resultado en vez de quedarse en "Sincronizando…".
-let promesaSyncAutomatica = null;
-
-const ejecutarSyncAutomatica = async () => {
-  try {
-    const credenciales = await getCredencialesPortal();
-    if (!credenciales.guardadas || credenciales.invalidas) {
-      return {
-        estado: 'requiere',
-        codigo: '',
-        mensaje: credenciales.invalidas
-          ? 'Las credenciales guardadas están inválidas. Actualízalas para sincronizar.' : '',
-      };
-    }
-    await iniciarSync();
-    return { estado: 'ok', codigo: '', mensaje: 'Datos sincronizados correctamente.' };
-  } catch (error) {
-    const deLogin = error.code === 'CREDENCIALES_REQUERIDAS' || error.code === 'LOGIN_RECHAZADO';
-    return {
-      estado: 'error',
-      codigo: error.code || '',
-      mensaje: error.message || (deLogin
-        ? 'No se pudo iniciar sesión en el portal.'
-        : 'No se pudo sincronizar. Puedes reintentar desde Ajustes.'),
-    };
-  }
-};
+import { getDashboard } from '../api.js';
+import {
+  ERRORES_LOGIN, esPc, intentarSync, irACredenciales, registrarSync, ultimaSync,
+} from '../portal.js';
 
 export default function Dashboard() {
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
-  const [exportarAbierto, setExportarAbierto] = useState(false);
-  const cerrarExportar = useCallback(() => setExportarAbierto(false), []);
+  const navigate = useNavigate();
   const [syncEstado, setSyncEstado] = useState('cargando');
   const [syncMensaje, setSyncMensaje] = useState('');
-  const [syncCodigo, setSyncCodigo] = useState('');
+  const activoRef = useRef(true);
   const [datosDashboard, setDatosDashboard] = useState(null);
   const [errorDashboard, setErrorDashboard] = useState('');
 
@@ -64,22 +35,37 @@ export default function Dashboard() {
     return () => { activo = false; };
   }, []);
 
+  // Muestra el resultado de una sincronización (la automática, un reintento o una hecha en otra
+  // pantalla). Devuelve el resultado, o null si Inicio ya no está montado.
+  const aplicarSync = async (promesa) => {
+    const resultado = await promesa;
+    if (!activoRef.current) return null;
+    setSyncEstado(resultado.estado);
+    setSyncMensaje(resultado.mensaje);
+    if (resultado.estado !== 'requiere') cargarDashboard(() => activoRef.current);
+    return resultado;
+  };
+
   useEffect(() => {
+    activoRef.current = true;
     if (!esPc) {
       setSyncEstado('sinDatos');
-      return undefined;
+    } else {
+      // La automática corre una vez por sesión; si otra pantalla sincronizó después, se ve eso
+      aplicarSync(ultimaSync() || registrarSync(intentarSync()));
     }
-    let activo = true;
-    if (!promesaSyncAutomatica) promesaSyncAutomatica = ejecutarSyncAutomatica();
-    promesaSyncAutomatica.then((resultado) => {
-      if (!activo) return;
-      setSyncEstado(resultado.estado);
-      setSyncCodigo(resultado.codigo);
-      setSyncMensaje(resultado.mensaje);
-      if (resultado.estado !== 'requiere') cargarDashboard(() => activo);
-    });
-    return () => { activo = false; };
-  }, [esPc]);
+    return () => { activoRef.current = false; };
+  }, []);
+
+  // Reintenta aquí mismo; solo si el problema son las credenciales se va a Ajustes
+  // (allí, al guardarlas, se sincroniza solo)
+  const reintentar = async () => {
+    setSyncEstado('cargando');
+    const resultado = await aplicarSync(registrarSync(intentarSync()));
+    if (resultado && (resultado.estado === 'requiere' || ERRORES_LOGIN.includes(resultado.codigo))) {
+      irACredenciales(navigate, resultado.mensaje || 'Configura las credenciales del portal para sincronizar.');
+    }
+  };
 
   return (
     <div className="dash">
@@ -94,28 +80,30 @@ export default function Dashboard() {
               syncEstado === 'ok' ? syncMensaje :
               !esPc ? 'Los datos se sincronizan desde el PC' :
               syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
+              syncEstado === 'error' ? 'No se pudo sincronizar' :
               'Sin datos sincronizados todavía'}
           </p>
           <div className="inicio-acciones">
-            <Link to="/ajustes" state={{
-              abrirCredenciales: syncEstado === 'requiere' || syncEstado === 'error',
-              accionModal: syncEstado === 'error' ? 'guardar' : 'sync',
-              mensaje: syncEstado === 'error' ? syncMensaje : '',
-            }}
-              className="btn dark" style={{ width: 'auto' }}>
-              {syncEstado === 'error' ? <><RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />
-                {syncCodigo === 'LOGIN_RECHAZADO' || syncCodigo === 'CREDENCIALES_REQUERIDAS'
-                  ? 'Actualizar credenciales' : 'Reintentar'}</> :
-                syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
-            </Link>
+            {syncEstado === 'error' || (esPc && syncEstado === 'cargando') ? (
+              <button type="button" className="btn dark" style={{ width: 'auto' }}
+                onClick={reintentar} disabled={syncEstado === 'cargando'}>
+                <RefreshCw size={15} className={syncEstado === 'cargando' ? 'audit-spin' : undefined}
+                  style={{ verticalAlign: -2, marginRight: 5 }} />
+                {syncEstado === 'cargando' ? 'Sincronizando…' : 'Reintentar'}
+              </button>
+            ) : (
+              <Link to="/ajustes" state={{ abrirCredenciales: syncEstado === 'requiere', accionModal: 'sync' }}
+                className="btn dark" style={{ width: 'auto' }}>
+                {syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
+              </Link>
+            )}
           </div>
         </div>
       </section>
-      {syncEstado === 'requiere' && syncMensaje && (
-        <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>
+      {(syncEstado === 'error' || syncEstado === 'requiere') && syncMensaje && (
+        <p className="msg error" role="alert">{syncMensaje}</p>
       )}
-      {syncEstado === 'error' && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{syncMensaje}</p>}
-      {errorDashboard && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{errorDashboard}</p>}
+      {errorDashboard && <p className="msg error" role="alert">{errorDashboard}</p>}
 
       <div className="kpis">
         <KpiCard sigla="TSE" nombre="Sincronización exitosa"

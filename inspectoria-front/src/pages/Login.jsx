@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { getToken, getSetupEstado, crearAdministrador } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { esPc } from '../portal.js';
 
 // Autenticación usuario/contraseña (informe 5.2): se valida en el servidor.
 export default function Login() {
@@ -14,14 +15,13 @@ export default function Login() {
   const [requiereAdmin, setRequiereAdmin] = useState(false);
   const [modoSetup, setModoSetup] = useState(false);
   const [adminPass2, setAdminPass2] = useState('');
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
   useEffect(() => {
     if (!esPc) return;
     getSetupEstado()
       .then((estado) => setRequiereAdmin(Boolean(estado.requiereAdmin)))
       .catch(() => setRequiereAdmin(false));
-  }, [esPc]);
+  }, []);
 
   // Si ya hay una sesión iniciada, no se vuelve a mostrar el login.
   if (getToken()) return <Navigate to="/" replace />;

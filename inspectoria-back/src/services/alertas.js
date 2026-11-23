@@ -15,6 +15,7 @@ const { ALERTAS } = require('../config/auditoria');
 
 const TIPOS_ALERTA = ['mismo_dia', 'fin_de_semana', 'licencias', 'caida'];
 const ESTADOS_GESTION = ['revisada', 'citado', 'descartada'];
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const DIAS_PLURAL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
 const CODIGO_LICENCIA = Number(Object.entries(CODIGOS).find(([, texto]) => texto.includes('LICENCIA'))[0]);
 
@@ -85,9 +86,9 @@ function detectarMismoDia(rut, filas) {
   return {
     clave: clave(rut, 'mismo_dia', dia),
     tipo: 'mismo_dia',
-    severidad: n >= umbral.alta ? 'alta' : 'media',
-    titulo: `Falta los ${DIAS_PLURAL[dia]}: ${n} de ${faltas.length} faltas`,
-    detalle: `Falta el ${pct(n, registrosPorDia.get(dia))}% de los ${DIAS_PLURAL[dia]} con clases`
+    prioridad: n >= umbral.alta ? 'alta' : 'media',
+    titulo: `${n} de sus ${faltas.length} faltas fueron un ${DIAS[dia]}`,
+    detalle: `Faltó el ${pct(n, registrosPorDia.get(dia))}% de los ${DIAS_PLURAL[dia]} con clases`
       + ` y el ${pct(faltas.length - n, otrosRegistros)}% del resto de los días.`
       + (justificadas ? ` ${justificadas} de esas faltas están justificadas.` : ''),
     evidencia: delDia.map((f) => f.fecha),
@@ -111,8 +112,8 @@ function detectarFinDeSemana(rut, filas, calendario, fechasMismoDia) {
   return {
     clave: clave(rut, 'fin_de_semana'),
     tipo: 'fin_de_semana',
-    severidad: 'media',
-    titulo: `Alarga fines de semana: ${pegadas.length} de ${faltas.length} faltas junto a días sin clases`,
+    prioridad: 'media',
+    titulo: `${pegadas.length} de sus ${faltas.length} faltas fueron justo antes o después de un fin de semana o feriado`,
     detalle: (feriados ? `${feriados} junto a feriados o interferiados. ` : '')
       + (justificadas ? `${justificadas} de esas faltas están justificadas.` : 'Ninguna está justificada.'),
     evidencia: pegadas.map((f) => f.fecha),
@@ -134,8 +135,8 @@ function detectarCaida(rut, filas, referencia) {
   return {
     clave: clave(rut, 'caida'),
     tipo: 'caida',
-    severidad: 'alta',
-    titulo: `Asistencia cayó de ${Math.round(antes)}% a ${Math.round(ahora)}% en las últimas ${semanas} semanas`,
+    prioridad: 'alta',
+    titulo: `Su asistencia bajó de ${Math.round(antes)}% a ${Math.round(ahora)}% en las últimas ${semanas} semanas`,
     detalle: `${recientes.filter(esFalta).length} faltas en los últimos ${umbral.diasRecientes} días`
       + ` (hasta el ${referencia.split('-').reverse().join('-')}).`,
     evidencia: recientes.filter(esFalta).map((f) => f.fecha),
@@ -176,7 +177,7 @@ function detectarLicencias(db, { desde, hasta, curso }) {
     alertas.push({
       clave: clave(rut, 'licencias', hasta.slice(0, 4)),
       tipo: 'licencias',
-      severidad: licencias.length >= umbral.alta ? 'alta' : 'media',
+      prioridad: licencias.length >= umbral.alta ? 'alta' : 'media',
       rut, nombres, apellidos, curso: cursoAlumno,
       titulo: `${licencias.length} licencia${licencias.length === 1 ? '' : 's'} médica${licencias.length === 1 ? '' : 's'}`
         + (cortas ? ` (${cortas} de ${umbral.diasCorta === 1 ? '1 día' : `hasta ${umbral.diasCorta} días`})` : ''),
@@ -248,7 +249,7 @@ function aplicarGestion(alertas, gestiones) {
       casosNuevos,
     };
   }).sort((a, b) => (a.estado === 'nueva' ? 0 : 1) - (b.estado === 'nueva' ? 0 : 1)
-    || orden[a.severidad] - orden[b.severidad]
+    || orden[a.prioridad] - orden[b.prioridad]
     || b.ultimaEvidencia.localeCompare(a.ultimaEvidencia));
 }
 

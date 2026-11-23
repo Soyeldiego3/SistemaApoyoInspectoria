@@ -8,6 +8,7 @@ import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import { crearJustificativo, getAlumno } from '../api.js';
 import { tituloMes } from '../fechas.js';
+import { formatearRut } from '../texto.js';
 
 const VISTAS = ['inasistencias', 'atrasos'];
 const FILTROS_VER = ['pendientes', 'todas'];
@@ -216,7 +217,7 @@ export default function StudentDetail() {
       </Link>
       <section className="card">
         <h2>{alumno ? `${alumno.nombres} ${alumno.apellidos}` : 'Alumno'}</h2>
-        <p className="muted">{alumno ? `${alumno.curso} · ${alumno.rut}` : decodeURIComponent(rut)}</p>
+        <p className="muted">{alumno ? `${alumno.curso} · ${formatearRut(alumno.rut)}` : formatearRut(decodeURIComponent(rut))}</p>
       </section>
 
       <Resumen resumen={resumen} />

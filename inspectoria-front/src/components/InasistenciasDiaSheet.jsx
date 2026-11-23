@@ -60,7 +60,7 @@ export default function InasistenciasDiaSheet({ fecha, curso, onCerrar }) {
           </p>
         )}
         {cargando && <p className="muted">Cargando…</p>}
-        {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+        {error && <p className="msg error" role="alert">{error}</p>}
         {!cargando && !error && (
           alumnos.length ? (
             <div className="list">

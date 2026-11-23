@@ -26,3 +26,10 @@ export const tituloMes = (fecha) => {
   const [anio, m] = fecha.split('-').map(Number);
   return `${MESES[m - 1]} ${anio}`;
 };
+
+// Date local → '2026-11-25' (sin pasar por UTC, que en Chile puede cambiar el día)
+export const fechaLocal = (fecha) => {
+  const m = String(fecha.getMonth() + 1).padStart(2, '0');
+  const d = String(fecha.getDate()).padStart(2, '0');
+  return `${fecha.getFullYear()}-${m}-${d}`;
+};

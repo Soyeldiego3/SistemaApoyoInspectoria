@@ -5,7 +5,8 @@ import {
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
-import CredencialesSheet, { MENSAJES_PORTAL } from './CredencialesSheet.jsx';
+import CredencialesSheet from './CredencialesSheet.jsx';
+import { MENSAJES_PORTAL } from '../portal.js';
 
 const TIMEOUT_MS = 45000;
 const VACIAS = { usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false };
@@ -148,8 +149,8 @@ export default function CredencialesPortal({ version = 0 }) {
           {guardadas && <button className="btn peligro" onClick={olvidar}>Olvidar</button>}
         </div>
         {aviso && (
-          <p className="msg" role={aviso.tipo === 'error' ? 'alert' : 'status'} style={{ marginTop: 14,
-            ...(aviso.tipo === 'error' ? { color: 'var(--bad)', background: 'var(--bad-soft)' } : {}) }}>
+          <p className={aviso.tipo === 'error' ? 'msg error' : 'msg'} role={aviso.tipo === 'error' ? 'alert' : 'status'}
+            style={{ marginTop: 14 }}>
             {aviso.texto}
           </p>
         )}

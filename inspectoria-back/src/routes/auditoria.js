@@ -91,9 +91,9 @@ function calcularNivel(alumno, tipo) {
 
   if (miraInasistencias && asistenciaConfiable && alumno.porcentajeAsistencia != null) {
     if (alumno.porcentajeAsistencia < ASISTENCIA_MINIMA) {
-      razones.alta.push(`Asistencia bajo ${ASISTENCIA_MINIMA}%`);
+      razones.alta.push(`Asistencia menor a ${ASISTENCIA_MINIMA}%`);
     } else if (alumno.porcentajeAsistencia < ASISTENCIA_ALERTA) {
-      razones.media.push(`Asistencia bajo ${ASISTENCIA_ALERTA}%`);
+      razones.media.push(`Asistencia menor a ${ASISTENCIA_ALERTA}%`);
     }
   }
   if (miraInasistencias && c.ausenciasConsecutivas >= RACHA_ALTA) {
@@ -105,7 +105,8 @@ function calcularNivel(alumno, tipo) {
     razones.media.push(`${c.atrasosSinJustificar} atrasos sin justificar`);
   }
   if (c.tendenciaReciente >= RECIENTES_MEDIA) {
-    razones.media.push(`${c.tendenciaReciente} incidencias sin justificar en los últimos ${DIAS_TENDENCIA_RECIENTE} días`);
+    const cuando = DIAS_TENDENCIA_RECIENTE === 7 ? 'en la última semana' : `en los últimos ${DIAS_TENDENCIA_RECIENTE} días`;
+    razones.media.push(`${c.tendenciaReciente} faltas o atrasos sin justificar ${cuando}`);
   }
 
   if (razones.alta.length) return { nivel: 'alta', razonesNivel: razones.alta };

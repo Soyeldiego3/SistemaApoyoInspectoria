@@ -103,7 +103,7 @@ function resolverRango(db, { desde, hasta, tipo }) {
   }
 
   if (!elegido?.desde || !elegido?.hasta) {
-    advertencias.push('No existe un rango común con datos suficientes para este tipo de análisis.');
+    advertencias.push('No hay suficientes datos en este período para calcularlo.');
   }
 
   return {

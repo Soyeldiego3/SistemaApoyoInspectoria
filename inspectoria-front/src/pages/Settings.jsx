@@ -3,6 +3,7 @@ import { Copy } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { getAjustes, getRedInfo, setNavegadorHeadless, setRedEnabled } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { esPc } from '../portal.js';
 import { MODOS, PALETAS, TAMANOS, useTema } from '../tema.jsx';
 import Segmented from '../components/Segmented.jsx';
 import Chips from '../components/Chips.jsx';
@@ -21,7 +22,6 @@ export default function Settings() {
     modo, paleta, texto, cambiarModo, cambiarPaleta, cambiarTexto,
   } = useTema();
   // Apariencia funciona en cualquier dispositivo; red y sincronización solo desde el PC
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
   // Sube tras sincronizar o cambiar credenciales, para refrescar la tarjeta de credenciales
@@ -45,7 +45,7 @@ export default function Settings() {
       .then((info) => { if (activo) setRed(info); })
       .catch((e) => { if (activo) mostrarError(e.message || 'No se pudo consultar el acceso en red.'); });
     return () => { activo = false; };
-  }, [esPc]);
+  }, []);
 
   useEffect(() => {
     if (!esAdmin || !esPc) return undefined;
@@ -54,7 +54,7 @@ export default function Settings() {
       .then((ajustes) => { if (activo) setHeadless(ajustes.navegadorHeadless); })
       .catch((e) => { if (activo) mostrarError(e.message || 'No se pudieron cargar los ajustes.'); });
     return () => { activo = false; };
-  }, [esAdmin, esPc]);
+  }, [esAdmin]);
 
   const cambiarRed = async (habilitada) => {
     setRedCargando(true);

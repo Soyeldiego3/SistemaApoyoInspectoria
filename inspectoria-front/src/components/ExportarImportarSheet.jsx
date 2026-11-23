@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { CalendarRange, FileUp } from 'lucide-react';
 import { exportarDocumento, getCursos, getRangoDatos, importarRegistro } from '../api.js';
 import { descargar } from '../descargas.js';
-import { fechaCorta } from '../fechas.js';
+import { fechaCorta, fechaLocal } from '../fechas.js';
 
 const MODOS = [
   { id: 'exportar', label: 'Exportar' },
@@ -23,15 +23,14 @@ const PERIODOS = [
   { id: 'personalizado', label: 'Personalizado…' },
 ];
 
-const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function rangoPeriodo(periodo, desde, hasta) {
   const hoy = new Date();
-  if (periodo === 'mes') return { desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) };
+  if (periodo === 'mes') return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fechaLocal(hoy) };
   if (periodo === 'mesAnterior') {
     return {
-      desde: iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
-      hasta: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 0)),
+      desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
+      hasta: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 0)),
     };
   }
   if (periodo === 'personalizado') return { desde, hasta };
@@ -43,7 +42,7 @@ const textoError = (e) => (e instanceof TypeError ? 'No hay conexión con el ser
 function ResultadoImportacion({ item }) {
   if (item.error) {
     return (
-      <div className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>
+      <div className="msg error" role="alert">
         <b>{item.nombre}</b>: {item.error}
       </div>
     );
@@ -276,7 +275,7 @@ export default function ExportarImportarSheet({ abierto, onCerrar, onImportado }
           </>
         )}
 
-        {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+        {error && <p className="msg error" role="alert">{error}</p>}
         {aviso && <p className="msg" role="status">{aviso}</p>}
 
         <div className="grid2">

@@ -5,14 +5,9 @@ import Chips from '../components/Chips.jsx';
 import ExportarImportarSheet from '../components/ExportarImportarSheet.jsx';
 import RangoSlider from '../components/RangoSlider.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
-import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
-
-const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
-  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información',
-};
+import { getAlumnos } from '../api.js';
+import { sincronizarPortal } from '../portal.js';
+import { coincide, formatearRut, plural } from '../texto.js';
 
 // Forma esperada de cada alumno (la API la entregará):
 // { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
@@ -54,13 +49,9 @@ function rangoGuardado() {
   return null;
 }
 
-// Ignora tildes, mayúsculas, puntos y guion del RUT
-const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toLowerCase();
-
 export default function Students() {
   const location = useLocation();
   const navigate = useNavigate();
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const parametros = new URLSearchParams(location.search);
   // Si la URL trae filtros (ej. desde Inicio → Reincidencias), mandan ellos y no lo guardado
   const urlConFiltros = parametros.has('filtro') || parametros.has('curso');
@@ -122,50 +113,10 @@ export default function Students() {
     setSincronizando(true);
     setError('');
     try {
-      if (!esPc) {
-        await iniciarSync();
-        await cargarAlumnos();
-        return;
-      }
-      const credenciales = await getCredencialesPortal();
-      if (!credenciales.guardadas && !credenciales.enMemoria) {
-        navigate('/ajustes', {
-          replace: false,
-          state: {
-            abrirCredenciales: true,
-            accionModal: 'guardar',
-            mensaje: 'Configura las credenciales del portal para sincronizar.',
-          },
-        });
-        return;
-      }
-      if (credenciales.invalidas) {
-        navigate('/ajustes', {
-          replace: false,
-          state: {
-            abrirCredenciales: true,
-            accionModal: 'guardar',
-            mensaje: 'Las credenciales guardadas están inválidas. Actualízalas para continuar.',
-          },
-        });
-        return;
-      }
-      await iniciarSync();
-      await cargarAlumnos();
+      // null = faltaban credenciales y se fue a Ajustes
+      if (await sincronizarPortal({ navigate })) await cargarAlumnos();
     } catch (e) {
-      if (!esPc && (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO')) {
-        setError('Sincroniza desde el PC.');
-      } else if (MENSAJES_PORTAL[e.code]) {
-        setError(MENSAJES_PORTAL[e.code]);
-        if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
-          navigate('/ajustes', {
-            replace: false,
-            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
-          });
-        }
-      } else {
-        setError(e.message || 'Ocurrió un error inesperado.');
-      }
+      setError(e.message);
     } finally {
       setSincronizando(false);
     }
@@ -211,10 +162,9 @@ export default function Students() {
 
   // Se recalcula en cada tecla; no necesita ir al back
   const lista = useMemo(() => {
-    const t = limpiar(q.trim());
     const enRango = (n) => n >= desde && n <= hasta;
     return alumnos.filter((a) =>
-      (!t || limpiar(`${a.rut} ${a.nombres} ${a.apellidos} ${a.curso}`).includes(t)) &&
+      coincide(q, a.rut, a.nombres, a.apellidos, a.curso) &&
       (!curso || a.curso === curso) &&
       (base === 'todos' ||
         (base === 'inasist' && enRango(a.pendientes)) ||
@@ -240,7 +190,7 @@ export default function Students() {
       {/* Tras importar justificaciones cambian los pendientes: se recarga la lista */}
       <ExportarImportarSheet abierto={exportarAbierto} onCerrar={cerrarExportar} onImportado={cargarAlumnos} />
 
-      {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+      {error && !cargando && <p className="msg error" role="alert">{error}</p>}
       <div className="searchbox">
         <Search size={18} />
         <input className="input" type="search" placeholder="RUT, nombre o curso" value={q}
@@ -262,11 +212,11 @@ export default function Students() {
       {conRango && alumnos.length > 0 && (
         <RangoSlider min={1} max={maximo} desde={desde} hasta={hasta} onChange={cambiarRango}
           etiqueta={base === 'inasist' ? 'Cantidad de inasistencias' : 'Cantidad de atrasos'}
-          unidad={base === 'inasist' ? (hasta === 1 ? 'inasistencia' : 'inasistencias') : (hasta === 1 ? 'atraso' : 'atrasos')} />
+          unidad={`${base === 'inasist' ? 'inasistencia' : 'atraso'}${hasta === 1 ? '' : 's'}`} />
       )}
 
       <div className="row muted">
-        <span>{lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}</span>
+        <span>{plural(lista.length, 'alumno')}</span>
         {hayFiltros &&<button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
       </div>
 
@@ -292,16 +242,16 @@ export default function Students() {
               to={`/alumnos/${encodeURIComponent(a.rut)}${VISTA_POR_FILTRO[base] ? `?vista=${VISTA_POR_FILTRO[base]}` : ''}`}
               state={{ returnTo: rutaRetorno }}
               className="item alumno">
-              <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
+              <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {formatearRut(a.rut)}</span></div>
               <div className="tags">
                 {verInasist && a.pendientes > 0 && (
                   <span className={`tag ${a.pendientes >= 3 ? 'bad' : 'warn'}`} title="Inasistencias sin justificar">
-                    <CalendarX size={13} aria-hidden />{a.pendientes} {a.pendientes === 1 ? 'inasistencia' : 'inasistencias'}{a.pendientes >= 3 ? ' · 3 o más' : ''}
+                    <CalendarX size={13} aria-hidden />{plural(a.pendientes, 'inasistencia')}{a.pendientes >= 3 ? ' · 3 o más' : ''}
                   </span>
                 )}
                 {verAtrasos && a.atrasos > 0 && (
                   <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`} title="Atrasos sin justificar">
-                    <Clock size={13} aria-hidden />{a.atrasos} {a.atrasos === 1 ? 'atraso' : 'atrasos'}{a.atrasos >= 3 ? ' · reincidente' : ''}
+                    <Clock size={13} aria-hidden />{plural(a.atrasos, 'atraso')}{a.atrasos >= 3 ? ' · reincidente' : ''}
                   </span>
                 )}
                 {a.pendientes === 0 && a.atrasos === 0 && <span className="tag ok">Al día</span>}

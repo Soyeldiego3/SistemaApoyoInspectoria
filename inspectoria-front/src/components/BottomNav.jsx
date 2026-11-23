@@ -4,6 +4,7 @@ import { LayoutGrid, ClipboardCheck, Users, BarChart3, UserPlus, Settings } from
 import { useAuth } from '../auth.jsx';
 import { getConteoAlertas } from '../api.js';
 import { hayFiltrosAuditar } from '../filtrosAuditar.js';
+import { fechaLocal } from '../fechas.js';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
@@ -34,8 +35,7 @@ export default function BottomNav() {
     let activo = true;
     // Mismo rango que abre el badge: "Este mes"
     const hoy = new Date();
-    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const cargar = () => getConteoAlertas({ desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) })
+    const cargar = () => getConteoAlertas({ desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fechaLocal(hoy) })
       .then((datos) => { if (activo) setAlertasNuevas(datos?.nuevas || 0); })
       .catch(() => {});
     cargar();

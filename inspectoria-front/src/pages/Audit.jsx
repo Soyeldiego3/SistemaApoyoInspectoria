@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Search, X } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
@@ -9,12 +9,12 @@ import {
   getAuditoriaCursos,
   getAuditoriaEstado,
   getAuditoriaPrioridad,
-  getCredencialesPortal,
   getCursos,
-  iniciarSync,
 } from '../api.js';
-import { fechaCorta, tituloMes } from '../fechas.js';
+import { diaSemana, fechaCorta, fechaLocal, tituloMes } from '../fechas.js';
 import { memoriaAuditar } from '../filtrosAuditar.js';
+import { sincronizarPortal } from '../portal.js';
+import { coincide, formatearRut, plural } from '../texto.js';
 
 const TABS = [
   { id: 'alertas', label: 'Alertas' },
@@ -23,7 +23,7 @@ const TABS = [
 ];
 
 const TIPOS = [
-  { id: 'ambos', label: 'Ambos' },
+  { id: 'ambos', label: 'Faltas y atrasos' },
   { id: 'inasistencias', label: 'Inasistencias' },
   { id: 'atrasos', label: 'Atrasos' },
 ];
@@ -35,7 +35,7 @@ const PERIODOS = [
   { id: '30dias', label: 'Últimos 30 días' },
   { id: 'mes', label: 'Este mes' },
   { id: '2meses', label: 'Últimos 2 meses' },
-  { id: 'personalizado', label: 'Personalizado…' },
+  { id: 'personalizado', label: 'Elegir fechas…' },
 ];
 
 // Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
@@ -45,22 +45,6 @@ const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'personalizado'];
 const periodosDe = (tab) => {
   const ids = tab === 'alertas' ? PERIODOS_ALERTAS : PERIODOS_GENERALES;
   return PERIODOS.filter((p) => ids.includes(p.id));
-};
-
-const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-
-const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
-  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información',
-};
-
-const fechaLocal = (fecha) => {
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, '0');
-  const d = String(fecha.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 };
 
 function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '') {
@@ -78,7 +62,7 @@ function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '')
     return { desde: fechaLocal(inicio), hasta: fin };
   }
   if (periodo === 'mes') {
-    return { desde: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`, hasta: fin };
+    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fin };
   }
   if (periodo === '30dias') {
     const inicio = new Date(hoy);
@@ -107,7 +91,7 @@ function FinDeSemana({ fecha, onVerViernes }) {
   const viernes = new Date(dia);
   viernes.setDate(dia.getDate() - (dia.getDay() === 0 ? 2 : 1));
   const fechaViernes = fechaLocal(viernes);
-  const nombre = DIAS_SEMANA[dia.getDay()];
+  const nombre = diaSemana(fecha).toLowerCase();
   const esHoy = fecha === fechaLocal(new Date());
   return (
     <section className="card" role="status">
@@ -125,8 +109,8 @@ function FinDeSemana({ fecha, onVerViernes }) {
 }
 
 function mostrarRango(datos) {
-  if (!datos?.rango?.desde || !datos?.rango?.hasta) return 'Sin rango con datos suficientes';
-  return `${fechaCorta(datos.rango.desde)} a ${fechaCorta(datos.rango.hasta)}`;
+  if (!datos?.rango?.desde || !datos?.rango?.hasta) return 'No hay suficientes datos para este período';
+  return `Mostrando del ${fechaCorta(datos.rango.desde)} al ${fechaCorta(datos.rango.hasta)}`;
 }
 
 function haceCuanto(fechaIso) {
@@ -135,21 +119,11 @@ function haceCuanto(fechaIso) {
   if (!Number.isFinite(diferencia) || diferencia < 0) return 'recién';
   const minutos = Math.floor(diferencia / 60000);
   if (minutos < 1) return 'hace menos de 1 minuto';
-  if (minutos < 60) return `hace ${minutos} minuto${minutos === 1 ? '' : 's'}`;
+  if (minutos < 60) return `hace ${plural(minutos, 'minuto')}`;
   const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `hace ${horas} hora${horas === 1 ? '' : 's'}`;
-  const dias = Math.floor(horas / 24);
-  return `hace ${dias} día${dias === 1 ? '' : 's'}`;
+  if (horas < 24) return `hace ${plural(horas, 'hora')}`;
+  return `hace ${plural(Math.floor(horas / 24), 'día')}`;
 }
-
-// '25990754-3' → '25.990.754-3'
-function formatearRut(rut) {
-  const [cuerpo, dv] = String(rut).split('-');
-  if (!dv || !/^\d+$/.test(cuerpo)) return rut;
-  return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${dv}`;
-}
-
-const plural = (n, singular, pluralTexto = `${singular}s`) => `${n} ${n === 1 ? singular : pluralTexto}`;
 
 const NIVELES = {
   alta: { label: 'Prioridad alta', clase: 'bad' },
@@ -165,7 +139,7 @@ function Resumen({ datos }) {
   return (
     <div className="kpis">
       <section className="card">
-        <p className="muted">Incidencias</p>
+        <p className="muted">Faltas y atrasos</p>
         <div className="big">{resumen?.incidencias ?? '—'}</div>
         {resumen?.incidencias != null && (
           <p className="muted detalle">
@@ -174,16 +148,16 @@ function Resumen({ datos }) {
         )}
       </section>
       <section className="card">
-        <p className="muted">% sin justificar</p>
+        <p className="muted">Sin justificar</p>
         <div className="big">{porcentaje}</div>
         {resumen?.incidencias ? (
-          <p className="muted detalle">{resumen.sinJustificar} de {resumen.incidencias} incidencias</p>
+          <p className="muted detalle">{resumen.sinJustificar} de {resumen.incidencias} faltas y atrasos</p>
         ) : null}
       </section>
       <section className="card">
         <p className="muted">Alumnos con pendientes</p>
         <div className="big">{resumen?.alumnosAfectados ?? '—'}</div>
-        <p className="muted detalle">Con al menos una incidencia sin justificar</p>
+        <p className="muted detalle">Tienen al menos una falta o atraso sin justificar</p>
       </section>
     </div>
   );
@@ -223,31 +197,53 @@ function senales(alumno, criterios) {
   if (c.inasistenciasSinJustificar) lista.push(plural(c.inasistenciasSinJustificar, 'falta sin justificar', 'faltas sin justificar'));
   if (c.atrasosSinJustificar) lista.push(plural(c.atrasosSinJustificar, 'atraso sin justificar', 'atrasos sin justificar'));
   if (c.ausenciasConsecutivas > 1) lista.push(`${c.ausenciasConsecutivas} faltas seguidas`);
-  if (c.tendenciaReciente) lista.push(`${c.tendenciaReciente} en los últimos ${criterios?.diasRecientes ?? 7} días`);
+  if (c.tendenciaReciente) {
+    const dias = criterios?.diasRecientes ?? 7;
+    lista.push(`${c.tendenciaReciente} ${dias === 7 ? 'en la última semana' : `en los últimos ${dias} días`}`);
+  }
   return lista;
 }
 
-function Prioridad({ datos, tipo, rutaRetorno }) {
-  const [nivel, setNivelEstado] = useState(memoriaAuditar.nivel);
-  const setNivel = (valor) => { memoriaAuditar.nivel = valor; setNivelEstado(valor); };
-  if (!datos?.alumnos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
+// "N alumnos" + "Limpiar filtros" (igual que en Alumnos)
+function Contador({ cantidad, singular, pluralTexto, hayFiltros, onLimpiar }) {
+  return (
+    <div className="row muted">
+      <span>{plural(cantidad, singular, pluralTexto)}</span>
+      {hayFiltros && (
+        <button className="linkbtn" type="button" onClick={onLimpiar}><X size={14} /> Limpiar filtros</button>
+      )}
+    </div>
+  );
+}
+
+const coincideAlumno = (q, a) => coincide(q, a.rut, a.nombres, a.apellidos, a.curso);
+
+function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, onLimpiar }) {
+  if (!datos?.alumnos?.length) return <EmptyState texto="No hay datos para este período." filas={3} />;
   // Con un tipo elegido, la ficha se abre en esa pestaña (los ids coinciden con sus vistas)
   const vista = tipo !== 'ambos' ? `?vista=${tipo}` : '';
   const criterios = datos.criterios;
-  const niveles = datos.resumen?.niveles;
+  // Los contadores se calculan sobre lo que coincide con la búsqueda
+  const coincidentes = datos.alumnos.filter((a) => coincideAlumno(q, a));
+  const contar = (n) => coincidentes.filter((a) => a.nivel === n).length;
   const opciones = [
-    { id: 'todos', label: `Todos (${datos.alumnos.length})` },
-    { id: 'alta', label: `Alta (${niveles?.alta ?? 0})` },
-    { id: 'media', label: `Media (${niveles?.media ?? 0})` },
+    { id: 'todos', label: `Todos (${coincidentes.length})` },
+    { id: 'alta', label: `Alta (${contar('alta')})` },
+    { id: 'media', label: `Media (${contar('media')})` },
   ];
-  const visibles = nivel === 'todos' ? datos.alumnos : datos.alumnos.filter((a) => a.nivel === nivel);
+  const visibles = nivel === 'todos' ? coincidentes : coincidentes.filter((a) => a.nivel === nivel);
   return (
     <>
       <p className="muted audit-nota">
-        Ordenados de mayor a menor prioridad según asistencia, faltas seguidas y atrasos sin justificar.
+        Primero los alumnos que más conviene citar: baja asistencia, faltas seguidas o atrasos sin justificar.
       </p>
       <Segmented valor={nivel} onChange={setNivel} opciones={opciones} />
-      {!visibles.length && <p className="muted">Ningún alumno en este nivel.</p>}
+      <Contador cantidad={visibles.length} singular="alumno" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
+      {!visibles.length && (
+        <p className="muted">
+          {q.trim() ? 'Ningún alumno coincide con la búsqueda.' : 'Ningún alumno en este nivel.'}
+        </p>
+      )}
       <div className="list">
         {visibles.map((alumno) => {
           const info = NIVELES[alumno.nivel] || NIVELES.baja;
@@ -275,7 +271,7 @@ function Prioridad({ datos, tipo, rutaRetorno }) {
                 <span className={`tag ${info.clase}`}>{info.label}</span>
                 {pct != null && tipo !== 'atrasos' && (
                   <span className={`tag ${clasePct}`}
-                    title={`${alumno.diasRegistrados} días registrados en el rango`}>
+                    title={`Calculado sobre ${plural(alumno.diasRegistrados, 'día')} con clases`}>
                     Asistencia {pct}%
                   </span>
                 )}
@@ -288,29 +284,34 @@ function Prioridad({ datos, tipo, rutaRetorno }) {
   );
 }
 
-function Cursos({ datos }) {
-  if (!datos?.cursos?.length) return <EmptyState texto="Sin datos en este rango." filas={3} />;
+function Cursos({ datos, q, hayFiltros, onLimpiar }) {
+  if (!datos?.cursos?.length) return <EmptyState texto="No hay datos para este período." filas={3} />;
+  const visibles = datos.cursos.filter((curso) => coincide(q, curso.curso));
+  // +2.1 → "+2.1 puntos vs. colegio": cuánto más (o menos) falta el curso que el promedio
+  const vsColegio = (d) => (d == null ? null : `${d > 0 ? '+' : ''}${d} puntos vs. colegio`);
   return (
     <>
     {datos.promedioGeneralInasistencia != null && (
       <p className="muted">
-        Desvío: puntos porcentuales de inasistencia sobre (+) o bajo (−) el promedio del colegio
-        ({datos.promedioGeneralInasistencia}%).
+        Comparado con el promedio del colegio ({datos.promedioGeneralInasistencia}% de inasistencia):
+        "+" falta más que el promedio, "−" falta menos.
       </p>
     )}
+    <Contador cantidad={visibles.length} singular="curso" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
+    {!visibles.length && <p className="muted">Ningún curso coincide con la búsqueda.</p>}
     <div className="list">
-      {datos.cursos.map((curso) => (
+      {visibles.map((curso) => (
         <section className="item" key={curso.curso}>
           <div>
             <b>{curso.curso}</b>
-            <span className="muted">Sobre {curso.denominador} registros · {curso.diasRegistrados} días · {curso.alumnosMatriculados} alumnos</span>
+            <span className="muted">{plural(curso.alumnosMatriculados, 'alumno')} · {plural(curso.diasRegistrados, 'día')} con clases</span>
             {curso.pocosDatos && <span className="tag warn">Pocos datos</span>}
           </div>
           <div className="tags">
             <span className="tag">Inasistencia {curso.porcentajeInasistencia == null ? '—' : `${curso.porcentajeInasistencia}%`}</span>
             <span className="tag">Atrasos {curso.porcentajeAtrasos == null ? '—' : `${curso.porcentajeAtrasos}%`}</span>
             <span className="tag warn">Sin justificar {curso.porcentajeSinJustificar == null ? '—' : `${curso.porcentajeSinJustificar}%`}</span>
-            <span className="tag">Desvío {curso.desviacionPromedio == null ? '—' : `${curso.desviacionPromedio} pp`}</span>
+            {vsColegio(curso.desviacionPromedio) && <span className="tag">{vsColegio(curso.desviacionPromedio)}</span>}
           </div>
         </section>
       ))}
@@ -323,9 +324,9 @@ function Cursos({ datos }) {
 
 const TIPOS_ALERTA = [
   { id: 'mismo_dia', label: 'Falta siempre el mismo día' },
-  { id: 'fin_de_semana', label: 'Alarga fines de semana' },
+  { id: 'fin_de_semana', label: 'Falta junto a fines de semana o feriados' },
   { id: 'licencias', label: 'Muchas licencias médicas' },
-  { id: 'caida', label: 'Caída reciente de asistencia' },
+  { id: 'caida', label: 'Está faltando más que antes' },
 ];
 
 const ESTADOS_ALERTA = {
@@ -344,6 +345,11 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
   const gestion = alerta.gestion;
   const estado = ESTADOS_ALERTA[alerta.estado];
   const fechas = alerta.evidencia || [];
+  // Ficha en Inasistencias con todas las faltas: la evidencia puede incluir justificadas (licencias)
+  const ficha = {
+    to: `/alumnos/${encodeURIComponent(alerta.rut)}?vista=inasistencias&ver=todas`,
+    state: { returnTo: rutaRetorno, returnLabel: 'Auditar' },
+  };
 
   const gestionar = async (nuevoEstado) => {
     setGuardando(true);
@@ -363,13 +369,13 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
   return (
     <article className="alerta">
       <div className="alerta-cabecera">
-        <div>
+        <Link className="alerta-alumno" {...ficha} title="Ver ficha del alumno">
           <b>{alerta.nombres} {alerta.apellidos}</b>
           <span className="muted audit-meta">{alerta.curso} · {formatearRut(alerta.rut)}</span>
-        </div>
+        </Link>
         <div className="tags">
-          <span className={`tag ${alerta.severidad === 'alta' ? 'bad' : 'warn'}`}>
-            {alerta.severidad === 'alta' ? 'Alta' : 'Media'}
+          <span className={`tag ${alerta.prioridad === 'alta' ? 'bad' : 'warn'}`}>
+            {alerta.prioridad === 'alta' ? 'Prioridad alta' : 'Prioridad media'}
           </span>
           {estado && <span className={`tag ${estado.clase}`}>{estado.label}</span>}
         </div>
@@ -388,7 +394,7 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
         <p className="muted">
           {alerta.casosNuevos > 0 && (
             <span className="tag warn" style={{ marginRight: 6 }}>
-              {plural(alerta.casosNuevos, 'caso nuevo', 'casos nuevos')} desde la gestión
+              {plural(alerta.casosNuevos, 'falta nueva', 'faltas nuevas')} desde que se atendió
             </span>
           )}
           {ESTADOS_ALERTA[gestion.estado]?.label} el {fechaCorta(fechaLocal(new Date(gestion.actualizado_en)))}
@@ -407,8 +413,8 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
           value={alerta.estado === 'nueva' ? '' : alerta.estado}
           onChange={(e) => gestionar(e.target.value === 'reabrir' ? null : e.target.value)}>
           {alerta.estado === 'nueva'
-            ? <option value="" disabled>{guardando ? 'Guardando…' : 'Gestionar…'}</option>
-            : <option value="reabrir">Reabrir (volver a nueva)</option>}
+            ? <option value="" disabled>{guardando ? 'Guardando…' : 'Marcar como…'}</option>
+            : <option value="reabrir">Volver a pendiente</option>}
           <option value="citado">Apoderado citado</option>
           <option value="revisada">Revisada</option>
           <option value="descartada">Descartada</option>
@@ -421,46 +427,64 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
             {gestion?.nota ? 'Editar nota' : 'Agregar nota'}
           </button>
         )}
-        <Link className="linkbtn" to={`/alumnos/${encodeURIComponent(alerta.rut)}?vista=inasistencias`}
-          state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }}>
-          Ver ficha
-        </Link>
+        <Link className="linkbtn" {...ficha}>Ver ficha</Link>
       </div>
     </article>
   );
 }
 
-function Alertas({ datos, rutaRetorno, periodo, onUltimos30, onRangoCompleto, onCambio }) {
+function Alertas({
+  datos, rutaRetorno, periodo, onUltimos30, onRangoCompleto, onCambio,
+  q, tipoAlerta, setTipoAlerta, prioridadAlerta, setPrioridadAlerta, hayFiltros, onLimpiar,
+}) {
   const [filtro, setFiltroEstado] = useState(memoriaAuditar.filtroAlertas);
   const setFiltro = (valor) => { memoriaAuditar.filtroAlertas = valor; setFiltroEstado(valor); };
-  if (!datos?.alertas) return <EmptyState texto="Sin datos en este rango." filas={3} />;
-  const resumen = datos.resumen || {};
+  if (!datos?.alertas) return <EmptyState texto="No hay datos para este período." filas={3} />;
+  // Búsqueda, tipo y prioridad; los contadores de estado se calculan sobre esto
+  const filtradas = datos.alertas.filter((a) => coincideAlumno(q, a)
+    && (tipoAlerta === 'todos' || a.tipo === tipoAlerta)
+    && (prioridadAlerta === 'todas' || a.prioridad === prioridadAlerta));
+  const nuevas = filtradas.filter((a) => a.estado === 'nueva').length;
   const opciones = [
-    { id: 'nuevas', label: `Nuevas (${resumen.nuevas ?? 0})` },
-    { id: 'gestionadas', label: `Gestionadas (${resumen.gestionadas ?? 0})` },
-    { id: 'todas', label: `Todas (${resumen.total ?? 0})` },
+    { id: 'nuevas', label: `Pendientes (${nuevas})` },
+    { id: 'gestionadas', label: `Atendidas (${filtradas.length - nuevas})` },
+    { id: 'todas', label: `Todas (${filtradas.length})` },
   ];
-  const visibles = datos.alertas.filter((a) => (filtro === 'todas' ? true
+  const visibles = filtradas.filter((a) => (filtro === 'todas' ? true
     : filtro === 'nuevas' ? a.estado === 'nueva' : a.estado !== 'nueva'));
+  const conFiltros = Boolean(q.trim()) || tipoAlerta !== 'todos' || prioridadAlerta !== 'todas';
   return (
     <>
       {!datos.datosSuficientes && (
         <div className="msg aviso" role="status">
           <p>
-            Los patrones de calendario necesitan al menos {datos.minDiasRango} días de clase con datos
-            (este período tiene {datos.diasConDatos}). Amplía el período para buscarlos.
+            Para buscar estas alertas se necesitan al menos {datos.minDiasRango} días de clases con datos
+            (este período tiene {datos.diasConDatos}). Elige un período más largo.
           </p>
           {periodo !== '30dias' && periodo !== '2meses' ? (
             <button className="btn" type="button" onClick={onUltimos30}>Ver últimos 30 días</button>
           ) : onRangoCompleto && (
-            <button className="btn" type="button" onClick={onRangoCompleto}>Usar todo el rango disponible</button>
+            <button className="btn" type="button" onClick={onRangoCompleto}>Usar todas las fechas descargadas</button>
           )}
         </div>
       )}
+      <div className="audit-filter-grid sin-tipo">
+        <select className="input" value={tipoAlerta} onChange={(e) => setTipoAlerta(e.target.value)} aria-label="Tipo de alerta">
+          <option value="todos">Todos los tipos de alerta</option>
+          {TIPOS_ALERTA.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+        </select>
+        <select className="input" value={prioridadAlerta} onChange={(e) => setPrioridadAlerta(e.target.value)} aria-label="Prioridad">
+          <option value="todas">Todas las prioridades</option>
+          <option value="alta">Prioridad alta</option>
+          <option value="media">Prioridad media</option>
+        </select>
+      </div>
       <Segmented valor={filtro} onChange={setFiltro} opciones={opciones} />
+      <Contador cantidad={visibles.length} singular="alerta" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
       {!visibles.length && (
         <p className="muted">
-          {filtro === 'nuevas' ? 'No hay alertas nuevas en este período.' : 'No hay alertas en esta vista.'}
+          {conFiltros ? 'Ninguna alerta coincide con los filtros.'
+            : filtro === 'nuevas' ? 'No hay alertas pendientes en este período.' : 'No hay alertas en esta vista.'}
         </p>
       )}
       {TIPOS_ALERTA.map((tipoAlerta) => {
@@ -498,6 +522,7 @@ function filtrosDesdeUrl(search) {
     tab,
     tipo: valido(TIPOS, p.get('tipo'), 'ambos'),
     curso: p.get('curso') || '',
+    q: p.get('q') || '',
     periodo,
     ...rango,
   };
@@ -518,7 +543,6 @@ function filtrosRecordados() {
 export default function Audit() {
   const navigate = useNavigate();
   const location = useLocation();
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const [restaurados] = useState(() => filtrosDesdeUrl(location.search) || filtrosRecordados());
   const [tab, setTab] = useState(restaurados?.tab ?? 'prioridad');
   const [tipo, setTipo] = useState(restaurados?.tipo ?? 'ambos');
@@ -526,6 +550,14 @@ export default function Audit() {
   const [periodo, setPeriodo] = useState(restaurados?.periodo ?? 'hoy');
   const [desde, setDesde] = useState(restaurados?.desde ?? '');
   const [hasta, setHasta] = useState(restaurados?.hasta ?? '');
+  // Búsqueda y filtros internos: se aplican en el navegador sobre lo que entrega el back
+  const [q, setQ] = useState(restaurados?.q ?? '');
+  const [nivel, setNivelEstado] = useState(memoriaAuditar.nivel);
+  const setNivel = (valor) => { memoriaAuditar.nivel = valor; setNivelEstado(valor); };
+  const [tipoAlerta, setTipoAlertaEstado] = useState(memoriaAuditar.tipoAlerta);
+  const setTipoAlerta = (valor) => { memoriaAuditar.tipoAlerta = valor; setTipoAlertaEstado(valor); };
+  const [prioridadAlerta, setPrioridadAlertaEstado] = useState(memoriaAuditar.prioridadAlerta);
+  const setPrioridadAlerta = (valor) => { memoriaAuditar.prioridadAlerta = valor; setPrioridadAlertaEstado(valor); };
   const [cursos, setCursos] = useState([]);
   const [datos, setDatos] = useState(null);
   const [estadoDatos, setEstadoDatos] = useState(null);
@@ -538,8 +570,8 @@ export default function Audit() {
   const [ultimoDia, setUltimoDia] = useState(null);
 
   useEffect(() => {
-    memoriaAuditar.filtros = { tab, tipo, curso, periodo, desde, hasta };
-  }, [tab, tipo, curso, periodo, desde, hasta]);
+    memoriaAuditar.filtros = { tab, tipo, curso, periodo, desde, hasta, q };
+  }, [tab, tipo, curso, periodo, desde, hasta, q]);
   const consultaAbortRef = useRef(null);
   const syncAbortRef = useRef(null);
 
@@ -558,26 +590,25 @@ export default function Audit() {
   };
 
   // Todo el rango con asistencia descargada (para buscar patrones)
-  const usarRangoCompleto = (estado = estadoDatos) => {
-    const inicio = estado?.primeraFechaAsistencia;
-    const fin = estado?.ultimaFechaAsistencia;
-    if (!inicio || !fin) return false;
+  const usarRangoCompleto = () => {
+    const inicio = estadoDatos?.primeraFechaAsistencia;
+    const fin = estadoDatos?.ultimaFechaAsistencia;
+    if (!inicio || !fin) return;
     setPeriodo('personalizado');
     setDesde(inicio);
     setHasta(fin);
     setAvisoRango('');
-    return true;
   };
 
   // Tras gestionar una alerta se actualiza en el lugar, sin recargar la lista
+  // (los contadores de Alertas se calculan en el componente a partir de `alertas`)
   const actualizarAlerta = (clave, gestion) => {
     setDatos((previo) => {
       if (!previo?.alertas) return previo;
       const alertas = previo.alertas.map((a) => (a.clave === clave
         ? { ...a, gestion, estado: gestion ? gestion.estado : 'nueva', casosNuevos: 0 }
         : a));
-      const nuevas = alertas.filter((a) => a.estado === 'nueva').length;
-      return { ...previo, alertas, resumen: { ...previo.resumen, nuevas, gestionadas: alertas.length - nuevas } };
+      return { ...previo, alertas };
     });
   };
 
@@ -616,9 +647,8 @@ export default function Audit() {
           setCargando(false);
           return;
         }
-        if (ultima !== hoy && ![estado.ultimaFechaAsistencia, estado.ultimaFechaAtrasos].includes(hoy)) {
-          setUltimoDia(ultima);
-        }
+        // `ultima` es la más reciente de las dos: si alguna fuera hoy, sería hoy
+        if (ultima !== hoy) setUltimoDia(ultima);
       })
       .catch((e) => {
         if (activo) {
@@ -671,15 +701,29 @@ export default function Audit() {
     if (tab !== 'prioridad') p.set('tab', tab);
     if (tipo !== 'ambos') p.set('tipo', tipo);
     if (curso) p.set('curso', curso);
+    if (q.trim()) p.set('q', q.trim());
+    // Siempre lleva al menos el período, para que Auditoría sepa que debe restaurar
     p.set('periodo', periodo);
     if (periodo === 'personalizado') {
       if (desde) p.set('desde', desde);
       if (hasta) p.set('hasta', hasta);
     }
-    // Siempre lleva al menos un parámetro, para que Auditoría sepa que debe restaurar
-    if (![...p.keys()].length) p.set('periodo', 'hoy');
     return `/auditar?${p}`;
-  }, [tab, tipo, curso, periodo, desde, hasta]);
+  }, [tab, tipo, curso, periodo, desde, hasta, q]);
+
+  // Solo cuentan los filtros que aplican a la pestaña actual (el período no es un filtro aquí)
+  const hayFiltros = Boolean(q.trim() || curso
+    || (tab !== 'alertas' && tipo !== 'ambos')
+    || (tab === 'prioridad' && nivel !== 'todos')
+    || (tab === 'alertas' && (tipoAlerta !== 'todos' || prioridadAlerta !== 'todas')));
+  const limpiarFiltros = () => {
+    setQ('');
+    setCurso('');
+    setTipo('ambos');
+    setNivel('todos');
+    setTipoAlerta('todos');
+    setPrioridadAlerta('todas');
+  };
 
   const cambiarPeriodo = (nuevoPeriodo) => {
     setPeriodo(nuevoPeriodo);
@@ -734,51 +778,11 @@ export default function Audit() {
       cambiarPeriodo(tab === 'alertas' ? '30dias' : 'hoy');
     };
     try {
-      if (!esPc) {
-        await terminar(await iniciarSync(cuerpo, { signal: controller.signal }));
-        return;
-      }
-      const credenciales = await getCredencialesPortal();
-      if (!credenciales.guardadas && !credenciales.enMemoria) {
-        if (esPc) {
-          navigate('/ajustes', {
-            replace: false,
-            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: 'Configura las credenciales del portal para sincronizar.' },
-          });
-        } else {
-          setError('Sincroniza desde el PC.');
-        }
-        return;
-      }
-      if (credenciales.invalidas) {
-        if (esPc) {
-          navigate('/ajustes', {
-            replace: false,
-            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: 'Las credenciales guardadas están inválidas. Actualízalas para continuar.' },
-          });
-        } else {
-          setError('Las credenciales no son válidas. Sincroniza desde el PC.');
-        }
-        return;
-      }
-      await terminar(await iniciarSync(cuerpo, { signal: controller.signal }));
+      const respuesta = await sincronizarPortal({ navigate, cuerpo, signal: controller.signal });
+      // null = faltaban credenciales y se fue a Ajustes
+      if (respuesta) await terminar(respuesta);
     } catch (e) {
-      if (e.name === 'AbortError') return;
-      if (!esPc && (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO')) {
-        setError('Sincroniza desde el PC.');
-      } else if (!esPc) {
-        setError(MENSAJES_PORTAL[e.code] || e.message || 'No se pudo sincronizar.');
-      } else if (MENSAJES_PORTAL[e.code]) {
-        setError(MENSAJES_PORTAL[e.code]);
-        if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
-          navigate('/ajustes', {
-            replace: false,
-            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
-          });
-        }
-      } else {
-        setError(e.message || 'Ocurrió un error inesperado.');
-      }
+      if (e.name !== 'AbortError') setError(e.message);
     } finally {
       setSincronizando(false);
     }
@@ -796,6 +800,12 @@ export default function Audit() {
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">
+        <div className="searchbox">
+          <Search size={18} />
+          <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder={tab === 'cursos' ? 'Buscar curso' : 'RUT, nombre o curso'}
+            aria-label={tab === 'cursos' ? 'Buscar curso' : 'Buscar alumno'} />
+        </div>
         <div className={tab === 'alertas' ? 'audit-filter-grid sin-tipo' : 'audit-filter-grid'}>
           <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
             <option value="">Todos los cursos</option>
@@ -824,19 +834,19 @@ export default function Audit() {
       {avisoRango && <p className="msg" role="status">{avisoRango}</p>}
       {ultimoDia && periodo === 'hoy' && !finDeSemana && (
         <div className="msg aviso" role="status">
-          <p>Hoy ({fechaCorta(fechaLocal(new Date()))}) no hay registros sincronizados.</p>
+          <p>Todavía no hay datos de hoy ({fechaCorta(fechaLocal(new Date()))}).</p>
           <button className="btn" type="button" onClick={() => verDia(ultimoDia)}>
-            Ver el {fechaCorta(ultimoDia)}, último día sincronizado
+            Ver el {fechaCorta(ultimoDia)}, último día con datos
           </button>
         </div>
       )}
-      {datos && <p className="muted">Rango consultado: {mostrarRango(datos)}</p>}
-      {error && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+      {datos && <p className="muted">{mostrarRango(datos)}</p>}
+      {error && <p className="msg error" role="alert">{error}</p>}
 
       {!cargando && !tieneDatos ? (
         <section className="card" role="status">
-          <h2>Sin datos sincronizados</h2>
-          <p className="muted" style={{ margin: '8px 0 14px' }}>Sincroniza el portal para comenzar a auditar.</p>
+          <h2>Aún no hay datos</h2>
+          <p className="muted" style={{ margin: '8px 0 14px' }}>Descarga los datos del portal para empezar.</p>
           <button className="btn" type="button" onClick={() => sincronizar()} disabled={sincronizando}>
             <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />
             {sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}
@@ -844,29 +854,32 @@ export default function Audit() {
         </section>
       ) : finDeSemana ? (
         <FinDeSemana fecha={finDeSemana} onVerViernes={verDia} />
-      ) : cargando ? (
-        <EmptyState texto="Calculando señales…" filas={4} />
+      ) : cargando || (datos && datos.tab !== tab) ? (
+        // También mientras llegan los datos de la pestaña recién elegida
+        <EmptyState texto="Revisando los datos…" filas={4} />
       ) : (
         <>
           <Avisos datos={datos} descargando={sincronizando}
             onDescargar={({ desde: inicio, hasta: fin }) => sincronizar({ desde: inicio, hasta: fin, soloFaltantes: true })} />
-          {datos && datos.tab !== tab ? (
-            <EmptyState texto="Calculando señales…" filas={4} />
-          ) : tab === 'alertas' ? (
+          {tab === 'alertas' ? (
             <Alertas datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
               periodo={periodo} onUltimos30={() => cambiarPeriodo('30dias')}
-              onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? () => usarRangoCompleto() : null} />
+              onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? usarRangoCompleto : null}
+              q={q} tipoAlerta={tipoAlerta} setTipoAlerta={setTipoAlerta}
+              prioridadAlerta={prioridadAlerta} setPrioridadAlerta={setPrioridadAlerta}
+              hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />
           ) : (
             <>
               <Resumen datos={datos} />
               {tab === 'prioridad'
-                ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} />
-                : <Cursos datos={datos} />}
+                ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} q={q}
+                    nivel={nivel} setNivel={setNivel} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />
+                : <Cursos datos={datos} q={q} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />}
             </>
           )}
         </>
       )}
-      <p className="muted">Estas señales no confirman la causa.</p>
+      <p className="muted">Estas alertas son orientativas: no indican el motivo de las faltas.</p>
     </>
   );
 }

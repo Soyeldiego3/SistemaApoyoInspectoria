@@ -16,8 +16,6 @@
 
 - grafico de top curso, etc. 
 
-- busqueda por nombre, rut, etc. de alumnos en auditoria.
-
 - agregar boton de auditar dentro de los detalles del alumno.
 
 ## En progreso
@@ -73,3 +71,5 @@
 - Seccion de Graficos (barras, torta, etc.)
 
 - eliminar hoy, ayer, semana de pestaña auditoria
+
+- Búsqueda por nombre, RUT o curso en Auditar (A quién citar, Alertas y Comparar cursos), con contador y "Limpiar filtros"; en Alertas, filtros por patrón y severidad

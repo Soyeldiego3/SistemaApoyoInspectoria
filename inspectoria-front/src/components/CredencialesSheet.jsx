@@ -1,19 +1,12 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
-export const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
-  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
-  CREDENCIALES_REQUERIDAS: 'Las credenciales del portal son necesarias para sincronizar.',
-};
-
 // Panel con el formulario de credenciales del portal.
 // accion: 'sync' (sincronizar con estas credenciales) | 'probar' | 'guardar'
+// sincronizaAlGuardar: en 'guardar', después de guardarlas se sincroniza (tarjeta de sincronización)
 export default function CredencialesSheet({
   accion, credenciales, setCredenciales, procesando, mensajeError, guardadas, passRef,
-  onSubmit, onCerrar, onCancelar, onOlvidar,
+  sincronizaAlGuardar = false, onSubmit, onCerrar, onCancelar, onOlvidar,
 }) {
   const [mostrarPass, setMostrarPass] = useState(false);
 
@@ -30,7 +23,9 @@ export default function CredencialesSheet({
         </div>
         <p className="muted">
           {accion === 'probar' ? 'Comprueba el acceso sin guardar cambios.' :
-            accion === 'guardar' ? 'Se validarán antes de guardarse.' :
+            accion === 'guardar' ? (sincronizaAlGuardar
+              ? 'Se validarán, se guardarán y luego se descargarán los datos.'
+              : 'Se validarán antes de guardarse.') :
             'Se usan durante la sincronización.'}
         </p>
         <div className="field">
@@ -80,7 +75,8 @@ export default function CredencialesSheet({
         <button className="btn" disabled={procesando}>
           {procesando ? 'Procesando…' :
             accion === 'probar' ? 'Probar conexión' :
-            accion === 'guardar' ? 'Guardar y verificar' : 'Sincronizar'}
+            accion === 'guardar' ? (sincronizaAlGuardar ? 'Guardar y sincronizar' : 'Guardar y verificar') :
+            'Sincronizar'}
         </button>
         {procesando && <button type="button" className="btn ghost" onClick={onCancelar}>Cancelar</button>}
         {guardadas && <button type="button" className="btn ghost" onClick={onOlvidar}>Olvidar credenciales guardadas</button>}
