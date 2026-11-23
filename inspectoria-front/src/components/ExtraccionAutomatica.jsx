@@ -127,7 +127,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
       setEstado('error');
       setMensaje('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
       setMensajeModal('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
-    }, anual ? 600000 : 120000); // el año completo descarga varios meses por curso
+    }, 600000); // la primera sincronización trae el año escolar (varios meses por curso)
     try {
       const cuerpo = anual ? { ...(datos || {}), periodo: 'anio' } : datos;
       const data = await iniciarSync(cuerpo, { signal: controllerRef.current.signal });
@@ -135,7 +135,11 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
       const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
       const detalleMeses = data.meses?.length > 1 ? ` Meses: ${data.meses[0]} a ${data.meses.at(-1)}.` : '';
       const detalleAvisos = data.advertencias?.length ? ` ${data.advertencias.length} meses no se pudieron descargar.` : '';
-      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleMeses}${detalleAvisos}${detalleErrores}`);
+      const segundos = Math.round((data.duracionMs || 0) / 1000);
+      const detalleDuracion = data.duracionMs
+        ? ` Tardó ${segundos >= 60 ? `${Math.floor(segundos / 60)} min ${segundos % 60} s` : `${segundos} s`}.`
+        : '';
+      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleMeses}${detalleAvisos}${detalleErrores}${detalleDuracion}`);
       setEstado(errores ? 'error' : 'ok');
       // Inicio deja de mostrar "Reintentar" si la sincronización automática había fallado
       if (!errores) marcarSyncExitosa();

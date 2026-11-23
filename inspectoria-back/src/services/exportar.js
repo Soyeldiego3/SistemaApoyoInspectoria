@@ -5,6 +5,7 @@ const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const PDFDocument = require('pdfkit');
 const { ErrorRegistro, exportarMaster } = require('./registroMaster');
+const { exportarAsistenciaMensual } = require('./asistenciaMensual');
 
 const ANIO = '(SELECT MAX(anio) FROM matricula)';
 const TIPOS = {
@@ -384,9 +385,16 @@ async function masterTodos(db) {
 
 // ---------- Entrada ----------
 
-const DOCUMENTOS = { asistencia: 'Asistencia', atrasos: 'Atrasos', master: 'Master' };
+const DOCUMENTOS = {
+  asistencia: 'Asistencia', asistenciaMensual: 'Asistencia mensual', atrasos: 'Atrasos', master: 'Master',
+};
 
 async function exportarDocumento(db, { documento, curso, formato, desde, hasta }) {
+  // Formato del reporte mensual del portal: un Excel por curso y mes (varios → ZIP)
+  if (documento === 'asistenciaMensual') {
+    if (formato !== 'excel') throw new ErrorRegistro(400, 'La Asistencia mensual solo se exporta en Excel.');
+    return exportarAsistenciaMensual(db, { curso, desde, hasta });
+  }
   if (documento === 'master') {
     if (formato !== 'excel') throw new ErrorRegistro(400, 'El Master solo se exporta en Excel.');
     if (curso) {

@@ -34,6 +34,7 @@ const PERIODOS = [
   { id: 'semana', label: 'Esta semana' },
   { id: '30dias', label: 'Últimos 30 días' },
   { id: 'mes', label: 'Este mes' },
+  { id: 'mesAnterior', label: 'Mes anterior' },
   { id: '2meses', label: 'Últimos 2 meses' },
   { id: 'personalizado', label: 'Elegir fechas…' },
 ];
@@ -41,15 +42,46 @@ const PERIODOS = [
 // Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
 // más cortos. "Este mes" tampoco, porque a fin de mes recién llega al mínimo.
 const PERIODOS_ALERTAS = ['30dias', '2meses', 'personalizado'];
-const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'personalizado'];
-const periodosDe = (tab) => {
+const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// Período por defecto de cada pestaña
+const periodoInicial = (tab) => (tab === 'alertas' ? '30dias' : 'mes');
+
+// Un mes descargado puntual: 'mes:2026-10'
+const PREFIJO_MES = 'mes:';
+const esPeriodoMes = (id) => /^mes:\d{4}-(0[1-9]|1[0-2])$/.test(id || '');
+const claveMes = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+
+// Opciones del selector. En "A quién citar" y "Comparar cursos" se agrega un ítem por
+// cada mes descargado (salvo este mes y el anterior, que ya tienen su opción).
+function periodosDe(tab, mesesConDatos = []) {
   const ids = tab === 'alertas' ? PERIODOS_ALERTAS : PERIODOS_GENERALES;
-  return PERIODOS.filter((p) => ids.includes(p.id));
-};
+  const fijos = PERIODOS.filter((p) => ids.includes(p.id));
+  if (tab === 'alertas') return fijos;
+  const hoy = new Date();
+  const yaIncluidos = new Set([claveMes(hoy), claveMes(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1))]);
+  const meses = mesesConDatos
+    .filter((mes) => !yaIncluidos.has(mes))
+    .map((mes) => ({ id: `${PREFIJO_MES}${mes}`, label: tituloMes(mes) }));
+  return [...fijos.slice(0, -1), ...meses, fijos.at(-1)];
+}
+
+const periodoValido = (tab, id) => (
+  PERIODOS.some((p) => p.id === id && periodosDe(tab).includes(p)) || (tab !== 'alertas' && esPeriodoMes(id))
+);
 
 function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '') {
   const hoy = new Date();
   const fin = fechaLocal(hoy);
+  // Mes completo (o hasta hoy si es el mes en curso)
+  const rangoMes = (anio, mesIndice) => {
+    const ultimo = fechaLocal(new Date(anio, mesIndice + 1, 0));
+    return { desde: fechaLocal(new Date(anio, mesIndice, 1)), hasta: ultimo < fin ? ultimo : fin };
+  };
+  if (periodo === 'mesAnterior') return rangoMes(hoy.getFullYear(), hoy.getMonth() - 1);
+  if (esPeriodoMes(periodo)) {
+    const [anio, mes] = periodo.slice(PREFIJO_MES.length).split('-').map(Number);
+    return rangoMes(anio, mes - 1);
+  }
   if (periodo === 'ayer') {
     const ayer = new Date(hoy);
     ayer.setDate(ayer.getDate() - 1);
@@ -223,6 +255,30 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
   // Con un tipo elegido, la ficha se abre en esa pestaña (los ids coinciden con sus vistas)
   const vista = tipo !== 'ambos' ? `?vista=${tipo}` : '';
   const criterios = datos.criterios;
+  // Textos de los tooltips: "Asistencia de noviembre 2026 hasta el 23-11-2026" (o "del … al …"
+  // si el período abarca varios meses) y "Asistencia del año hasta el 23-11-2026"
+  const { mesDesde, hasta: asistenciaHasta } = criterios || {};
+  const hastaTexto = asistenciaHasta ? ` hasta el ${fechaCorta(asistenciaHasta)}` : '';
+  const textoMes = !mesDesde || !asistenciaHasta ? 'Asistencia del mes'
+    : mesDesde.slice(0, 7) === asistenciaHasta.slice(0, 7)
+      ? `Asistencia de ${tituloMes(mesDesde).toLowerCase()}${hastaTexto}`
+      : `Asistencia del ${fechaCorta(mesDesde)} al ${fechaCorta(asistenciaHasta)}`;
+  const textoAnio = `Asistencia del año${hastaTexto}`;
+  // Chip de asistencia. Con pocos días cargados se marca y va sin color.
+  // `cuenta`: si define la prioridad (el del año), se pinta según 85% / 90%.
+  const chipAsistencia = (etiqueta, pct, dias, texto, cuenta) => {
+    if (pct == null) return null;
+    const pocos = criterios && dias < criterios.minDiasRegistrados;
+    const clase = !cuenta || !criterios || pocos ? ''
+      : pct < criterios.asistenciaMinima ? 'bad'
+        : pct < criterios.asistenciaAlerta ? 'warn' : '';
+    const nota = pocos ? '. Pocos días para considerarla.' : cuenta ? '. Define la prioridad.' : '';
+    return (
+      <span className={`tag ${clase}`} title={`${texto}: ${plural(dias, 'día')} con clases${nota}`}>
+        {etiqueta} {pct}%{pocos ? ' · pocos datos' : ''}
+      </span>
+    );
+  };
   // Los contadores se calculan sobre lo que coincide con la búsqueda
   const coincidentes = datos.alumnos.filter((a) => coincideAlumno(q, a));
   const contar = (n) => coincidentes.filter((a) => a.nivel === n).length;
@@ -235,7 +291,7 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
   return (
     <>
       <p className="muted audit-nota">
-        Primero los alumnos que más conviene citar: baja asistencia, faltas seguidas o atrasos sin justificar.
+        Primero los alumnos que más conviene citar: baja asistencia del año, faltas seguidas o atrasos sin justificar.
       </p>
       <Segmented valor={nivel} onChange={setNivel} opciones={opciones} />
       <Contador cantidad={visibles.length} singular="alumno" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
@@ -247,14 +303,10 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
       <div className="list">
         {visibles.map((alumno) => {
           const info = NIVELES[alumno.nivel] || NIVELES.baja;
-          const pct = alumno.porcentajeAsistencia;
-          const clasePct = pct == null || !criterios ? ''
-            : pct < criterios.asistenciaMinima ? 'bad'
-              : pct < criterios.asistenciaAlerta ? 'warn' : '';
           const chips = senales(alumno, criterios);
           return (
             <Link key={alumno.rut} to={`/alumnos/${encodeURIComponent(alumno.rut)}${vista}`}
-              state={{ returnTo: rutaRetorno, returnLabel: 'Auditar' }} className="item alumno">
+              state={{ returnTo: rutaRetorno, returnLabel: 'Auditoría' }} className="item alumno">
               <div>
                 <b>{alumno.nombres} {alumno.apellidos}</b>
                 <span className="muted audit-meta">{alumno.curso} · {formatearRut(alumno.rut)}</span>
@@ -269,12 +321,11 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
               </div>
               <div className="tags audit-nivel">
                 <span className={`tag ${info.clase}`}>{info.label}</span>
-                {pct != null && tipo !== 'atrasos' && (
-                  <span className={`tag ${clasePct}`}
-                    title={`Asistencia del año: ${plural(alumno.diasRegistrados, 'día')} con clases`
-                      + (criterios?.asistenciaHasta ? ` hasta el ${criterios.asistenciaHasta.split('-').reverse().join('-')}` : '')}>
-                    Asistencia {pct}%
-                  </span>
+                {tipo !== 'atrasos' && (
+                  <>
+                    {chipAsistencia('Mes', alumno.porcentajeMes, alumno.diasMes, textoMes, false)}
+                    {chipAsistencia('Año', alumno.porcentajeAsistencia, alumno.diasRegistrados, textoAnio, true)}
+                  </>
                 )}
               </div>
             </Link>
@@ -357,7 +408,7 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
   // Ficha en Inasistencias con todas las faltas: la evidencia puede incluir justificadas (licencias)
   const ficha = {
     to: `/alumnos/${encodeURIComponent(alerta.rut)}?vista=inasistencias&ver=todas`,
-    state: { returnTo: rutaRetorno, returnLabel: 'Auditar' },
+    state: { returnTo: rutaRetorno, returnLabel: 'Auditoría' },
   };
 
   const gestionar = async (nuevoEstado) => {
@@ -522,7 +573,8 @@ function filtrosDesdeUrl(search) {
   const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
   const tab = valido(TABS, p.get('tab'), 'prioridad');
   // Desde el badge del menú (?tab=alertas sin período) se abre "Últimos 30 días"
-  const periodo = valido(periodosDe(tab), p.get('periodo'), tab === 'alertas' ? '30dias' : 'hoy');
+  const pedido = p.get('periodo');
+  const periodo = periodoValido(tab, pedido) ? pedido : periodoInicial(tab);
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
   const rango = periodo === 'personalizado'
     ? { desde: fecha(p.get('desde')), hasta: fecha(p.get('hasta')) }
@@ -538,11 +590,11 @@ function filtrosDesdeUrl(search) {
 }
 
 // Últimos filtros usados en Auditar mientras la app siga abierta (ver filtrosAuditar.js).
-// Al abrir la app no hay nada guardado, así que la primera vez Auditar parte en "Hoy".
+// Al abrir la app no hay nada guardado, así que la primera vez Auditar parte en "Este mes".
 function filtrosRecordados() {
   const filtros = memoriaAuditar.filtros;
   if (!filtros) return null;
-  if (!periodosDe(filtros.tab).some((p) => p.id === filtros.periodo)) return null;
+  if (!periodoValido(filtros.tab, filtros.periodo)) return null;
   // Los períodos relativos (hoy, semana, mes…) se recalculan por si cambió el día
   return filtros.periodo === 'personalizado'
     ? filtros
@@ -556,7 +608,7 @@ export default function Audit() {
   const [tab, setTab] = useState(restaurados?.tab ?? 'prioridad');
   const [tipo, setTipo] = useState(restaurados?.tipo ?? 'ambos');
   const [curso, setCurso] = useState(restaurados?.curso ?? '');
-  const [periodo, setPeriodo] = useState(restaurados?.periodo ?? 'hoy');
+  const [periodo, setPeriodo] = useState(restaurados?.periodo ?? 'mes');
   const [desde, setDesde] = useState(restaurados?.desde ?? '');
   const [hasta, setHasta] = useState(restaurados?.hasta ?? '');
   // Búsqueda y filtros internos: se aplican en el navegador sobre lo que entrega el back
@@ -643,21 +695,14 @@ export default function Audit() {
           if (!restaurados.desde && !restaurados.hasta) setCargando(false);
           return;
         }
-        const hoy = fechaLocal(new Date());
-        const ultima = [estado.ultimaFechaAsistencia, estado.ultimaFechaAtrasos]
-          .filter(Boolean)
-          .sort()
-          .at(-1) || null;
-        // Primera entrada desde que se abrió la app: siempre "Hoy"
-        setPeriodo('hoy');
-        setDesde(hoy);
-        setHasta(hoy);
-        if (!ultima) {
-          setCargando(false);
-          return;
-        }
-        // `ultima` es la más reciente de las dos: si alguna fuera hoy, sería hoy
-        if (ultima !== hoy) setUltimoDia(ultima);
+        // Primera entrada desde que se abrió la app: siempre "Este mes"
+        // (o "Últimos 30 días" si se entra directo a Alertas)
+        const inicial = periodoInicial(tab);
+        const rango = rangoPeriodo(inicial);
+        setPeriodo(inicial);
+        setDesde(rango.desde);
+        setHasta(rango.hasta);
+        if (!estado.ultimaFechaAsistencia && !estado.ultimaFechaAtrasos) setCargando(false);
       })
       .catch((e) => {
         if (activo) {
@@ -678,7 +723,8 @@ export default function Audit() {
   }, [curso, desde, hasta, periodo, tipo]);
 
   useEffect(() => {
-    if (!desde && !hasta && periodo === 'hoy') return undefined;
+    // Sin fechas todavía (esperando el estado de los datos en la primera entrada)
+    if (!desde && !hasta) return undefined;
     const temporizador = setTimeout(() => {
       consultaAbortRef.current?.abort();
       const controller = new AbortController();
@@ -734,7 +780,7 @@ export default function Audit() {
     setPrioridadAlerta('todas');
   };
 
-  const cambiarPeriodo = (nuevoPeriodo) => {
+  const cambiarPeriodo = (nuevoPeriodo, estado = estadoDatos) => {
     setPeriodo(nuevoPeriodo);
     setAvisoRango('');
     setUltimoDia(null);
@@ -743,15 +789,19 @@ export default function Audit() {
       setDesde(rango.desde);
       setHasta(rango.hasta);
     }
+    // En "Hoy", si aún no hay datos de hoy se ofrece ver el último día con datos
+    if (nuevoPeriodo === 'hoy') {
+      const ultima = [estado?.ultimaFechaAsistencia, estado?.ultimaFechaAtrasos]
+        .filter(Boolean).sort().at(-1);
+      if (ultima && ultima !== fechaLocal(new Date())) setUltimoDia(ultima);
+    }
   };
 
   // Cada pestaña tiene sus períodos: al cambiar se ajusta el período si no está disponible
+  // (Alertas → "Últimos 30 días"; A quién citar / Comparar cursos → "Este mes")
   const cambiarTab = (nuevoTab) => {
     if (nuevoTab === tab) return;
-    const disponibles = periodosDe(nuevoTab).map((p) => p.id);
-    // Si el período no existe en la otra pestaña, se usa su primera opción
-    // (Alertas → "Últimos 30 días"; A quién citar / Comparar cursos → "Hoy")
-    if (!disponibles.includes(periodo)) cambiarPeriodo(disponibles[0]);
+    if (!periodoValido(nuevoTab, periodo)) cambiarPeriodo(periodoInicial(nuevoTab));
     setTab(nuevoTab);
   };
 
@@ -784,7 +834,7 @@ export default function Audit() {
         setRecarga((n) => n + 1);
         return;
       }
-      cambiarPeriodo(tab === 'alertas' ? '30dias' : 'hoy');
+      cambiarPeriodo(periodoInicial(tab), estado);
     };
     try {
       const respuesta = await sincronizarPortal({ navigate, cuerpo, signal: controller.signal });
@@ -800,12 +850,17 @@ export default function Audit() {
   const tieneDatos = Boolean(estadoDatos?.ultimaFechaAsistencia || estadoDatos?.ultimaFechaAtrasos);
   const ultimaTexto = haceCuanto(estadoDatos?.ultimaSincronizacionExitosa);
   const rangoActual = rangoPeriodo(periodo, desde, hasta);
+  // Meses del selector; si el elegido (p. ej. al volver de una ficha) no está, se agrega
+  const mesesSelector = [...new Set([
+    ...(estadoDatos?.mesesConDatos || []),
+    ...(esPeriodoMes(periodo) ? [periodo.slice(PREFIJO_MES.length)] : []),
+  ])].sort().reverse();
   const finDeSemana = tab !== 'alertas' ? diaFinDeSemana(rangoActual.desde, rangoActual.hasta) : null;
 
   return (
     <>
       <div className="audit-header">
-        <h2>Auditar</h2>
+        <h2>Auditoría</h2>
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">
@@ -826,7 +881,7 @@ export default function Audit() {
             </select>
           )}
           <select className="input" value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} aria-label="Período">
-            {periodosDe(tab).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+            {periodosDe(tab, mesesSelector).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
           </select>
         </div>
         {periodo === 'personalizado' && (

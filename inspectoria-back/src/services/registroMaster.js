@@ -364,4 +364,5 @@ function importarMaster(db, cursoElegido, buffer, { transaccion }) {
 
 module.exports = {
   ErrorRegistro, exportarMaster, importarMaster, cursoLegible, cursoDesdeTexto,
+  claveCurso, buscadorDeAlumnos, alumnosDelCurso,
 };

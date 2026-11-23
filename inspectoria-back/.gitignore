@@ -25,6 +25,8 @@ Archivos/
 *.xlsx
 # La plantilla del Master de registro (sin datos personales) sí se versiona
 !plantillas/master-inasistencias.xlsx
+# Igual la plantilla de Asistencia mensual (formato del portal), también sin datos personales
+!plantillas/asistencia-mensual.xlsx
 
 # Archivos del sistema operativo
 .DS_Store

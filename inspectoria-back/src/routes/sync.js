@@ -24,9 +24,16 @@ function obtenerDbWritable() {
 const INICIO_ANIO_ESCOLAR = 2; // marzo (índice 0-based)
 const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
+// Meses (YYYY-MM) que ya tienen asistencia guardada
+function mesesConDatos(db) {
+  return new Set(db.prepare('SELECT DISTINCT substr(fecha, 1, 7) AS mes FROM asistencia').all().map((fila) => fila.mes));
+}
+
 // Decide qué meses descargar (índices 0-based del año en curso).
-// - por defecto: mes anterior + mes actual (sin bajar de marzo)
-// - periodo 'anio': de marzo al mes actual
+// - por defecto: el año escolar (marzo al mes actual). El mes actual y el anterior se
+//   descargan siempre; los anteriores solo si aún no están en la base, así la primera
+//   sincronización trae el año completo y las siguientes siguen siendo rápidas.
+// - periodo 'anio': de marzo al mes actual, todos (fuerza volver a descargarlos)
 // - desde/hasta: los meses del rango dentro de marzo..mes actual; con soloFaltantes
 //   se omiten los que ya tienen asistencia guardada
 function calcularMeses(db, { periodo, desde, hasta, soloFaltantes }, ahora = new Date()) {
@@ -51,9 +58,7 @@ function calcularMeses(db, { periodo, desde, hasta, soloFaltantes }, ahora = new
     if (anioHasta > anio || fin > actual) fin = actual;
     let meses = inicio <= fin && anioHasta >= anio ? rango(inicio, fin) : [];
     if (soloFaltantes && meses.length) {
-      const conDatos = new Set(db.prepare(`
-        SELECT DISTINCT substr(fecha, 1, 7) AS mes FROM asistencia
-      `).all().map((fila) => fila.mes));
+      const conDatos = mesesConDatos(db);
       meses = meses.filter((m) => !conDatos.has(`${anio}-${String(m + 1).padStart(2, '0')}`));
     }
     return { modo: 'rango', meses, advertencias };
@@ -62,8 +67,12 @@ function calcularMeses(db, { periodo, desde, hasta, soloFaltantes }, ahora = new
   if (periodo === 'anio' && actual > INICIO_ANIO_ESCOLAR) {
     return { modo: 'anio', meses: rango(INICIO_ANIO_ESCOLAR, actual), advertencias };
   }
-  const inicio = actual > INICIO_ANIO_ESCOLAR ? actual - 1 : actual;
-  return { modo: 'normal', meses: rango(inicio, actual), advertencias };
+  // Antes de marzo no hay año escolar: solo el mes actual (como siempre)
+  if (actual <= INICIO_ANIO_ESCOLAR) return { modo: 'normal', meses: [actual], advertencias };
+  const conDatos = mesesConDatos(db);
+  const meses = rango(INICIO_ANIO_ESCOLAR, actual).filter((m) => m >= actual - 1
+    || !conDatos.has(`${anio}-${String(m + 1).padStart(2, '0')}`));
+  return { modo: 'normal', meses, advertencias };
 }
 
 function registrarEjecucion(exitosa) {
@@ -98,6 +107,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     });
   }
   sincronizacionEnCurso = true;
+  const inicioSync = Date.now();
   let sesion;
   let credencialesGuardadas = false;
   let credencialesUsadas;
@@ -250,10 +260,14 @@ router.post('/descargar-e-importar', async (req, res) => {
     });
 
     configuracion.guardar({ ultimaSincronizacionExitosa: new Date().toISOString() });
+    // Cuánto tardó (para comparar la sincronización del año completo con la de 2 meses)
+    const duracionMs = Date.now() - inicioSync;
+    console.log(`Sincronización (${plan.modo}): ${meses.length} mes(es) × ${cursos.length} curso(s) en ${Math.round(duracionMs / 1000)} s.`);
     responder(200, {
       mensaje: 'Proceso completado',
       mes,
       meses,
+      duracionMs,
       advertencias,
       totalCursos: cursos.length,
       cursosProcesados: paquetes.length,

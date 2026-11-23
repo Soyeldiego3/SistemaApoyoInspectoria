@@ -12,6 +12,7 @@ const MODOS = [
 
 const DOCUMENTOS = [
   { id: 'asistencia', label: 'Asistencia' },
+  { id: 'asistenciaMensual', label: 'Asistencia mensual (formato portal)' },
   { id: 'atrasos', label: 'Atrasos' },
   { id: 'master', label: 'Inasistencias justificadas (Master)' },
 ];
@@ -48,18 +49,24 @@ function ResultadoImportacion({ item }) {
     );
   }
   const r = item.resumen;
+  const esAsistencia = r.tipo === 'asistencia';
   return (
     <div className="msg exportar-resultado" role="status">
       <p>
-        <b>{r.curso}</b> ({item.nombre}): {r.registros} registros de {r.alumnos} alumnos.{' '}
-        {r.nuevos} nuevos, {r.cambiados} cambiados, {r.sinCambios} sin cambios.
+        <b>{r.curso}</b>{esAsistencia && r.periodo ? `, asistencia de ${r.periodo}` : ''} ({item.nombre}):{' '}
+        {r.registros} {esAsistencia ? 'días' : 'registros'} de {r.alumnos} alumnos.{' '}
+        {r.nuevos} nuevos, {r.cambiados} cambiados, {r.sinCambios} sin cambios
+        {r.eliminados > 0 ? `, ${r.eliminados} quitados (ya no figuran en el archivo)` : ''}.
       </p>
       {r.fueraDeDatos > 0 && (
         <p className="muted">{r.fueraDeDatos} fechas no figuran como inasistencia en los datos sincronizados (se guardaron igual).</p>
       )}
       {r.noEncontrados?.length > 0 && (
         <details>
-          <summary>{r.noEncontrados.length} alumnos del archivo no se encontraron en el curso</summary>
+          <summary>
+            {r.noEncontrados.length} alumnos del archivo no se encontraron en el curso
+            {esAsistencia ? ' (se buscan por nombre; no se importaron)' : ''}
+          </summary>
           <ul>{r.noEncontrados.map((n) => <li key={n}>{n}</li>)}</ul>
         </details>
       )}
@@ -119,6 +126,8 @@ export default function ExportarImportarSheet({ abierto, onCerrar, onImportado }
   if (!abierto) return null;
 
   const esMaster = documento === 'master';
+  const esMensual = documento === 'asistenciaMensual';
+  const soloExcel = esMaster || esMensual;
   const fechas = rangoPeriodo(periodo, desde, hasta);
   const fechasMal = periodo === 'personalizado' && (!desde || !hasta || hasta < desde);
   const faltanMeses = rango?.desde && Number(rango.desde.slice(5, 7)) > 3 && new Date().getMonth() > 2;
@@ -126,7 +135,7 @@ export default function ExportarImportarSheet({ abierto, onCerrar, onImportado }
   const cambiarModo = (nuevo) => { setModo(nuevo); setError(''); setAviso(''); };
   const cambiarDocumento = (nuevo) => {
     setDocumento(nuevo);
-    if (nuevo === 'master') setFormato('excel');
+    if (nuevo === 'master' || nuevo === 'asistenciaMensual') setFormato('excel');
   };
 
   const exportar = async () => {
@@ -236,12 +245,18 @@ export default function ExportarImportarSheet({ abierto, onCerrar, onImportado }
               <select id="exp-formato" className="input" value={formato} disabled={ocupado}
                 onChange={(e) => setFormato(e.target.value)}>
                 <option value="excel">Excel (.xlsx)</option>
-                <option value="pdf" disabled={esMaster}>PDF</option>
+                <option value="pdf" disabled={soloExcel}>PDF</option>
               </select>
               {esMaster && (
                 <p className="muted exportar-nota">
                   El Master solo se exporta en Excel, con el formato del establecimiento.
                   {!curso && ' Con todos los cursos se descarga un ZIP con un Excel por curso.'}
+                </p>
+              )}
+              {esMensual && (
+                <p className="muted exportar-nota">
+                  Igual al reporte mensual del portal: un Excel por curso y mes (● presente, x ausente).
+                  Si el período abarca varios meses o cursos, se descarga un ZIP.
                 </p>
               )}
             </div>
@@ -258,8 +273,10 @@ export default function ExportarImportarSheet({ abierto, onCerrar, onImportado }
         ) : (
           <>
             <p className="muted">
-              Solo se importan Excel del Master de inasistencias justificadas. El curso se detecta desde el
-              archivo, y sus justificaciones reemplazan a las de la app en esos mismos días.
+              Se importan Excel del Master de inasistencias justificadas o de Asistencia mensual (formato
+              del portal). El tipo y el curso se detectan desde el archivo: las justificaciones del Master
+              y la asistencia del mes reemplazan a las de la app en esos mismos días. En la Asistencia
+              mensual los alumnos se buscan por nombre.
             </p>
             <button type="button" className="btn ghost" disabled={ocupado} onClick={() => inputRef.current?.click()}>
               <FileUp size={16} style={{ verticalAlign: -3, marginRight: 8 }} />

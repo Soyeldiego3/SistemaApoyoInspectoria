@@ -16,7 +16,13 @@ const DESPLAZAMIENTO_STORAGE_KEY = 'inspectoria.graficos.desplazamiento';
 const ESCALAS = [
   { id: 'semana', label: 'Semana' },
   { id: 'mes', label: 'Mes' },
+  { id: 'anio', label: 'Año' },
 ];
+const ETIQUETA_DESPLAZAR = {
+  semana: ['Semana anterior', 'Semana siguiente'],
+  mes: ['Mes anterior', 'Mes siguiente'],
+  anio: ['Año anterior', 'Año siguiente'],
+};
 
 // Lee/guarda en sessionStorage sin romper la página si el navegador no lo permite
 const leerSesion = (clave) => {
@@ -30,9 +36,14 @@ const guardarSesion = (clave, valor) => {
 const fechaCorta = (fecha) => (fecha ? `${fecha.slice(8, 10)}-${fecha.slice(5, 7)}` : '');
 const textoPeriodo = (rango) => (rango?.desde ? `${fechaCorta(rango.desde)} a ${fechaCorta(rango.hasta)}` : 'sin datos');
 
-// Semana (lunes a domingo) o mes completo; desplazamiento 0 = actual, -1 = anterior, etc.
+// Semana (lunes a domingo), mes completo o año escolar (marzo a diciembre);
+// desplazamiento 0 = actual, -1 = anterior, etc.
 function rangoDe(escala, desplazamiento) {
   const hoy = new Date();
+  if (escala === 'anio') {
+    const anio = hoy.getFullYear() + desplazamiento;
+    return { desde: `${anio}-03-01`, hasta: `${anio}-12-31`, etiqueta: `Año escolar ${anio}` };
+  }
   if (escala === 'semana') {
     const lunes = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     lunes.setDate(lunes.getDate() - (hoy.getDay() === 0 ? 6 : hoy.getDay() - 1) + desplazamiento * 7);
@@ -122,12 +133,12 @@ export default function Charts() {
       <Segmented opciones={ESCALAS} valor={escala} onChange={cambiarEscala} />
       <div className="row">
         <button type="button" className="iconbtn audit-sync" onClick={() => setDesplazamiento((d) => d - 1)}
-          disabled={!puedeRetroceder || cargando} aria-label={escala === 'semana' ? 'Semana anterior' : 'Mes anterior'}>
+          disabled={!puedeRetroceder || cargando} aria-label={ETIQUETA_DESPLAZAR[escala][0]}>
           <ChevronLeft size={20} />
         </button>
         <b>{rango.etiqueta}</b>
         <button type="button" className="iconbtn audit-sync" onClick={() => setDesplazamiento((d) => d + 1)}
-          disabled={!puedeAvanzar || cargando} aria-label={escala === 'semana' ? 'Semana siguiente' : 'Mes siguiente'}>
+          disabled={!puedeAvanzar || cargando} aria-label={ETIQUETA_DESPLAZAR[escala][1]}>
           <ChevronRight size={20} />
         </button>
       </div>

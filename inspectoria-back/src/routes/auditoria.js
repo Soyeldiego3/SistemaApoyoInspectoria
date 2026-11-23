@@ -138,6 +138,13 @@ router.get('/estado', (req, res) => {
       primeraFechaAsistencia: rangos.asistencia.desde || null,
       ultimaFechaAsistencia: rangos.asistencia.hasta || null,
       ultimaFechaAtrasos: rangos.atrasos.hasta || null,
+      // Meses (YYYY-MM) con asistencia o atrasos descargados, del más reciente al más antiguo
+      mesesConDatos: db.prepare(`
+        SELECT substr(fecha, 1, 7) AS mes FROM asistencia
+        UNION
+        SELECT substr(fecha, 1, 7) AS mes FROM atraso
+        ORDER BY mes DESC
+      `).all().map((fila) => fila.mes),
       ultimaSincronizacionExitosa,
     });
   } catch (error) {
@@ -180,11 +187,17 @@ router.get('/prioridad', (req, res) => {
 
     const filtros = { ...rango.elegido, curso: req.query.curso, tipo };
     const incidentes = obtenerIncidentes(db, filtros);
+    // La racha se mira en el período. El % de asistencia se calcula de dos formas:
+    // - del mes: desde el día 1 del mes en que empieza el período (informativo)
+    // - del año: desde el 1 de enero hasta el final del período (define la prioridad,
+    //   porque el 85% mínimo para la promoción es anual)
+    // Así "Hoy" o "Esta semana" no muestran 0% por un solo día.
     const asistenciaPeriodo = resumirAsistencia(obtenerRegistrosAsistencia(db, filtros));
+    const inicioMes = `${rango.elegido.desde.slice(0, 7)}-01`;
     const inicioAnio = `${rango.elegido.hasta.slice(0, 4)}-01-01`;
-    const asistenciaAnual = resumirAsistencia(obtenerRegistrosAsistencia(db, { ...filtros, desde: inicioAnio }));
-    base.criterios.asistenciaDesde = inicioAnio;
-    base.criterios.asistenciaHasta = rango.elegido.hasta;
+    const asistenciaMes = resumirAsistencia(obtenerRegistrosAsistencia(db, { ...filtros, desde: inicioMes }));
+    const asistenciaAnio = resumirAsistencia(obtenerRegistrosAsistencia(db, { ...filtros, desde: inicioAnio }));
+    Object.assign(base.criterios, { mesDesde: inicioMes, anioDesde: inicioAnio, hasta: rango.elegido.hasta });
     const alumnos = new Map();
     const recienteDesde = sumarDias(rango.elegido.hasta, -(DIAS_TENDENCIA_RECIENTE - 1));
 
@@ -219,11 +232,15 @@ router.get('/prioridad', (req, res) => {
       const vacio = { dias: 0, presentes: 0, racha: 0 };
       const clave = `${alumno.rut}::${alumno.curso}`;
       const periodo = asistenciaPeriodo.get(clave) || vacio;
-      const anual = asistenciaAnual.get(clave) || vacio;
+      const mes = asistenciaMes.get(clave) || vacio;
+      const anio = asistenciaAnio.get(clave) || vacio;
+      const porcentaje = (r) => (r.dias ? Number((r.presentes / r.dias * 100).toFixed(1)) : null);
       alumno.componentes.ausenciasConsecutivas = periodo.racha;
-      alumno.diasRegistrados = anual.dias;      alumno.porcentajeAsistencia = anual.dias
-        ? Number((anual.presentes / anual.dias * 100).toFixed(1))
-        : null;
+      // porcentajeAsistencia/diasRegistrados = del año (los usa calcularNivel)
+      alumno.diasRegistrados = anio.dias;
+      alumno.porcentajeAsistencia = porcentaje(anio);
+      alumno.diasMes = mes.dias;
+      alumno.porcentajeMes = porcentaje(mes);
       const c = alumno.componentes;
       alumno.puntaje = c.inasistenciasSinJustificar * PESO_INASISTENCIA
         + c.atrasosSinJustificar * PESO_ATRASO

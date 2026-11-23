@@ -1,8 +1,11 @@
-// Importar el "Master de registro inasistencia justificadas" (Excel por curso)
+// Importar Excel por curso: el "Master de registro inasistencia justificadas" o la
+// asistencia mensual (formato del reporte del portal, o el Excel que descarga la sincronización)
 const express = require('express');
+const XLSX = require('xlsx');
 const db = require('../db/conexion');
 const { abrirDb, transaccion } = require('../services/asistencia');
 const { ErrorRegistro, importarMaster } = require('../services/registroMaster');
+const { importarAsistencia } = require('../services/asistenciaMensual');
 
 const router = express.Router();
 let dbWritable;
@@ -36,7 +39,7 @@ router.get('/rango', (req, res) => {
 
 // La exportación está en routes/exportar.js (asistencia, atrasos y Master)
 
-// ?curso= es opcional: sin él, el curso se detecta desde el archivo (MASTER!B2)
+// ?curso= es opcional: sin él, el curso se detecta desde el archivo (MASTER!B2 o el título)
 router.post('/importar', express.raw({ type: 'application/octet-stream', limit: '10mb' }), (req, res) => {
   const { curso } = req.query;
   if (curso != null && !cursoValido(curso)) return res.status(400).json({ error: 'Curso no válido.' });
@@ -44,7 +47,20 @@ router.post('/importar', express.raw({ type: 'application/octet-stream', limit: 
     return res.status(400).json({ error: 'No se recibió ningún archivo.' });
   }
   try {
-    const resumen = importarMaster(obtenerDbWritable(), curso ? curso.trim() : null, req.body, { transaccion });
+    let wb;
+    try {
+      wb = XLSX.read(req.body, { type: 'buffer' });
+    } catch {
+      throw new ErrorRegistro(400, 'No se pudo leer el archivo. Debe ser un Excel (.xlsx).');
+    }
+    const cursoElegido = curso ? curso.trim() : null;
+    const conexion = obtenerDbWritable();
+    const resumen = wb.Sheets.MASTER
+      ? importarMaster(conexion, cursoElegido, req.body, { transaccion })
+      : importarAsistencia(conexion, wb, req.body, cursoElegido, { transaccion });
+    if (!resumen) {
+      throw new ErrorRegistro(400, 'El archivo no es un Master de inasistencias justificadas ni un reporte de Asistencia mensual.');
+    }
     res.json(resumen);
   } catch (error) {
     responderError(res, error, 'Error al importar el registro');

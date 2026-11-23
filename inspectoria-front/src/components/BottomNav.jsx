@@ -8,7 +8,7 @@ import { fechaLocal } from '../fechas.js';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
-  { to: '/auditar', label: 'Auditar', Icon: ClipboardCheck },
+  { to: '/auditar', label: 'Auditoría', Icon: ClipboardCheck },
   { to: '/alumnos', label: 'Alumnos', Icon: Users },
   { to: '/graficos', label: 'Gráficos', Icon: BarChart3 },
   { to: '/usuarios', label: 'Usuarios', Icon: UserPlus },

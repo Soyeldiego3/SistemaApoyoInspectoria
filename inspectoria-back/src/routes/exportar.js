@@ -1,4 +1,4 @@
-// Exportar datos: GET /api/exportar?documento=asistencia|atrasos|master&curso=&formato=excel|pdf&desde=&hasta=
+// Exportar datos: GET /api/exportar?documento=asistencia|asistenciaMensual|atrasos|master&curso=&formato=excel|pdf&desde=&hasta=
 const express = require('express');
 const db = require('../db/conexion');
 const { ErrorRegistro } = require('../services/registroMaster');

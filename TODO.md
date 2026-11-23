@@ -2,7 +2,7 @@
 
 ## Pendiente
 
-- Comprobar que datos locales se puedan exportar o realizar copias de seguridad para evitar perdida de trabajo
+- Comprobar que datos locales se puedan exportar o realizar copias de seguridad para evitar perdida de trabajo: faltan datos de auditoria, 
 
 - Imporatar y exportar notas de alertas en auditoria
 
@@ -17,6 +17,14 @@
 - grafico de top curso, etc. 
 
 - agregar boton de auditar dentro de los detalles del alumno.
+
+- modificar los campos de fecha personalizada para que muestren solo los meses disponibles? 
+
+- Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.
+
+- en ves de sincronizar solo 2 meses, ver la forma de sincronizar el año escolar completo. para asi poder generar el porcentaje de asistencia anual en los archivos excel y  graficos.
+
+- mostrar porcentaje de asistencia anual y mensual por alumno.
 
 ## En progreso
 
