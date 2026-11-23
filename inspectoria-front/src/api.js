@@ -24,7 +24,8 @@ async function request(path, options = {}) {
   // Solo una 401 de una ruta del sistema invalida la sesión.
   // Las rutas del portal y sincronización pueden reportar 422/502/503/504 sin cerrar sesión.
   const rutaPortal = path.startsWith('/portal/') || path.startsWith('/sync/');
-  if (response.status === 401 && path !== '/auth/login' && !rutaPortal && !data?.codigo) {
+  const rutaLogin = path === '/auth/login' || path === '/auth/qr';
+  if (response.status === 401 && !rutaLogin && !rutaPortal && !data?.codigo) {
     cerrarSesion();
     window.location.hash = '#/login';
     throw new Error('Tu sesión venció. Inicia sesión de nuevo.');
@@ -49,6 +50,21 @@ export async function login(usuario, password) {
   });
   localStorage.setItem('token', data.token);
   return data;
+}
+
+// Canjea el código del QR (teléfono) por una sesión normal
+export async function loginConQr(codigo) {
+  const data = await request('/auth/qr', {
+    method: 'POST',
+    body: JSON.stringify({ codigo }),
+  });
+  localStorage.setItem('token', data.token);
+  return data;
+}
+
+// Solo desde el PC: { codigo, url, expiraEnMs, usuario } para armar el QR con inicio de sesión
+export function crearCodigoQr() {
+  return request('/red/qr-login', { method: 'POST' });
 }
 
 export function getSetupEstado() {

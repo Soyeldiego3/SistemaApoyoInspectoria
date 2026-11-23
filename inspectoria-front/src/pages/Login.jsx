@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { getToken, getSetupEstado, crearAdministrador } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { esPc } from '../portal.js';
@@ -11,10 +11,16 @@ export default function Login() {
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
-  const { ingresar } = useAuth();
+  const { ingresar, ingresarConQr } = useAuth();
   const [requiereAdmin, setRequiereAdmin] = useState(false);
   const [modoSetup, setModoSetup] = useState(false);
   const [adminPass2, setAdminPass2] = useState('');
+
+  // QR de "Conectar desde el teléfono": /#/login?qr=<código de un solo uso>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const codigoQr = searchParams.get('qr');
+  const [canjeandoQr, setCanjeandoQr] = useState(Boolean(codigoQr));
+  const qrIntentado = useRef(false);
 
   useEffect(() => {
     if (!esPc) return;
@@ -23,8 +29,34 @@ export default function Login() {
       .catch(() => setRequiereAdmin(false));
   }, []);
 
+  useEffect(() => {
+    if (!codigoQr || qrIntentado.current) return; // el código es de un solo uso: no reintentar
+    qrIntentado.current = true;
+    setCanjeandoQr(true);
+    ingresarConQr(codigoQr)
+      .then(() => nav('/', { replace: true }))
+      .catch((err) => {
+        setError(err instanceof TypeError
+          ? 'No se pudo conectar con el PC. Revisa que estés en la misma red.'
+          : 'El código QR venció o ya se usó. Escanea el código nuevo o ingresa con tu usuario.');
+        setSearchParams({}, { replace: true }); // el código no queda en la URL ni en el historial
+        setCanjeandoQr(false);
+      });
+  }, [codigoQr]);
+
+  if (canjeandoQr) {
+    return (
+      <div className="app center">
+        <div className="form card" role="status">
+          <h1>Inspectoría</h1>
+          <p className="muted">Iniciando sesión…</p>
+        </div>
+      </div>
+    );
+  }
+
   // Si ya hay una sesión iniciada, no se vuelve a mostrar el login.
-  if (getToken()) return <Navigate to="/" replace />;
+  if (getToken() && !codigoQr) return <Navigate to="/" replace />;
 
   const enviar = async (e) => {
     e.preventDefault();

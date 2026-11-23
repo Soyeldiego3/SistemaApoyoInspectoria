@@ -4,8 +4,6 @@
 
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
 
-- Pasar el inicio de sesion en la url hacia el telefono.
-
 - aparte de mostrat top 5 atrasos. mostrar top 5 de inasistencias. 
 
 - grafico de top curso, etc. 
@@ -19,6 +17,8 @@
 
 
 ## Completado
+
+- Inicio de sesión por QR: el QR de "Conectar desde el teléfono" lleva un código de un solo uso (dura 60 s, se renueva cada 45 s mientras la ventana está a la vista) y el teléfono entra con la sesión del PC.
 
 - Respaldo de información: "Respaldar información" / "Restaurar respaldo" en Ajustes (notas y estados de alertas + justificativos aprobados, en JSON). Atajo "Respaldar notas" en Auditoría. Respaldos automáticos al abrir y cerrar la app (últimos 7, en la carpeta de datos/respaldos).
 

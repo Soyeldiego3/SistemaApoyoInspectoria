@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
 import { getAjustes, getRedInfo, setNavegadorHeadless, setRedEnabled } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { esPc } from '../portal.js';
@@ -10,6 +9,7 @@ import Chips from '../components/Chips.jsx';
 import CredencialesPortal from '../components/CredencialesPortal.jsx';
 import ExtraccionAutomatica from '../components/ExtraccionAutomatica.jsx';
 import RespaldoInformacion from '../components/RespaldoInformacion.jsx';
+import QrInicioSesion from '../components/QrInicioSesion.jsx';
 
 // Opciones del selector de paleta, con una muestra de color antes del nombre
 const OPCIONES_PALETA = PALETAS.map((p) => ({
@@ -119,7 +119,7 @@ export default function Settings() {
                   <Copy size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Copiar URL
                 </button>
               </div>
-              <QRCodeCanvas value={red.principal} size={140} includeMargin />
+              <QrInicioSesion urlBase={red.principal} />
             </div>
           ) : red ? (
             <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar una URL y un código QR.</p>
