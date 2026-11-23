@@ -10,6 +10,8 @@
 
 - Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
 
+- Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
+
 ## En progreso
 
 
@@ -76,7 +78,7 @@
 
 ## Descartado / pendiente
 
-- Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.
+- Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.? algo innesesario se puede llegar a lo mismo desde student detail. 
 
 - modificar los campos de fecha personalizada para que muestren solo los meses disponibles? 
 
