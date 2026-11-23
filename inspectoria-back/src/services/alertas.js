@@ -5,6 +5,7 @@
 // - fin_de_semana: sus faltas se pegan a fines de semana o días sin clases ("puentes")
 // - licencias: muchas licencias médicas aprobadas (o varias de un solo día)
 // - caida: su asistencia de las últimas semanas cayó respecto al resto del rango
+// - falta_bloque: faltó a clases y volvió el mismo día (asistencia por clase)
 //
 // Las faltas justificadas también cuentan para los patrones de calendario: el patrón
 // existe igual; en el detalle se indica cuántas están justificadas.
@@ -13,7 +14,7 @@ const { obtenerRegistrosAsistencia } = require('./incidentes');
 const { codigoDeTipo, CODIGOS } = require('./justificativos');
 const { ALERTAS } = require('../config/auditoria');
 
-const TIPOS_ALERTA = ['mismo_dia', 'fin_de_semana', 'licencias', 'caida'];
+const TIPOS_ALERTA = ['mismo_dia', 'fin_de_semana', 'licencias', 'caida', 'falta_bloque'];
 const ESTADOS_GESTION = ['revisada', 'citado', 'descartada'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const DIAS_PLURAL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
@@ -189,6 +190,62 @@ function detectarLicencias(db, { desde, hasta, curso }) {
   return alertas;
 }
 
+// Faltó a un bloque y después volvió a clases el mismo día (P o T en un bloque posterior).
+// No cuentan las ausencias al final del día (probable retiro anticipado) ni la falta al día completo.
+function detectarFaltasBloque(db, { desde, hasta, curso }) {
+  const umbral = ALERTAS.faltaBloque;
+  const filas = db.prepare(`
+    SELECT al.rut, al.nombres, al.apellidos, c.nombre AS curso,
+      ac.fecha, ac.hora_inicio, ac.hora_fin, ac.estado
+    FROM asistencia_clase ac
+    JOIN matricula m ON m.id_matricula = ac.id_matricula
+    JOIN alumno al   ON al.rut = m.rut_alumno
+    JOIN curso c     ON c.id_curso = m.id_curso
+    WHERE ac.fecha BETWEEN @desde AND @hasta AND (@curso IS NULL OR c.nombre = @curso)
+    ORDER BY al.rut, ac.fecha, ac.hora_inicio
+  `).all({ desde, hasta, curso: curso || null });
+
+  // rut::curso -> fecha -> bloques del día en orden
+  const porAlumno = new Map();
+  for (const fila of filas) {
+    const k = `${fila.rut}::${fila.curso}`;
+    if (!porAlumno.has(k)) porAlumno.set(k, { ...fila, dias: new Map() });
+    const dias = porAlumno.get(k).dias;
+    if (!dias.has(fila.fecha)) dias.set(fila.fecha, []);
+    dias.get(fila.fecha).push(fila);
+  }
+
+  const alertas = [];
+  for (const { rut, nombres, apellidos, curso: cursoAlumno, dias } of porAlumno.values()) {
+    const fechas = [];
+    const porBloque = new Map();
+    for (const [fecha, bloques] of dias) {
+      const perdidos = bloques.filter((b, i) => b.estado === 'A'
+        && bloques.slice(i + 1).some((s) => s.estado === 'P' || s.estado === 'T'));
+      if (!perdidos.length) continue;
+      fechas.push(fecha);
+      for (const b of perdidos) {
+        const nombre = `${b.hora_inicio}–${b.hora_fin}`;
+        porBloque.set(nombre, (porBloque.get(nombre) || 0) + 1);
+      }
+    }
+    if (fechas.length < umbral.minDias) continue;
+    const total = [...porBloque.values()].reduce((a, b) => a + b, 0);
+    const [bloque, veces] = [...porBloque.entries()].sort((a, b) => b[1] - a[1])[0];
+    alertas.push({
+      clave: clave(rut, 'falta_bloque'),
+      tipo: 'falta_bloque',
+      prioridad: fechas.length >= umbral.alta ? 'alta' : 'media',
+      rut, nombres, apellidos, curso: cursoAlumno,
+      titulo: `Faltó a clases en ${fechas.length} días en que sí asistió al colegio`,
+      detalle: `${total} bloque${total === 1 ? '' : 's'} perdido${total === 1 ? '' : 's'} antes de volver a clases.`
+        + (veces > 1 ? ` El más repetido: ${bloque} (${veces} veces).` : ''),
+      evidencia: fechas,
+    });
+  }
+  return alertas;
+}
+
 // Devuelve { alertas, datosSuficientes, diasConDatos }
 function detectarAlertas(db, { desde, hasta, curso }) {
   if (!desde || !hasta) return { alertas: [], datosSuficientes: false, diasConDatos: 0 };
@@ -219,8 +276,9 @@ function detectarAlertas(db, { desde, hasta, curso }) {
       }
     }
   }
-  // Las licencias no dependen del calendario de asistencia
+  // Las licencias y la asistencia por clase no dependen del calendario de asistencia diaria
   alertas.push(...detectarLicencias(db, { desde, hasta, curso }));
+  alertas.push(...detectarFaltasBloque(db, { desde, hasta, curso }));
 
   for (const alerta of alertas) {
     alerta.evidencia.sort();

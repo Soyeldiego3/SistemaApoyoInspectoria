@@ -142,4 +142,38 @@ router.post('/alumnos/:rut/justificativos', (req, res) => {
   }
 });
 
+// Asistencia por clase guardada: ?curso=7°A&fecha=2026-11-25 -> registros agrupados por bloque
+router.get('/clase', (req, res) => {
+  const curso = typeof req.query.curso === 'string' ? req.query.curso.trim() : '';
+  const fecha = typeof req.query.fecha === 'string' ? req.query.fecha : '';
+  if (!curso || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return res.status(400).json({ error: 'Indica el curso y la fecha (YYYY-MM-DD).' });
+  }
+  try {
+    const filas = db.prepare(`
+      SELECT ac.hora_inicio, ac.hora_fin, al.rut, al.apellidos, al.nombres, ac.estado
+      FROM asistencia_clase ac
+      JOIN matricula m ON m.id_matricula = ac.id_matricula
+      JOIN alumno al   ON al.rut = m.rut_alumno
+      JOIN curso c     ON c.id_curso = m.id_curso
+      WHERE c.nombre = ? AND ac.fecha = ?
+      ORDER BY ac.hora_inicio, al.apellidos, al.nombres
+    `).all(curso, fecha);
+
+    const bloques = [];
+    for (const { hora_inicio, hora_fin, ...alumno } of filas) {
+      let bloque = bloques.at(-1);
+      if (!bloque || bloque.hora_inicio !== hora_inicio) {
+        bloque = { hora_inicio, hora_fin, alumnos: [] };
+        bloques.push(bloque);
+      }
+      bloque.alumnos.push(alumno);
+    }
+    res.json({ curso, fecha, bloques });
+  } catch (error) {
+    console.error('Error al consultar asistencia por clase:', error.message);
+    res.status(500).json({ error: 'No se pudo cargar la asistencia por clase.' });
+  }
+});
+
 module.exports = router;

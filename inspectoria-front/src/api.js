@@ -236,6 +236,22 @@ export function iniciarSync(credenciales, options = {}) {
   });
 }
 
+// ---------- Asistencia por clase (bloques horarios) ----------
+// Lee lo guardado en la BD: { curso, fecha, bloques: [{ hora_inicio, hora_fin, alumnos: [{ rut, apellidos, nombres, estado }] }] }
+export function getAsistenciaClase({ curso, fecha }) {
+  return request(`/asistencia/clase?${new URLSearchParams({ curso, fecha })}`);
+}
+
+// Abre el portal una vez y trae la asistencia por clase de TODOS los cursos en esa fecha.
+// Devuelve { cursos: string[], bloques, filas, advertencias, duracionMs }
+export function extraerAsistenciaClase(fecha, options = {}) {
+  return request('/sync/asistencia-clase', {
+    method: 'POST',
+    body: JSON.stringify({ fecha }),
+    signal: options.signal,
+  });
+}
+
 export function getCredencialesPortal() {
   return request('/portal/credenciales');
 }

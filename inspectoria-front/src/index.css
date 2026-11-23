@@ -432,3 +432,24 @@ button.calendario-dia:hover { outline: 2px solid var(--text); outline-offset: -2
 .calendario-dia.vacio { visibility: hidden; }
 .calendario-leyenda { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: .75rem; color: var(--muted); }
 .calendario-leyenda i { width: 14px; height: 14px; border-radius: 3px; background: var(--graf-3); }
+
+/* Asistencia por clase (vista temporal): filtros y tabla alumno × bloque */
+.clase-filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.clase-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.clase-tabla-caja { padding: 8px 0; overflow-x: auto; }
+.clase-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.clase-tabla th, .clase-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.clase-tabla thead th { font-size: .75rem; color: var(--muted); font-weight: 600; text-align: center; white-space: nowrap; }
+.clase-tabla thead th:first-child, .clase-tabla tbody th { text-align: left; }
+.clase-tabla tbody th { position: sticky; left: 0; background: var(--card); font-weight: 500; min-width: 170px; }
+.clase-tabla tbody th a { color: inherit; text-decoration: none; }
+.clase-tabla tbody tr:last-child > * { border-bottom: 0; }
+.clase-tabla td { text-align: center; font-weight: 700; color: var(--muted); }
+.clase-tabla td.estado-P { color: var(--ok); }
+.clase-tabla td.estado-A { color: var(--bad); background: var(--bad-soft); }
+.clase-tabla td.estado-T { color: var(--warn); }
+.clase-parcial { display: table; margin-top: 4px; }
+.clase-leyenda b { margin-right: 4px; }
+.clase-leyenda .estado-P { color: var(--ok); }
+.clase-leyenda .estado-A { color: var(--bad); }
+.clase-leyenda .estado-T { color: var(--warn); }

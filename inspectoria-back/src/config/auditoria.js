@@ -26,5 +26,8 @@ module.exports = {
     licencias: { minLicencias: 3, minCortas: 2, diasCorta: 1, alta: 5 },
     // Caída reciente de asistencia (puntos porcentuales)
     caida: { diasRecientes: 14, minDiasRecientes: 5, minDiasRango: 20, puntos: 15 },
+    // Faltó a un bloque y volvió a clases el mismo día (asistencia por clase).
+    // minDias: días con ese patrón para alertar; alta: días para prioridad alta
+    faltaBloque: { minDias: 2, alta: 4 },
   },
 };

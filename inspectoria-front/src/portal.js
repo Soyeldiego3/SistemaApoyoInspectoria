@@ -60,7 +60,9 @@ export async function intentarSync() {
 // En el PC revisa antes las credenciales: si faltan, son inválidas o el portal las rechaza,
 // lleva a Ajustes para ingresarlas. Devuelve la respuesta, o null si se fue a Ajustes.
 // Lanza un Error con el mensaje listo para mostrar (los AbortError se relanzan tal cual).
-export async function sincronizarPortal({ navigate, cuerpo, signal } = {}) {
+// `accion` opcional: otra petición al portal (p. ej. asistencia por clase) con el mismo manejo
+// de credenciales y errores; esa no cuenta como sincronización completa para Inicio.
+export async function sincronizarPortal({ navigate, cuerpo, signal, accion } = {}) {
   try {
     if (esPc) {
       const credenciales = await getCredencialesPortal();
@@ -73,6 +75,7 @@ export async function sincronizarPortal({ navigate, cuerpo, signal } = {}) {
         return null;
       }
     }
+    if (accion) return await accion();
     const respuesta = await iniciarSync(cuerpo, { signal });
     marcarSyncExitosa();
     return respuesta;

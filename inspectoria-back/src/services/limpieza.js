@@ -7,6 +7,7 @@ const { transaccion } = require('./asistencia');
 function borrarDatosSincronizados(db) {
   db.exec(`
     DELETE FROM atraso;
+    DELETE FROM asistencia_clase;
     DELETE FROM asistencia;
     DELETE FROM matricula;
     DELETE FROM curso;

@@ -170,6 +170,18 @@ function abrirDb(ruta = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS idx_atraso_fecha ON atraso(fecha);
 
+    -- Asistencia por bloque horario ("Asistencia por clase" del portal), extraída de su tabla HTML
+    CREATE TABLE IF NOT EXISTS asistencia_clase (
+      id_asistencia_clase INTEGER PRIMARY KEY,
+      id_matricula INTEGER NOT NULL REFERENCES matricula(id_matricula),
+      fecha        TEXT    NOT NULL,              -- YYYY-MM-DD
+      hora_inicio  TEXT    NOT NULL,              -- HH:MM
+      hora_fin     TEXT    NOT NULL,              -- HH:MM
+      estado       TEXT    NOT NULL CHECK (estado IN ('P','A','T')),
+      UNIQUE (id_matricula, fecha, hora_inicio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asistencia_clase_fecha ON asistencia_clase(fecha);
+
     CREATE TABLE IF NOT EXISTS sync_ejecucion (
       id_ejecucion INTEGER PRIMARY KEY,
       fecha        TEXT    NOT NULL,

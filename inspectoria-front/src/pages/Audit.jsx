@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, Download, RefreshCw, Search, X } from 'lucide-react';
+import { CalendarClock, ChevronRight, Download, RefreshCw, Search, X } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
@@ -413,6 +413,7 @@ const TIPOS_ALERTA = [
   { id: 'fin_de_semana', label: 'Falta junto a fines de semana o feriados' },
   { id: 'licencias', label: 'Muchas licencias médicas' },
   { id: 'caida', label: 'Está faltando más que antes' },
+  { id: 'falta_bloque', label: 'Falta a clases estando en el colegio' },
 ];
 
 const ESTADOS_ALERTA = {
@@ -514,6 +515,12 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
           </button>
         )}
         <Link className="linkbtn" {...ficha}>Ver ficha</Link>
+        {alerta.tipo === 'falta_bloque' && (
+          <Link className="linkbtn" state={ficha.state}
+            to={`/asistencia-clase?${new URLSearchParams({ curso: alerta.curso, fecha: alerta.ultimaEvidencia })}`}>
+            Ver por clase
+          </Link>
+        )}
       </div>
     </article>
   );
@@ -906,6 +913,9 @@ export default function Audit() {
     <>
       <div className="audit-header">
         <h2>Auditoría</h2>
+        <Link className="btn ghost alumnos-exportar" to="/asistencia-clase" state={{ returnTo: rutaRetorno }}>
+          <CalendarClock size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Por clase
+        </Link>
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">

@@ -4,8 +4,10 @@ const { abrirSesion } = require('../extractores/sesion_portal');
 const { descargarAsistencia } = require('../extractores/extraer_asistencia');
 const { extraerTablaAtrasos } = require('../extractores/extraer_atrasos');
 const { extraerCursos } = require('../extractores/extraer_cursos');
+const { extraerAsistenciaClaseDia } = require('../extractores/extraer_asistencia_clase');
 const { parsearAsistencia, abrirDb, guardar, transaccion } = require('../services/asistencia');
 const { parsearAtrasos, guardarAtrasos } = require('../services/atrasos');
+const { parsearAsistenciaClase, guardarAsistenciaClase } = require('../services/asistencia_clase');
 const credencialesPortal = require('../services/credenciales_portal');
 const configuracion = require('../services/configuracion');
 
@@ -75,13 +77,83 @@ function calcularMeses(db, { periodo, desde, hasta, soloFaltantes }, ahora = new
   return { modo: 'normal', meses, advertencias };
 }
 
+// Fecha local del PC en YYYY-MM-DD
+function fechaLocal(fecha = new Date()) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+}
+
 function registrarEjecucion(exitosa) {
-  const ahora = new Date();
-  const fecha = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
   obtenerDbWritable().prepare(`
     INSERT INTO sync_ejecucion (fecha, exitosa)
     VALUES (?, ?)
-  `).run(fecha, exitosa ? 1 : 0);
+  `).run(fechaLocal(), exitosa ? 1 : 0);
+}
+
+// Parsea lo extraído de "Asistencia por clase". Lo que no se puede leer pasa a advertencias
+// en vez de tumbar el resto. Entrada: { tablas, errores } de extraerAsistenciaClaseDia().
+function parsearTablasClase({ tablas, errores }) {
+  const advertencias = errores.map(({ curso, mensaje }) => {
+    console.error(`Asistencia por clase, ${curso}:`, mensaje);
+    return `${curso}: no se pudo leer la asistencia por clase.`;
+  });
+  const datos = [];
+  for (const tabla of tablas) {
+    try {
+      datos.push(parsearAsistenciaClase(tabla));
+    } catch (error) {
+      advertencias.push(`${tabla.curso} ${tabla.bloque}: ${error.message}`);
+    }
+  }
+  return { datos, advertencias };
+}
+
+// Credenciales del body (si vienen) o las guardadas. Devuelve { credenciales, guardadas } o { error }.
+function resolverCredenciales(body) {
+  const { usuario, pass, urlPortal } = body ?? {};
+  const tieneCredencialesBody = typeof usuario === 'string' && usuario.trim()
+    && typeof pass === 'string' && pass;
+  if ((usuario !== undefined || pass !== undefined) && !tieneCredencialesBody) {
+    return { error: {
+      ok: false,
+      codigo: 'CREDENCIALES_REQUERIDAS',
+      mensaje: 'Usuario y contraseña del portal son obligatorios.',
+    } };
+  }
+  const guardadas = !tieneCredencialesBody;
+  const credenciales = tieneCredencialesBody
+    ? { usuario: usuario.trim(), pass, urlPortal }
+    : credencialesPortal.leerDisponibles();
+  if (!credenciales) {
+    return { error: {
+      ok: false,
+      codigo: 'CREDENCIALES_REQUERIDAS',
+      mensaje: 'Ingresa o actualiza las credenciales del portal para sincronizar.',
+    } };
+  }
+  if (guardadas && credenciales.invalidas) {
+    return { error: {
+      ok: false,
+      codigo: 'CREDENCIALES_REQUERIDAS',
+      mensaje: 'Las credenciales guardadas son inválidas. Actualízalas para sincronizar.',
+    } };
+  }
+  if (!credenciales.urlPortal) credenciales.urlPortal = URL_PORTAL_CONFIGURADA;
+  return { credenciales, guardadas };
+}
+
+// Traduce los errores del portal a { estado, datos }; null si no es un error del portal.
+function errorPortal(error) {
+  if (error.code === 'LOGIN_RECHAZADO') {
+    return { estado: 422, datos: { ok: false, codigo: 'LOGIN_RECHAZADO', mensaje: 'El portal rechazó las credenciales.' } };
+  }
+  const mensajes = {
+    PORTAL_INACCESIBLE: 'No se pudo conectar con el portal.',
+    NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge disponible.',
+    ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
+  };
+  if (!mensajes[error.code]) return null;
+  const estado = error.code === 'NAVEGADOR_NO_DISPONIBLE' ? 503 : 502;
+  return { estado, datos: { ok: false, codigo: error.code, mensaje: mensajes[error.code] } };
 }
 
 router.get('/cursos', (req, res) => {
@@ -121,40 +193,13 @@ router.post('/descargar-e-importar', async (req, res) => {
   };
   try {
     const {
-      usuario, pass, recordar, enMemoria, urlPortal, periodo, desde, hasta, soloFaltantes,
+      recordar, enMemoria, periodo, desde, hasta, soloFaltantes,
     } = req.body ?? {};
-    const tieneCredencialesBody = typeof usuario === 'string' && usuario.trim()
-      && typeof pass === 'string' && pass;
-    if (usuario !== undefined || pass !== undefined) {
-      if (!tieneCredencialesBody) {
-        return responder(400, {
-          ok: false,
-          codigo: 'CREDENCIALES_REQUERIDAS',
-          mensaje: 'Usuario y contraseña del portal son obligatorios.',
-        });
-      }
-    }
-
-    credencialesGuardadas = !tieneCredencialesBody;
-    const credenciales = tieneCredencialesBody
-      ? { usuario: usuario.trim(), pass, urlPortal }
-      : credencialesPortal.leerDisponibles();
+    const resuelto = resolverCredenciales(req.body);
+    if (resuelto.error) return responder(400, resuelto.error);
+    const { credenciales } = resuelto;
+    credencialesGuardadas = resuelto.guardadas;
     credencialesUsadas = credenciales;
-    if (!credenciales) {
-      return responder(400, {
-        ok: false,
-        codigo: 'CREDENCIALES_REQUERIDAS',
-        mensaje: 'Ingresa o actualiza las credenciales del portal para sincronizar.',
-      });
-    }
-    if (credencialesGuardadas && credenciales.invalidas) {
-      return responder(400, {
-        ok: false,
-        codigo: 'CREDENCIALES_REQUERIDAS',
-        mensaje: 'Las credenciales guardadas son inválidas. Actualízalas para sincronizar.',
-      });
-    }
-    if (!credenciales.urlPortal) credenciales.urlPortal = URL_PORTAL_CONFIGURADA;
 
     // TODO: convertir a job asíncrono
     const mes = MESES[new Date().getMonth()];
@@ -242,9 +287,24 @@ router.post('/descargar-e-importar', async (req, res) => {
       throw fallo;
     }
 
+    // Asistencia por clase de hoy, con la misma sesión. Es un extra: si falla, se avisa
+    // pero la sincronización sigue. Los fines de semana no hay clases.
+    let clase = { datos: [], advertencias: [] };
+    const diaSemana = new Date().getDay();
+    if (!aPedido && diaSemana !== 0 && diaSemana !== 6) {
+      try {
+        clase = parsearTablasClase(await extraerAsistenciaClaseDia(sesion.page, { fecha: fechaLocal(), cursos }));
+      } catch (error) {
+        console.error('Asistencia por clase de hoy:', error.cause?.message || error.message);
+        clase.advertencias.push('No se pudo traer la asistencia por clase de hoy.');
+      }
+      advertencias.push(...clase.advertencias);
+    }
+
     let totalAlumnos = 0;
     let filasAsistencia = 0;
     let filasAtrasos = 0;
+    let filasClase = 0;
     // No se borra lo anterior: guardar() reemplaza curso+mes y guardarAtrasos() su ventana,
     // así los meses ya descargados (p. ej. a pedido desde Auditar) se conservan.
     // El borrado total sigue ocurriendo al cerrar la app (limpiarAlCerrar).
@@ -257,6 +317,7 @@ router.post('/descargar-e-importar', async (req, res) => {
           filasAtrasos += guardarAtrasos(db, paquete.atrasos, { ...paquete.rango, transaccionar: false });
         }
       }
+      for (const data of clase.datos) filasClase += guardarAsistenciaClase(db, data, { transaccionar: false });
     });
 
     configuracion.guardar({ ultimaSincronizacionExitosa: new Date().toISOString() });
@@ -274,27 +335,12 @@ router.post('/descargar-e-importar', async (req, res) => {
       totalAlumnos,
       filasAsistencia,
       filasAtrasos,
+      filasClase,
       errores: [],
     }, true);
   } catch (error) {
-    if (error.code === 'LOGIN_RECHAZADO') {
-      return responder(422, {
-        ok: false,
-        codigo: 'LOGIN_RECHAZADO',
-        mensaje: 'El portal rechazó las credenciales.',
-      });
-    }
-    if (['PORTAL_INACCESIBLE', 'NAVEGADOR_NO_DISPONIBLE', 'ESTRUCTURA_CAMBIADA'].includes(error.code)) {
-      const mensajes = {
-        PORTAL_INACCESIBLE: 'No se pudo conectar con el portal.',
-        NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge disponible.',
-        ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información.',
-      };
-      const estado = error.code === 'NAVEGADOR_NO_DISPONIBLE' ? 503
-        : error.code === 'ESTRUCTURA_CAMBIADA' ? 502
-        : 502;
-      return responder(estado, { ok: false, codigo: error.code, mensaje: mensajes[error.code] });
-    }
+    const portal = errorPortal(error);
+    if (portal) return responder(portal.estado, portal.datos);
     if (error.code === 'SYNC_FAILED') {
       console.error('Error de extracción:', error.cause?.message || error.message);
       return responder(502, {
@@ -308,6 +354,54 @@ router.post('/descargar-e-importar', async (req, res) => {
       ok: false,
       codigo: 'SYNC_FAILED',
       mensaje: 'No se pudo completar la sincronización.',
+    });
+  } finally {
+    await sesion?.cerrar();
+    sincronizacionEnCurso = false;
+  }
+});
+
+// Asistencia por clase de TODOS los cursos en una fecha, a pedido, con un solo inicio de sesión.
+// Body: { fecha: 'YYYY-MM-DD' } + credenciales opcionales. No cuenta como sincronización (sync_ejecucion).
+router.post('/asistencia-clase', async (req, res) => {
+  const { fecha } = req.body ?? {};
+  if (!FECHA_ISO.test(fecha || '')) {
+    return res.status(400).json({ ok: false, codigo: 'DATOS_INVALIDOS', mensaje: 'Indica la fecha (YYYY-MM-DD).' });
+  }
+  if (sincronizacionEnCurso) {
+    return res.status(409).json({
+      ok: false,
+      codigo: 'SINCRONIZACION_EN_CURSO',
+      mensaje: 'Ya hay una sincronización en curso.',
+    });
+  }
+  const resuelto = resolverCredenciales(req.body);
+  if (resuelto.error) return res.status(400).json(resuelto.error);
+
+  sincronizacionEnCurso = true;
+  const inicio = Date.now();
+  let sesion;
+  try {
+    sesion = await abrirSesion(resuelto.credenciales);
+    credencialesPortal.registrarExito(resuelto.credenciales);
+    const cursos = await extraerCursos(sesion.page);
+    const { datos, advertencias } = parsearTablasClase(await extraerAsistenciaClaseDia(sesion.page, { fecha, cursos }));
+    if (!datos.length) advertencias.push(`El portal no tiene asistencia por clase para el ${fecha.split('-').reverse().join('-')}.`);
+
+    const db = obtenerDbWritable();
+    const filas = transaccion(db, () => datos.reduce(
+      (total, data) => total + guardarAsistenciaClase(db, data, { transaccionar: false }), 0));
+    const cursosConDatos = [...new Set(datos.map((data) => data.curso))];
+    console.log(`Asistencia por clase ${fecha}: ${cursosConDatos.length} curso(s), ${datos.length} bloque(s) en ${Math.round((Date.now() - inicio) / 1000)} s.`);
+    res.json({ ok: true, fecha, cursos: cursosConDatos, bloques: datos.length, filas, advertencias, duracionMs: Date.now() - inicio });
+  } catch (error) {
+    console.error('Asistencia por clase:', error.cause?.message || error.message);
+    const portal = errorPortal(error);
+    if (portal) return res.status(portal.estado).json(portal.datos);
+    res.status(502).json({
+      ok: false,
+      codigo: 'SYNC_FAILED',
+      mensaje: 'No se pudo extraer la asistencia por clase; se conservaron los datos anteriores.',
     });
   } finally {
     await sesion?.cerrar();

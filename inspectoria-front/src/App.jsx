@@ -8,6 +8,7 @@ import StudentDetail from './pages/StudentDetail.jsx';
 import Users from './pages/Users.jsx';
 import Settings from './pages/Settings.jsx';
 import Charts from './pages/Charts.jsx';
+import AsistenciaClase from './pages/AsistenciaClase.jsx';
 import { getToken } from './api.js';
 import { useAuth } from './auth.jsx';
 
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="alumnos" element={<Students />} />
         <Route path="alumnos/:rut" element={<StudentDetail />} />
         <Route path="graficos" element={<Charts />} />
+        <Route path="asistencia-clase" element={<AsistenciaClase />} />
         {/* La antigua página Datos: la sincronización está en Ajustes y exportar/importar en Inicio y Alumnos */}
         <Route path="datos" element={<Navigate to="/ajustes" replace />} />
         <Route path="usuarios" element={<AdminGuard><Users /></AdminGuard>} />

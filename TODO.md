@@ -8,15 +8,17 @@
 
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
-- Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
-
 - Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
+
+- Pantalla de carga ante de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
 
 ## En progreso
 
 
 
 ## Completado
+
+- - Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
 
 - Acceso "Ver patrones" en la ficha del alumno: abre Auditoría → Alertas filtrado por su RUT, con todas las fechas descargadas y todas las alertas (pendientes y atendidas).
 
