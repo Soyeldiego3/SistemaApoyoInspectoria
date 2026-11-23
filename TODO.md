@@ -2,12 +2,6 @@
 
 ## Pendiente
 
-- Comprobar que datos locales se puedan exportar o realizar copias de seguridad para evitar perdida de trabajo: faltan datos de auditoria, 
-
-- Imporatar y exportar notas de alertas en auditoria
-
-- Importar y exportar atrasos como Excel
-
 - Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
 
 - Pasar el inicio de sesion en la url hacia el telefono.
@@ -18,12 +12,6 @@
 
 - agregar boton de auditar dentro de los detalles del alumno.
 
-- modificar los campos de fecha personalizada para que muestren solo los meses disponibles? 
-
-- Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.
-
-- en ves de sincronizar solo 2 meses, ver la forma de sincronizar el año escolar completo. para asi poder generar el porcentaje de asistencia anual en los archivos excel y  graficos.
-
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
 ## En progreso
@@ -31,6 +19,8 @@
 
 
 ## Completado
+
+- Respaldo de información: "Respaldar información" / "Restaurar respaldo" en Ajustes (notas y estados de alertas + justificativos aprobados, en JSON). Atajo "Respaldar notas" en Auditoría. Respaldos automáticos al abrir y cerrar la app (últimos 7, en la carpeta de datos/respaldos).
 
 - Dejar más explícita la asistencia y los atrasos de los estudiantes de la seccion de alumnos: ficha con resumen y pestañas Inasistencias/Atrasos; cada justificativo aplica solo a su tipo
 
@@ -81,3 +71,13 @@
 - eliminar hoy, ayer, semana de pestaña auditoria
 
 - Búsqueda por nombre, RUT o curso en Auditar (A quién citar, Alertas y Comparar cursos), con contador y "Limpiar filtros"; en Alertas, filtros por patrón y severidad
+
+- Importar y exportar atrasos como Excel
+
+- en ves de sincronizar solo 2 meses, ver la forma de sincronizar el año escolar completo. para asi poder generar el porcentaje de asistencia anual en los archivos excel y  graficos.
+
+## Descartado / pendiente
+
+- Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.
+
+- modificar los campos de fecha personalizada para que muestren solo los meses disponibles? 

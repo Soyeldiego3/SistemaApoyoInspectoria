@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronRight, Download, RefreshCw, Search, X } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
+  descargarRespaldo,
   gestionarAlerta,
   getAlertas,
   getAuditoriaCursos,
@@ -11,6 +12,7 @@ import {
   getAuditoriaPrioridad,
   getCursos,
 } from '../api.js';
+import { descargar } from '../descargas.js';
 import { diaSemana, fechaCorta, fechaLocal, tituloMes } from '../fechas.js';
 import { memoriaAuditar } from '../filtrosAuditar.js';
 import { sincronizarPortal } from '../portal.js';
@@ -237,14 +239,38 @@ function senales(alumno, criterios) {
 }
 
 // "N alumnos" + "Limpiar filtros" (igual que en Alumnos)
-function Contador({ cantidad, singular, pluralTexto, hayFiltros, onLimpiar }) {
+function Contador({ cantidad, singular, pluralTexto, hayFiltros, onLimpiar, accion = null }) {
   return (
     <div className="row muted">
       <span>{plural(cantidad, singular, pluralTexto)}</span>
-      {hayFiltros && (
-        <button className="linkbtn" type="button" onClick={onLimpiar}><X size={14} /> Limpiar filtros</button>
-      )}
+      <span className="row" style={{ gap: 16 }}>
+        {hayFiltros && (
+          <button className="linkbtn" type="button" onClick={onLimpiar}><X size={14} /> Limpiar filtros</button>
+        )}
+        {accion}
+      </span>
     </div>
+  );
+}
+
+// Atajo al respaldo de Ajustes: descarga las notas de alertas (y los justificativos aprobados)
+function RespaldarNotas() {
+  const [estado, setEstado] = useState('');
+  const respaldar = async () => {
+    setEstado('Respaldando…');
+    try {
+      const { blob, nombre } = await descargarRespaldo();
+      descargar(blob, nombre);
+      setEstado('');
+    } catch (error) {
+      setEstado(error.message || 'No se pudo respaldar');
+    }
+  };
+  return (
+    <button className="linkbtn" type="button" disabled={estado === 'Respaldando…'} onClick={respaldar}
+      title="Descarga un respaldo de las notas y estados de las alertas">
+      <Download size={14} /> {estado || 'Respaldar notas'}
+    </button>
   );
 }
 
@@ -540,7 +566,8 @@ function Alertas({
         </select>
       </div>
       <Segmented valor={filtro} onChange={setFiltro} opciones={opciones} />
-      <Contador cantidad={visibles.length} singular="alerta" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
+      <Contador cantidad={visibles.length} singular="alerta" hayFiltros={hayFiltros} onLimpiar={onLimpiar}
+        accion={<RespaldarNotas />} />
       {!visibles.length && (
         <p className="muted">
           {conFiltros ? 'Ninguna alerta coincide con los filtros.'

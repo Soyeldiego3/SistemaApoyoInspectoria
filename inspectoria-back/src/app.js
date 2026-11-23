@@ -16,6 +16,7 @@ const cuentaRouter = require('./routes/cuenta');
 const ajustesRouter = require('./routes/ajustes');
 const registroRouter = require('./routes/registro');
 const exportarRouter = require('./routes/exportar');
+const respaldoRouter = require('./routes/respaldo');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { requerirRol } = require('./middleware/roles');
@@ -80,6 +81,7 @@ app.use('/api/dashboard', requerirSesion, dashboardRouter);
 app.use('/api/graficos', requerirSesion, graficosRouter);
 app.use('/api/registro', requerirSesion, registroRouter);
 app.use('/api/exportar', requerirSesion, exportarRouter);
+app.use('/api/respaldo', requerirSesion, respaldoRouter);
 app.use('/api/ajustes', requerirSesion, requerirLoopback, requerirRol('admin'), ajustesRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {

@@ -176,6 +176,42 @@ export function importarRegistro(archivo, curso) {
   });
 }
 
+// ---------- Respaldo de información (notas de alertas y justificativos) ----------
+async function descargarArchivo(path, nombrePorDefecto) {
+  const token = getToken();
+  const response = await fetch(`${API_URL}${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || data.mensaje || `Error de API (${response.status})`);
+  }
+  const simple = /filename="([^"]+)"/i.exec(response.headers.get('content-disposition') || '');
+  return { blob: await response.blob(), nombre: simple?.[1] || nombrePorDefecto };
+}
+
+// Devuelve { blob, nombre } con el respaldo en JSON
+export function descargarRespaldo() {
+  return descargarArchivo('/respaldo', 'respaldo-inspectoria.json');
+}
+
+// Devuelve { ok, resumen: { alertas: {nuevas, actualizadas, omitidas}, justificativos: {nuevos, omitidos} } }
+export function restaurarRespaldo(archivo) {
+  return request('/respaldo/restaurar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: archivo,
+  });
+}
+
+export function listarRespaldosAutomaticos() {
+  return request('/respaldo/automaticos');
+}
+
+export function descargarRespaldoAutomatico(nombre) {
+  return descargarArchivo(`/respaldo/automaticos/${encodeURIComponent(nombre)}`, nombre);
+}
+
 export function iniciarSync(credenciales, options = {}) {
   return request('/sync/descargar-e-importar', {
     method: 'POST',

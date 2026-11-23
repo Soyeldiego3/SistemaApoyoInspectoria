@@ -147,27 +147,12 @@ app.whenReady().then(async () => {
 
 let cleanupStarted = false;
 
-function limpiarAlCerrarHabilitado() {
-  const configPath = path.join(app.getPath('userData'), 'app.config.json');
-  if (!fs.existsSync(configPath)) return true;
-  try {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8')).limpiarAlCerrar !== false;
-  } catch (error) {
-    console.error('No se pudo leer la configuración de cierre:', error.message);
-    return true;
-  }
-}
-
+// Siempre se avisa al backend antes de cerrar: guarda el respaldo automático y,
+// si "limpiarAlCerrar" está activo (lo decide el backend), borra los datos sincronizados.
 app.on('before-quit', (event) => {
   if (cleanupStarted) return;
   const proceso = backend;
   if (!proceso) return;
-
-  if (!limpiarAlCerrarHabilitado()) {
-    cleanupStarted = true;
-    proceso.kill();
-    return;
-  }
 
   event.preventDefault();
   cleanupStarted = true;

@@ -9,6 +9,7 @@ import Segmented from '../components/Segmented.jsx';
 import Chips from '../components/Chips.jsx';
 import CredencialesPortal from '../components/CredencialesPortal.jsx';
 import ExtraccionAutomatica from '../components/ExtraccionAutomatica.jsx';
+import RespaldoInformacion from '../components/RespaldoInformacion.jsx';
 
 // Opciones del selector de paleta, con una muestra de color antes del nombre
 const OPCIONES_PALETA = PALETAS.map((p) => ({
@@ -131,6 +132,8 @@ export default function Settings() {
       <ExtraccionAutomatica onSincronizado={() => setVersionPortal((v) => v + 1)} />
 
       {esPc && <CredencialesPortal version={versionPortal} />}
+
+      <RespaldoInformacion />
 
       <section className="card">
         <h2>Apariencia</h2>
