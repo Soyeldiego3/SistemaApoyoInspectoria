@@ -2,15 +2,13 @@
 
 ## Pendiente
 
-- Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 
-
 - aparte de mostrat top 5 atrasos. mostrar top 5 de inasistencias. 
 
 - grafico de top curso, etc. 
 
-- agregar boton de auditar dentro de los detalles del alumno.
-
 - mostrar porcentaje de asistencia anual y mensual por alumno.
+
+- Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
 
 ## En progreso
 
@@ -18,7 +16,7 @@
 
 ## Completado
 
-- Inicio de sesión por QR: el QR de "Conectar desde el teléfono" lleva un código de un solo uso (dura 60 s, se renueva cada 45 s mientras la ventana está a la vista) y el teléfono entra con la sesión del PC.
+- Acceso "Ver patrones" en la ficha del alumno: abre Auditoría → Alertas filtrado por su RUT, con todas las fechas descargadas y todas las alertas (pendientes y atendidas).
 
 - Respaldo de información: "Respaldar información" / "Restaurar respaldo" en Ajustes (notas y estados de alertas + justificativos aprobados, en JSON). Atajo "Respaldar notas" en Auditoría. Respaldos automáticos al abrir y cerrar la app (últimos 7, en la carpeta de datos/respaldos).
 
@@ -81,3 +79,5 @@
 - Poder buscar la asistencia en un rango de fecha personalizado. por ejemplo ver si un alumno estubo presente en un mes especifico o semana especifica.
 
 - modificar los campos de fecha personalizada para que muestren solo los meses disponibles? 
+
+- Reemplazar o agregar la alterativa para el host local de smartphone, usar vercel o railway para hostear temporalmente los datos necesarios en la nube y asi tener acceso remoto desde otra red en caso de que la red institucional tenga restricciones en los usos de puertos. 

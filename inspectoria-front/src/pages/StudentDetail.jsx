@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import AttendanceRow from '../components/AttendanceRow.jsx';
 import JustifySheet, { SIN_JUSTIFICAR, motivoCorto } from '../components/JustifySheet.jsx';
 import Chips from '../components/Chips.jsx';
@@ -9,6 +9,14 @@ import { EmptyState } from '../components/Skeleton.jsx';
 import { crearJustificativo, getAlumno } from '../api.js';
 import { tituloMes } from '../fechas.js';
 import { formatearRut } from '../texto.js';
+import { memoriaAuditar } from '../filtrosAuditar.js';
+
+// "Ver patrones": Alertas se abre con todas las alertas del alumno, también las ya atendidas
+function prepararAuditoria() {
+  memoriaAuditar.filtroAlertas = 'todas';
+  memoriaAuditar.tipoAlerta = 'todos';
+  memoriaAuditar.prioridadAlerta = 'todas';
+}
 
 const VISTAS = ['inasistencias', 'atrasos'];
 const FILTROS_VER = ['pendientes', 'todas'];
@@ -216,8 +224,18 @@ export default function StudentDetail() {
         <ChevronLeft size={16} />{location.state?.returnLabel || 'Alumnos'}
       </Link>
       <section className="card">
-        <h2>{alumno ? `${alumno.nombres} ${alumno.apellidos}` : 'Alumno'}</h2>
-        <p className="muted">{alumno ? `${alumno.curso} · ${formatearRut(alumno.rut)}` : formatearRut(decodeURIComponent(rut))}</p>
+        <div className="row" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div>
+            <h2>{alumno ? `${alumno.nombres} ${alumno.apellidos}` : 'Alumno'}</h2>
+            <p className="muted">{alumno ? `${alumno.curso} · ${formatearRut(alumno.rut)}` : formatearRut(decodeURIComponent(rut))}</p>
+          </div>
+          {alumno && (
+            <Link className="linkbtn" onClick={prepararAuditoria} title="Abrir Auditoría → Alertas con este alumno"
+              to={`/auditar?tab=alertas&rango=completo&q=${encodeURIComponent(alumno.rut)}`}>
+              <ClipboardCheck size={16} /> Ver patrones
+            </Link>
+          )}
+        </div>
       </section>
 
       <Resumen resumen={resumen} />

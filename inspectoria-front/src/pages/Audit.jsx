@@ -603,6 +603,19 @@ function filtrosDesdeUrl(search) {
   const pedido = p.get('periodo');
   const periodo = periodoValido(tab, pedido) ? pedido : periodoInicial(tab);
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+  // Desde "Ver patrones" de la ficha: todas las fechas descargadas (se completan al cargar el estado)
+  if (p.get('rango') === 'completo') {
+    return {
+      tab,
+      tipo: 'ambos',
+      curso: '',
+      q: p.get('q') || '',
+      periodo: 'personalizado',
+      desde: '',
+      hasta: '',
+      rangoCompleto: true,
+    };
+  }
   const rango = periodo === 'personalizado'
     ? { desde: fecha(p.get('desde')), hasta: fecha(p.get('hasta')) }
     : rangoPeriodo(periodo);
@@ -719,6 +732,11 @@ export default function Audit() {
         setEstadoDatos(estado);
         // Al volver desde la ficha de un alumno se respetan los filtros que traía
         if (restaurados) {
+          if (restaurados.rangoCompleto && estado.primeraFechaAsistencia && estado.ultimaFechaAsistencia) {
+            setDesde(estado.primeraFechaAsistencia);
+            setHasta(estado.ultimaFechaAsistencia);
+            return;
+          }
           if (!restaurados.desde && !restaurados.hasta) setCargando(false);
           return;
         }
