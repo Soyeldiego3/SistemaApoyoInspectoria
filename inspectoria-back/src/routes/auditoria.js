@@ -51,10 +51,7 @@ function metadata(rango, tipo) {
   };
 }
 
-// Por alumno: días registrados, días presentes y la racha más larga de ausencias
-// SIN justificar. La racha usa filas consecutivas con registro del curso; no se comparan
-// fechas calendario, así que fines de semana, feriados y días sin fila no la cortan.
-// Una ausencia justificada o un día presente la cortan.
+
 function resumirAsistencia(registros) {
   const porAlumno = new Map();
   for (const registro of registros) {
@@ -68,8 +65,10 @@ function resumirAsistencia(registros) {
     let racha = 0;
     let presentes = 0;
     for (const fila of filas) {
-      if (fila.estado === 'P') presentes += 1;
-      if ((fila.estado === 'A' || fila.estado === 'F') && !fila.justificado) {
+      const falta = fila.estado === 'A' || fila.estado === 'F';
+      // Igual que la ficha del alumno: todo día registrado que no es falta cuenta como asistido
+      if (!falta) presentes += 1;
+      if (falta && !fila.justificado) {
         actual += 1;
         racha = Math.max(racha, actual);
       } else {
@@ -91,9 +90,9 @@ function calcularNivel(alumno, tipo) {
 
   if (miraInasistencias && asistenciaConfiable && alumno.porcentajeAsistencia != null) {
     if (alumno.porcentajeAsistencia < ASISTENCIA_MINIMA) {
-      razones.alta.push(`Asistencia menor a ${ASISTENCIA_MINIMA}%`);
+      razones.alta.push(`Asistencia del año menor a ${ASISTENCIA_MINIMA}%`);
     } else if (alumno.porcentajeAsistencia < ASISTENCIA_ALERTA) {
-      razones.media.push(`Asistencia menor a ${ASISTENCIA_ALERTA}%`);
+      razones.media.push(`Asistencia del año menor a ${ASISTENCIA_ALERTA}%`);
     }
   }
   if (miraInasistencias && c.ausenciasConsecutivas >= RACHA_ALTA) {
@@ -181,8 +180,11 @@ router.get('/prioridad', (req, res) => {
 
     const filtros = { ...rango.elegido, curso: req.query.curso, tipo };
     const incidentes = obtenerIncidentes(db, filtros);
-    const registros = obtenerRegistrosAsistencia(db, filtros);
-    const asistencia = resumirAsistencia(registros);
+    const asistenciaPeriodo = resumirAsistencia(obtenerRegistrosAsistencia(db, filtros));
+    const inicioAnio = `${rango.elegido.hasta.slice(0, 4)}-01-01`;
+    const asistenciaAnual = resumirAsistencia(obtenerRegistrosAsistencia(db, { ...filtros, desde: inicioAnio }));
+    base.criterios.asistenciaDesde = inicioAnio;
+    base.criterios.asistenciaHasta = rango.elegido.hasta;
     const alumnos = new Map();
     const recienteDesde = sumarDias(rango.elegido.hasta, -(DIAS_TENDENCIA_RECIENTE - 1));
 
@@ -214,11 +216,13 @@ router.get('/prioridad', (req, res) => {
     }
 
     const ranking = [...alumnos.values()].map((alumno) => {
-      const resumen = asistencia.get(`${alumno.rut}::${alumno.curso}`) || { dias: 0, presentes: 0, racha: 0 };
-      alumno.componentes.ausenciasConsecutivas = resumen.racha;
-      alumno.diasRegistrados = resumen.dias;
-      alumno.porcentajeAsistencia = resumen.dias
-        ? Number((resumen.presentes / resumen.dias * 100).toFixed(1))
+      const vacio = { dias: 0, presentes: 0, racha: 0 };
+      const clave = `${alumno.rut}::${alumno.curso}`;
+      const periodo = asistenciaPeriodo.get(clave) || vacio;
+      const anual = asistenciaAnual.get(clave) || vacio;
+      alumno.componentes.ausenciasConsecutivas = periodo.racha;
+      alumno.diasRegistrados = anual.dias;      alumno.porcentajeAsistencia = anual.dias
+        ? Number((anual.presentes / anual.dias * 100).toFixed(1))
         : null;
       const c = alumno.componentes;
       alumno.puntaje = c.inasistenciasSinJustificar * PESO_INASISTENCIA

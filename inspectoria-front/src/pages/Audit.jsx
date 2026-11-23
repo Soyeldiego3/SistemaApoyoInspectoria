@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw, Search, X } from 'lucide-react';
+import { ChevronRight, RefreshCw, Search, X } from 'lucide-react';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
@@ -271,7 +271,8 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
                 <span className={`tag ${info.clase}`}>{info.label}</span>
                 {pct != null && tipo !== 'atrasos' && (
                   <span className={`tag ${clasePct}`}
-                    title={`Calculado sobre ${plural(alumno.diasRegistrados, 'día')} con clases`}>
+                    title={`Asistencia del año: ${plural(alumno.diasRegistrados, 'día')} con clases`
+                      + (criterios?.asistenciaHasta ? ` hasta el ${criterios.asistenciaHasta.split('-').reverse().join('-')}` : '')}>
                     Asistencia {pct}%
                   </span>
                 )}
@@ -287,21 +288,28 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
 function Cursos({ datos, q, hayFiltros, onLimpiar }) {
   if (!datos?.cursos?.length) return <EmptyState texto="No hay datos para este período." filas={3} />;
   const visibles = datos.cursos.filter((curso) => coincide(q, curso.curso));
-  // +2.1 → "+2.1 puntos vs. colegio": cuánto más (o menos) falta el curso que el promedio
-  const vsColegio = (d) => (d == null ? null : `${d > 0 ? '+' : ''}${d} puntos vs. colegio`);
+  // Cuánto más (o menos) falta el curso que el promedio del colegio
+  const vsPromedio = (d) => {
+    if (d == null) return null;
+    if (d === 0) return 'En el promedio';
+    return d > 0 ? `+${d} puntos sobre el promedio` : `−${Math.abs(d)} puntos bajo el promedio`;
+  };
   return (
     <>
     {datos.promedioGeneralInasistencia != null && (
       <p className="muted">
-        Comparado con el promedio del colegio ({datos.promedioGeneralInasistencia}% de inasistencia):
-        "+" falta más que el promedio, "−" falta menos.
+        Promedio de inasistencia del colegio: {datos.promedioGeneralInasistencia}%.
+        "Sobre el promedio" falta más que el resto; "bajo el promedio", menos.
+        Toca un curso para ver sus alumnos.
       </p>
     )}
     <Contador cantidad={visibles.length} singular="curso" hayFiltros={hayFiltros} onLimpiar={onLimpiar} />
     {!visibles.length && <p className="muted">Ningún curso coincide con la búsqueda.</p>}
     <div className="list">
       {visibles.map((curso) => (
-        <section className="item" key={curso.curso}>
+        <Link className="item enlace curso-item" key={curso.curso}
+          to={`/alumnos?curso=${encodeURIComponent(curso.curso)}`}
+          title={`Ver alumnos de ${curso.curso}`}>
           <div>
             <b>{curso.curso}</b>
             <span className="muted">{plural(curso.alumnosMatriculados, 'alumno')} · {plural(curso.diasRegistrados, 'día')} con clases</span>
@@ -311,9 +319,10 @@ function Cursos({ datos, q, hayFiltros, onLimpiar }) {
             <span className="tag">Inasistencia {curso.porcentajeInasistencia == null ? '—' : `${curso.porcentajeInasistencia}%`}</span>
             <span className="tag">Atrasos {curso.porcentajeAtrasos == null ? '—' : `${curso.porcentajeAtrasos}%`}</span>
             <span className="tag warn">Sin justificar {curso.porcentajeSinJustificar == null ? '—' : `${curso.porcentajeSinJustificar}%`}</span>
-            {vsColegio(curso.desviacionPromedio) && <span className="tag">{vsColegio(curso.desviacionPromedio)}</span>}
+            {vsPromedio(curso.desviacionPromedio) && <span className="tag">{vsPromedio(curso.desviacionPromedio)}</span>}
+            <ChevronRight size={18} className="curso-flecha" aria-hidden="true" />
           </div>
-        </section>
+        </Link>
       ))}
     </div>
     </>
