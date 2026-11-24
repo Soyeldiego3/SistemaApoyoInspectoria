@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
-import { getAjustes, getRedInfo, setNavegadorHeadless, setRedEnabled } from '../api.js';
+import {
+  getAjustes, getRedInfo, setInicioWindows, setNavegadorHeadless, setRedEnabled,
+} from '../api.js';
 import { useAuth } from '../auth.jsx';
 import { esPc } from '../portal.js';
 import { MODOS, PALETAS, TAMANOS, useTema } from '../tema.jsx';
@@ -36,6 +38,10 @@ export default function Settings() {
   const [headless, setHeadless] = useState(null);
   const [headlessCargando, setHeadlessCargando] = useState(false);
 
+  // Abrir la app al iniciar Windows (cualquier usuario, en la app de escritorio para Windows)
+  const [inicioWindows, setInicioWindowsEstado] = useState(null); // { disponible, activo } | null
+  const [inicioCargando, setInicioCargando] = useState(false);
+
   const mostrarError = (texto) => { setMensaje(''); setError(texto); };
   const mostrarMensaje = (texto) => { setError(''); setMensaje(texto); };
 
@@ -49,10 +55,14 @@ export default function Settings() {
   }, []);
 
   useEffect(() => {
-    if (!esAdmin || !esPc) return undefined;
+    if (!esPc) return undefined;
     let activo = true;
     getAjustes()
-      .then((ajustes) => { if (activo) setHeadless(ajustes.navegadorHeadless); })
+      .then((ajustes) => {
+        if (!activo) return;
+        setHeadless(ajustes.navegadorHeadless);
+        setInicioWindowsEstado(ajustes.inicioWindows || null);
+      })
       .catch((e) => { if (activo) mostrarError(e.message || 'No se pudieron cargar los ajustes.'); });
     return () => { activo = false; };
   }, [esAdmin]);
@@ -91,6 +101,21 @@ export default function Settings() {
       mostrarError(e.message || 'No se pudo guardar el ajuste.');
     } finally {
       setHeadlessCargando(false);
+    }
+  };
+
+  const cambiarInicioWindows = async (activar) => {
+    setInicioCargando(true);
+    try {
+      const { inicioWindows: estado } = await setInicioWindows(activar);
+      setInicioWindowsEstado(estado);
+      mostrarMensaje(estado.activo
+        ? 'La app se abrirá sola al iniciar Windows.'
+        : 'La app ya no se abrirá sola al iniciar Windows.');
+    } catch (e) {
+      mostrarError(e.message || 'No se pudo cambiar el inicio con Windows.');
+    } finally {
+      setInicioCargando(false);
     }
   };
 
@@ -145,6 +170,24 @@ export default function Settings() {
         <p className="muted" style={{ margin: '14px 0 8px' }}>Tamaño del texto</p>
         <Segmented opciones={TAMANOS} valor={texto} onChange={cambiarTexto} />
       </section>
+
+      {esPc && inicioWindows?.disponible && (
+        <section className="card">
+          <div className="row">
+            <div>
+              <h2>Inicio con Windows</h2>
+              <p className="muted">
+                La app se abre sola al encender el computador.
+              </p>
+            </div>
+            <label className="row" style={{ gap: 8 }}>
+              <input type="checkbox" checked={inicioWindows.activo} disabled={inicioCargando}
+                onChange={(e) => cambiarInicioWindows(e.target.checked)} />
+              Abrir al iniciar Windows
+            </label>
+          </div>
+        </section>
+      )}
 
       {esAdmin && esPc && (
         <section className="card">

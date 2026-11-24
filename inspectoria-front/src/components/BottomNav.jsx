@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, ClipboardCheck, Users, BarChart3, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 import { getConteoAlertas } from '../api.js';
-import { PERIODO_AVISO, RUTA_AVISO, prepararAvisoAlertas } from '../filtrosAuditar.js';
+import {
+  PERIODO_AVISO, RUTA_AVISO, memoriaAuditar, prepararAvisoAlertas,
+} from '../filtrosAuditar.js';
 import { rangoPeriodo } from '../periodos.js';
 
 const tabs = [
@@ -19,6 +21,7 @@ const tabs = [
 export default function BottomNav() {
   const { esAdmin } = useAuth();
   const { pathname, state } = useLocation();
+  const navigate = useNavigate();
   // La ficha de un alumno abierta desde Auditoría sigue resaltando "Auditar"
   const desdeAuditoria = pathname.startsWith('/alumnos/') && Boolean(state?.returnTo?.startsWith('/auditar'));
   // Igual con Gráficos: la ficha abierta desde el Top 5 sigue resaltando "Gráficos"
@@ -52,16 +55,28 @@ export default function BottomNav() {
     if (tab.to === '/usuarios') return esAdmin;
     return true;
   });
+  // "Auditoría" vuelve a donde se estaba (pestaña y filtros recordados). Solo la primera vez
+  // en la sesión, si hay alertas pendientes, abre directo las alertas.
+  const destino = (to) => (to === '/auditar' && alertasNuevas > 0 && !memoriaAuditar.filtros ? RUTA_AVISO : to);
+  // El número rojo siempre lleva a las alertas pendientes que cuenta
+  const abrirAlertas = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    prepararAvisoAlertas();
+    navigate(RUTA_AVISO);
+  };
   return (
     <nav className="nav" aria-label="Navegación principal">
       {visibleTabs.map(({ to, label, Icon, end, abajo }) => (
-        <NavLink key={to} to={to === '/auditar' && alertasNuevas > 0 ? RUTA_AVISO : to} end={end}
-          onClick={to === '/auditar' && alertasNuevas > 0 ? prepararAvisoAlertas : undefined}
+        <NavLink key={to} to={destino(to)} end={end}
+          onClick={destino(to) === RUTA_AVISO ? prepararAvisoAlertas : undefined}
           className={({ isActive }) => [activa(to, isActive) ? 'active' : '', abajo ? 'nav-bottom' : ''].join(' ').trim()}>
           <span className="nav-icono">
             <Icon size={22} />
             {to === '/auditar' && alertasNuevas > 0 && (
-              <span className="nav-badge" aria-label={`${alertasNuevas} alertas pendientes`} title={`${alertasNuevas} alertas pendientes (últimos 30 días)`}>
+              <span className="nav-badge" onClick={abrirAlertas}
+                aria-label={`${alertasNuevas} alertas pendientes`}
+                title={`${alertasNuevas} alertas pendientes (últimos 30 días). Clic para verlas`}>
                 {alertasNuevas > 99 ? '99+' : alertasNuevas}
               </span>
             )}

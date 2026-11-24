@@ -12,6 +12,8 @@ const credencialesPortal = require('../services/credenciales_portal');
 const configuracion = require('../services/configuracion');
 const tareas = require('../services/tareas_sync');
 const { esLoopback } = require('../services/red');
+const auditoriaSistema = require('../services/auditoria_sistema');
+const { conReintentos } = require('../services/reintentos');
 
 const router = express.Router();
 const URL_PORTAL_CONFIGURADA = process.env.PORTAL_URL;
@@ -394,10 +396,33 @@ async function sincronizarCompleta(body) {
   }
 }
 
+// SLA 1: la sincronización completa se reintenta sola ante fallas transitorias
+// (services/reintentos.js): 3 intentos, esperando 30 s y luego 90 s (menos de 5 min en total).
+// Cada intento queda en sync_ejecucion (el KPI TSE cuenta intentos ejecutados).
+// SYNC_ESPERAS_MS (ej. "100,100") permite acortar las esperas en pruebas.
+const ESPERAS_REINTENTO_MS = (process.env.SYNC_ESPERAS_MS || '30000,90000')
+  .split(',').map(Number).filter((n) => Number.isFinite(n) && n >= 0);
+const CODIGOS_REINTENTABLES = ['PORTAL_INACCESIBLE', 'SYNC_FAILED'];
+
+function sincronizarConReintentos(body) {
+  return conReintentos(() => sincronizarCompleta(body), {
+    esperasMs: ESPERAS_REINTENTO_MS,
+    esReintentable: (respuesta) => CODIGOS_REINTENTABLES.includes(respuesta.datos?.codigo),
+    alReintentar: ({ intento, de, codigo, esperaMs }) => {
+      console.warn(`Sincronización: el intento ${intento} de ${de} falló (${codigo}); se reintenta en ${Math.round(esperaMs / 1000)} s.`);
+      try {
+        auditoriaSistema.registrar('sync.reintento', null, { intento, de, codigo, esperaMs });
+      } catch { /* sin log */ }
+      tareas.actualizarDetalle(`El intento ${intento} falló; se vuelve a intentar en ${Math.round(esperaMs / 1000)} s…`);
+    },
+    alIniciarIntento: ({ intento, de }) => tareas.actualizarDetalle(`Reintentando (${intento} de ${de})…`),
+  });
+}
+
 router.post('/descargar-e-importar', (req, res) => correrTarea(req, res, {
   tipo: 'completa',
   parametros: parametrosPublicos(req.body, ['periodo', 'desde', 'hasta', 'soloFaltantes']),
-}, () => sincronizarCompleta(req.body)));
+}, () => sincronizarConReintentos(req.body)));
 
 // Asistencia por clase de TODOS los cursos en una fecha, con un solo inicio de sesión.
 // Devuelve { estado, datos }. No cuenta como sincronización (sync_ejecucion).

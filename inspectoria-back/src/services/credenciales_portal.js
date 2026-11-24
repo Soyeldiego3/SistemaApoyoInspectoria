@@ -1,21 +1,14 @@
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { DATA_DIR } = require('../db/ruta');
 const { obtenerSecreto } = require('./secreto');
+const { cifrar, descifrar } = require('./cifrado');
 
 const FILE_PATH = path.join(DATA_DIR, 'portal.cred.json');
 const SALT_LABEL = 'apoyo-inspectoria-portal';
 let credencialesMemoria = null;
 
-function clave(salt) {
-  return crypto.scryptSync(obtenerSecreto(), Buffer.concat([Buffer.from(SALT_LABEL), salt]), 32);
-}
-
 function escribir({ usuario, pass, urlPortal, invalidas = false, fallosConsecutivos = 0 }) {
-  const salt = crypto.randomBytes(16);
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', clave(salt), iv);
   const contenido = JSON.stringify({
     usuario,
     pass,
@@ -23,14 +16,7 @@ function escribir({ usuario, pass, urlPortal, invalidas = false, fallosConsecuti
     invalidas: Boolean(invalidas),
     fallosConsecutivos: Number(fallosConsecutivos) || 0,
   });
-  const cifrado = Buffer.concat([cipher.update(contenido, 'utf8'), cipher.final()]);
-  const registro = {
-    version: 1,
-    salt: salt.toString('base64'),
-    iv: iv.toString('base64'),
-    tag: cipher.getAuthTag().toString('base64'),
-    data: cifrado.toString('base64'),
-  };
+  const registro = { version: 1, ...cifrar(contenido, obtenerSecreto(), SALT_LABEL) };
 
   fs.writeFileSync(FILE_PATH, JSON.stringify(registro), { encoding: 'utf8', mode: 0o600 });
   try {
@@ -51,16 +37,7 @@ function leer() {
   try {
     const registro = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
     if (registro.version !== 1) throw new Error('Versión de credenciales no soportada');
-    const decipher = crypto.createDecipheriv(
-      'aes-256-gcm',
-      clave(Buffer.from(registro.salt, 'base64')),
-      Buffer.from(registro.iv, 'base64'),
-    );
-    decipher.setAuthTag(Buffer.from(registro.tag, 'base64'));
-    const contenido = Buffer.concat([
-      decipher.update(Buffer.from(registro.data, 'base64')),
-      decipher.final(),
-    ]).toString('utf8');
+    const contenido = descifrar(registro, obtenerSecreto(), SALT_LABEL).toString('utf8');
     const credenciales = JSON.parse(contenido);
     if (typeof credenciales.usuario !== 'string' || typeof credenciales.pass !== 'string') {
       throw new Error('Credenciales incompletas');

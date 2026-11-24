@@ -384,7 +384,7 @@ a { color: inherit; text-decoration: none; }
 
 /* Badge de alertas nuevas sobre "Auditar" */
 .nav-icono { position: relative; display: inline-grid; place-items: center; }
-.nav-badge { position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
+.nav-badge { cursor: pointer; position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
   border-radius: 9px; background: var(--bad); color: #fff; font-size: .65rem; font-weight: 700;
   line-height: 18px; text-align: center; }
 
@@ -444,7 +444,10 @@ button.calendario-dia:hover { outline: 2px solid var(--text); outline-offset: -2
 .clase-grupo-titulo { font-size: 1rem; margin: 6px 0 0; }
 .clase-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .clase-tabla-caja { padding: 8px 0; overflow-x: auto; }
-.clase-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.clase-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; table-layout: fixed; }
+/* Ancho fijo e igual en todas las tablas: nombre 40 %, el resto se reparte entre los bloques */
+.clase-tabla .clase-col-alumno { width: 40%; }
+.clase-tabla tbody th { overflow-wrap: anywhere; }
 .clase-tabla th, .clase-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .clase-tabla thead th { font-size: .75rem; color: var(--muted); font-weight: 600; text-align: center; white-space: nowrap; }
 .clase-tabla thead th:first-child, .clase-tabla tbody th { text-align: left; }
