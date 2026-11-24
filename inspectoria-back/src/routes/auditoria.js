@@ -134,7 +134,16 @@ router.get('/estado', (req, res) => {
       if (ultimaExitosa) ultimaSincronizacionExitosa = `${ultimaExitosa.fecha}T00:00:00.000Z`;
     }
 
+    // Último día con asistencia por clase (la tabla puede no existir en bases antiguas)
+    let ultimaFechaClase = null;
+    try {
+      ultimaFechaClase = db.prepare('SELECT MAX(fecha) AS fecha FROM asistencia_clase').get()?.fecha || null;
+    } catch {
+      ultimaFechaClase = null;
+    }
+
     res.json({
+      ultimaFechaClase,
       primeraFechaAsistencia: rangos.asistencia.desde || null,
       ultimaFechaAsistencia: rangos.asistencia.hasta || null,
       ultimaFechaAtrasos: rangos.atrasos.hasta || null,

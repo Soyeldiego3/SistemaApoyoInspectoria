@@ -142,34 +142,52 @@ router.post('/alumnos/:rut/justificativos', (req, res) => {
   }
 });
 
-// Asistencia por clase guardada: ?curso=7°A&fecha=2026-11-25 -> registros agrupados por bloque
+// Agrupa filas (ordenadas por hora_inicio) en bloques: [{ hora_inicio, hora_fin, alumnos }]
+function agruparBloques(filas) {
+  const bloques = [];
+  for (const { hora_inicio, hora_fin, ...alumno } of filas) {
+    let bloque = bloques.at(-1);
+    if (!bloque || bloque.hora_inicio !== hora_inicio) {
+      bloque = { hora_inicio, hora_fin, alumnos: [] };
+      bloques.push(bloque);
+    }
+    bloque.alumnos.push(alumno);
+  }
+  return bloques;
+}
+
+// Asistencia por clase guardada, agrupada por bloque.
+// ?curso=7°A&fecha=2026-11-25 -> { curso, fecha, bloques }
+// ?fecha=2026-11-25 (todos los cursos) -> { fecha, cursos: [{ curso, bloques }] }
 router.get('/clase', (req, res) => {
   const curso = typeof req.query.curso === 'string' ? req.query.curso.trim() : '';
   const fecha = typeof req.query.fecha === 'string' ? req.query.fecha : '';
-  if (!curso || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return res.status(400).json({ error: 'Indica el curso y la fecha (YYYY-MM-DD).' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return res.status(400).json({ error: 'Indica la fecha (YYYY-MM-DD).' });
   }
   try {
     const filas = db.prepare(`
-      SELECT ac.hora_inicio, ac.hora_fin, al.rut, al.apellidos, al.nombres, ac.estado
+      SELECT c.nombre AS curso, ac.hora_inicio, ac.hora_fin, al.rut, al.apellidos, al.nombres, ac.estado
       FROM asistencia_clase ac
       JOIN matricula m ON m.id_matricula = ac.id_matricula
       JOIN alumno al   ON al.rut = m.rut_alumno
       JOIN curso c     ON c.id_curso = m.id_curso
-      WHERE c.nombre = ? AND ac.fecha = ?
-      ORDER BY ac.hora_inicio, al.apellidos, al.nombres
-    `).all(curso, fecha);
+      WHERE ac.fecha = ? AND (? = '' OR c.nombre = ?)
+      ORDER BY c.nombre, ac.hora_inicio, al.apellidos, al.nombres
+    `).all(fecha, curso, curso);
 
-    const bloques = [];
-    for (const { hora_inicio, hora_fin, ...alumno } of filas) {
-      let bloque = bloques.at(-1);
-      if (!bloque || bloque.hora_inicio !== hora_inicio) {
-        bloque = { hora_inicio, hora_fin, alumnos: [] };
-        bloques.push(bloque);
-      }
-      bloque.alumnos.push(alumno);
+    if (curso) {
+      return res.json({ curso, fecha, bloques: agruparBloques(filas.map(({ curso: _c, ...fila }) => fila)) });
     }
-    res.json({ curso, fecha, bloques });
+    const porCurso = new Map();
+    for (const { curso: nombre, ...fila } of filas) {
+      if (!porCurso.has(nombre)) porCurso.set(nombre, []);
+      porCurso.get(nombre).push(fila);
+    }
+    res.json({
+      fecha,
+      cursos: [...porCurso].map(([nombre, filasCurso]) => ({ curso: nombre, bloques: agruparBloques(filasCurso) })),
+    });
   } catch (error) {
     console.error('Error al consultar asistencia por clase:', error.message);
     res.status(500).json({ error: 'No se pudo cargar la asistencia por clase.' });

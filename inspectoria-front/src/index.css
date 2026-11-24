@@ -434,7 +434,8 @@ button.calendario-dia:hover { outline: 2px solid var(--text); outline-offset: -2
 .calendario-leyenda i { width: 14px; height: 14px; border-radius: 3px; background: var(--graf-3); }
 
 /* Asistencia por clase (vista temporal): filtros y tabla alumno × bloque */
-.clase-filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.clase-grupo { display: grid; gap: 8px; }
+.clase-grupo-titulo { font-size: 1rem; margin: 6px 0 0; }
 .clase-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .clase-tabla-caja { padding: 8px 0; overflow-x: auto; }
 .clase-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }

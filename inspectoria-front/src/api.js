@@ -37,6 +37,7 @@ async function request(path, options = {}) {
       : `Error de API (${response.status})`;
     const error = new Error(message);
     error.code = typeof data === 'object' ? (data?.codigo || data?.code) : undefined;
+    error.datos = typeof data === 'object' ? data : undefined;
     throw error;
   }
 
@@ -238,8 +239,9 @@ export function iniciarSync(credenciales, options = {}) {
 
 // ---------- Asistencia por clase (bloques horarios) ----------
 // Lee lo guardado en la BD: { curso, fecha, bloques: [{ hora_inicio, hora_fin, alumnos: [{ rut, apellidos, nombres, estado }] }] }
+// Sin curso (todos los cursos): { fecha, cursos: [{ curso, bloques }] }
 export function getAsistenciaClase({ curso, fecha }) {
-  return request(`/asistencia/clase?${new URLSearchParams({ curso, fecha })}`);
+  return request(`/asistencia/clase?${new URLSearchParams({ ...(curso ? { curso } : {}), fecha })}`);
 }
 
 // Abre el portal una vez y trae la asistencia por clase de TODOS los cursos en esa fecha.
@@ -250,6 +252,28 @@ export function extraerAsistenciaClase(fecha, options = {}) {
     body: JSON.stringify({ fecha }),
     signal: options.signal,
   });
+}
+
+// ---------- Sincronización como tarea en el PC (la usa el teléfono) ----------
+// El PC responde al tiro { tarea } y extrae en segundo plano; el estado se consulta con getTareaSync.
+// Tarea: { id, tipo: 'completa'|'clase', parametros, origen, estado: 'en_curso'|'ok'|'error', resultado, error }
+export function iniciarTareaSync(cuerpo) {
+  return request('/sync/descargar-e-importar', {
+    method: 'POST',
+    body: JSON.stringify({ ...(cuerpo || {}), segundoPlano: true }),
+  });
+}
+
+export function iniciarTareaClase(fecha) {
+  return request('/sync/asistencia-clase', {
+    method: 'POST',
+    body: JSON.stringify({ fecha, segundoPlano: true }),
+  });
+}
+
+// Sin id: la tarea en curso o la última terminada ({ tarea: null } si no hay)
+export function getTareaSync(id) {
+  return request(id ? `/sync/tarea/${encodeURIComponent(id)}` : '/sync/tarea');
 }
 
 export function getCredencialesPortal() {

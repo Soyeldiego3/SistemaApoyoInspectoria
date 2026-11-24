@@ -2,8 +2,8 @@
 // Así, al ir a otra sección y volver, Auditar queda donde estaba: pestaña, curso, tipo,
 // período y los filtros internos de cada pestaña.
 export const memoriaAuditar = {
-  // { tab, tipo, curso, periodo, desde, hasta, q } o null si aún no se ha entrado a Auditar
-  // (q = texto del buscador)
+  // { tab, tipo, curso, periodo, desde, hasta, q, diaClase, fechaClase } o null si aún no se ha entrado a Auditar
+  // (q = texto del buscador; diaClase/fechaClase = día de la pestaña "Por clase")
   filtros: null,
   // "A quién citar": todos | alta | media
   nivel: 'todos',

@@ -10,11 +10,12 @@ const { parsearAtrasos, guardarAtrasos } = require('../services/atrasos');
 const { parsearAsistenciaClase, guardarAsistenciaClase } = require('../services/asistencia_clase');
 const credencialesPortal = require('../services/credenciales_portal');
 const configuracion = require('../services/configuracion');
+const tareas = require('../services/tareas_sync');
+const { esLoopback } = require('../services/red');
 
 const router = express.Router();
 const URL_PORTAL_CONFIGURADA = process.env.PORTAL_URL;
 let dbWritable;
-let sincronizacionEnCurso = false;
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -170,38 +171,71 @@ router.get('/cursos', (req, res) => {
   }
 });
 
-router.post('/descargar-e-importar', async (req, res) => {
-  if (sincronizacionEnCurso) {
-    return res.status(409).json({
-      ok: false,
-      codigo: 'SINCRONIZACION_EN_CURSO',
-      mensaje: 'Ya hay una sincronización en curso.',
-    });
+// ---- Tareas ----
+// Las extracciones corren como tarea (services/tareas_sync.js): una a la vez.
+// Sin `segundoPlano` la petición espera el resultado (como siempre, lo usa el PC).
+// Con `segundoPlano: true` responde 202 { tarea } al tiro y el resultado se consulta en
+// GET /tarea/:id; así el teléfono le pide la sincronización al PC sin depender de una
+// petición de minutos que se corta al bloquear la pantalla.
+
+function enCurso(res) {
+  return res.status(409).json({
+    ok: false,
+    codigo: 'SINCRONIZACION_EN_CURSO',
+    mensaje: 'Ya hay una sincronización en curso.',
+    tarea: tareas.obtenerActual(),
+  });
+}
+
+// Solo parámetros de la extracción (nunca credenciales) para mostrarlos en la tarea
+function parametrosPublicos(body, claves) {
+  return Object.fromEntries(claves.filter((clave) => body?.[clave] !== undefined).map((clave) => [clave, body[clave]]));
+}
+
+async function correrTarea(req, res, { tipo, parametros }, fn) {
+  if (tareas.ocupado()) return enCurso(res);
+  const segundoPlano = req.body?.segundoPlano === true;
+  const origen = esLoopback(req.socket.remoteAddress) ? 'pc' : 'telefono';
+  const { tarea, terminado } = tareas.ejecutar({ tipo, parametros, origen }, fn);
+  // En segundo plano, si faltan credenciales se responde el error al tiro (no toca el portal)
+  if (segundoPlano && !resolverCredenciales(req.body).error) return res.status(202).json({ ok: true, tarea });
+  const { estado, datos } = await terminado;
+  return res.status(estado).json(datos);
+}
+
+router.get('/tarea', (req, res) => {
+  res.json({ tarea: tareas.obtenerActual() });
+});
+
+router.get('/tarea/:id', (req, res) => {
+  const tarea = tareas.obtener(req.params.id);
+  if (!tarea) {
+    return res.status(404).json({ ok: false, codigo: 'TAREA_NO_ENCONTRADA', mensaje: 'La sincronización ya no está disponible.' });
   }
-  sincronizacionEnCurso = true;
+  res.json({ tarea });
+});
+
+// Sincronización completa (asistencia de los meses, atrasos y asistencia por clase de hoy).
+// Devuelve { estado, datos } para responder.
+async function sincronizarCompleta(body) {
   const inicioSync = Date.now();
   let sesion;
-  let credencialesGuardadas = false;
-  let credencialesUsadas;
   const responder = (estado, datos, exitosa = false) => {
     try {
       registrarEjecucion(exitosa);
     } catch (error) {
       console.error('Error al registrar la ejecución de sincronización:', error.message);
     }
-    return res.status(estado).json(datos);
+    return { estado, datos };
   };
   try {
     const {
       recordar, enMemoria, periodo, desde, hasta, soloFaltantes,
-    } = req.body ?? {};
-    const resuelto = resolverCredenciales(req.body);
+    } = body ?? {};
+    const resuelto = resolverCredenciales(body);
     if (resuelto.error) return responder(400, resuelto.error);
     const { credenciales } = resuelto;
-    credencialesGuardadas = resuelto.guardadas;
-    credencialesUsadas = credenciales;
 
-    // TODO: convertir a job asíncrono
     const mes = MESES[new Date().getMonth()];
     const db = obtenerDbWritable();
     const plan = calcularMeses(db, { periodo, desde, hasta, soloFaltantes });
@@ -324,7 +358,7 @@ router.post('/descargar-e-importar', async (req, res) => {
     // Cuánto tardó (para comparar la sincronización del año completo con la de 2 meses)
     const duracionMs = Date.now() - inicioSync;
     console.log(`Sincronización (${plan.modo}): ${meses.length} mes(es) × ${cursos.length} curso(s) en ${Math.round(duracionMs / 1000)} s.`);
-    responder(200, {
+    return responder(200, {
       mensaje: 'Proceso completado',
       mes,
       meses,
@@ -350,35 +384,27 @@ router.post('/descargar-e-importar', async (req, res) => {
       });
     }
     console.error('Error en sincronización:', error.message);
-    responder(500, {
+    return responder(500, {
       ok: false,
       codigo: 'SYNC_FAILED',
       mensaje: 'No se pudo completar la sincronización.',
     });
   } finally {
     await sesion?.cerrar();
-    sincronizacionEnCurso = false;
   }
-});
+}
 
-// Asistencia por clase de TODOS los cursos en una fecha, a pedido, con un solo inicio de sesión.
-// Body: { fecha: 'YYYY-MM-DD' } + credenciales opcionales. No cuenta como sincronización (sync_ejecucion).
-router.post('/asistencia-clase', async (req, res) => {
-  const { fecha } = req.body ?? {};
-  if (!FECHA_ISO.test(fecha || '')) {
-    return res.status(400).json({ ok: false, codigo: 'DATOS_INVALIDOS', mensaje: 'Indica la fecha (YYYY-MM-DD).' });
-  }
-  if (sincronizacionEnCurso) {
-    return res.status(409).json({
-      ok: false,
-      codigo: 'SINCRONIZACION_EN_CURSO',
-      mensaje: 'Ya hay una sincronización en curso.',
-    });
-  }
-  const resuelto = resolverCredenciales(req.body);
-  if (resuelto.error) return res.status(400).json(resuelto.error);
+router.post('/descargar-e-importar', (req, res) => correrTarea(req, res, {
+  tipo: 'completa',
+  parametros: parametrosPublicos(req.body, ['periodo', 'desde', 'hasta', 'soloFaltantes']),
+}, () => sincronizarCompleta(req.body)));
 
-  sincronizacionEnCurso = true;
+// Asistencia por clase de TODOS los cursos en una fecha, con un solo inicio de sesión.
+// Devuelve { estado, datos }. No cuenta como sincronización (sync_ejecucion).
+async function traerAsistenciaClase(body, fecha) {
+  const resuelto = resolverCredenciales(body);
+  if (resuelto.error) return { estado: 400, datos: resuelto.error };
+
   const inicio = Date.now();
   let sesion;
   try {
@@ -393,20 +419,34 @@ router.post('/asistencia-clase', async (req, res) => {
       (total, data) => total + guardarAsistenciaClase(db, data, { transaccionar: false }), 0));
     const cursosConDatos = [...new Set(datos.map((data) => data.curso))];
     console.log(`Asistencia por clase ${fecha}: ${cursosConDatos.length} curso(s), ${datos.length} bloque(s) en ${Math.round((Date.now() - inicio) / 1000)} s.`);
-    res.json({ ok: true, fecha, cursos: cursosConDatos, bloques: datos.length, filas, advertencias, duracionMs: Date.now() - inicio });
+    return {
+      estado: 200,
+      datos: { ok: true, fecha, cursos: cursosConDatos, bloques: datos.length, filas, advertencias, duracionMs: Date.now() - inicio },
+    };
   } catch (error) {
     console.error('Asistencia por clase:', error.cause?.message || error.message);
     const portal = errorPortal(error);
-    if (portal) return res.status(portal.estado).json(portal.datos);
-    res.status(502).json({
-      ok: false,
-      codigo: 'SYNC_FAILED',
-      mensaje: 'No se pudo extraer la asistencia por clase; se conservaron los datos anteriores.',
-    });
+    if (portal) return portal;
+    return {
+      estado: 502,
+      datos: {
+        ok: false,
+        codigo: 'SYNC_FAILED',
+        mensaje: 'No se pudo extraer la asistencia por clase; se conservaron los datos anteriores.',
+      },
+    };
   } finally {
     await sesion?.cerrar();
-    sincronizacionEnCurso = false;
   }
+}
+
+// Body: { fecha: 'YYYY-MM-DD' } + credenciales opcionales + segundoPlano opcional.
+router.post('/asistencia-clase', (req, res) => {
+  const { fecha } = req.body ?? {};
+  if (!FECHA_ISO.test(fecha || '')) {
+    return res.status(400).json({ ok: false, codigo: 'DATOS_INVALIDOS', mensaje: 'Indica la fecha (YYYY-MM-DD).' });
+  }
+  return correrTarea(req, res, { tipo: 'clase', parametros: { fecha } }, () => traerAsistenciaClase(req.body, fecha));
 });
 
 module.exports = router;

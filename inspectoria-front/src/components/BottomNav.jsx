@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutGrid, ClipboardCheck, Users, BarChart3, UserPlus, Settings, CalendarClock } from 'lucide-react';
+import { LayoutGrid, ClipboardCheck, Users, BarChart3, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 import { getConteoAlertas } from '../api.js';
 import { hayFiltrosAuditar } from '../filtrosAuditar.js';
@@ -11,7 +11,6 @@ const tabs = [
   { to: '/auditar', label: 'Auditoría', Icon: ClipboardCheck },
   { to: '/alumnos', label: 'Alumnos', Icon: Users },
   { to: '/graficos', label: 'Gráficos', Icon: BarChart3 },
-  { to: '/asistencia-clase', label: 'Por clase', Icon: CalendarClock }, // TEMPORAL: mover a Auditoría
   { to: '/usuarios', label: 'Usuarios', Icon: UserPlus },
   // Al fondo del menú lateral. Incluye la sincronización con el portal (antes en "Datos")
   { to: '/ajustes', label: 'Ajustes', Icon: Settings, abajo: true },

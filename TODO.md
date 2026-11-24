@@ -12,6 +12,12 @@
 
 - Pantalla de carga ante de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
 
+- Asegurarse que la conexion con el backend es seguro. y no existen urls ni nada sin protejer ni asegurar.
+
+- evitar subir archivos que no sean excel y asegurar medidas de control para evitar posibles ejecuciones de codigo malisioso
+
+- revisar que las consultas sql sean statements para evitar la inyeccion sql.
+
 ## En progreso
 
 
