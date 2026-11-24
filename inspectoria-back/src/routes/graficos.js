@@ -9,6 +9,7 @@ const {
 const router = express.Router();
 const TOP_ALUMNOS = 5;
 const FECHA_OK = /^\d{4}-\d{2}-\d{2}$/;
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
 
 // Recorta el rango de una fuente al período pedido; sin cruce -> sin datos
 function recortar(fuente, desde, hasta) {
@@ -105,6 +106,13 @@ router.get('/', (req, res) => {
       inasistencias: porFecha.get(fecha) || 0,
     }));
 
+    // Total de inasistencias por día de la semana (lunes a viernes); getDay(): 1 = lunes
+    const porDiaSemana = contarPor(inasistencias, (i) => new Date(`${i.fecha}T00:00:00`).getDay());
+    const inasistenciasPorDiaSemana = DIAS_SEMANA.map((dia, indice) => ({
+      dia,
+      inasistencias: porDiaSemana.get(indice + 1) || 0,
+    }));
+
     const atrasosPorCurso = [...contarPor(todosAtrasos, (a) => a.curso).entries()]
       .map(([nombre, total]) => ({ curso: nombre, atrasos: total }))
       .sort(ordenCurso);
@@ -112,6 +120,33 @@ router.get('/', (req, res) => {
     const incidentes = [...inasistencias, ...atrasos];
     const justificados = incidentes.filter((i) => i.justificado).length;
     const justificacion = { justificados, sinJustificar: incidentes.length - justificados };
+
+    // % de asistencia de cada alumno, solo con un curso elegido (con todos serían cientos de filas).
+    // De menor a mayor: los casos críticos quedan arriba.
+    let asistenciaPorAlumno = [];
+    if (filtroCurso) {
+      const totalesAlumno = new Map();
+      for (const registro of delCurso(registros)) {
+        const total = totalesAlumno.get(registro.rut) || { registros: 0, presentes: 0 };
+        total.registros += 1;
+        if (registro.estado === 'P') total.presentes += 1;
+        totalesAlumno.set(registro.rut, total);
+      }
+      const alumnosCurso = db.prepare(`
+        SELECT DISTINCT a.rut, a.nombres, a.apellidos
+        FROM matricula m
+        JOIN alumno a ON a.rut = m.rut_alumno
+        JOIN curso c ON c.id_curso = m.id_curso
+        WHERE c.nombre = ?
+      `).all(filtroCurso);
+      asistenciaPorAlumno = alumnosCurso
+        .filter((a) => totalesAlumno.has(a.rut))
+        .map((a) => {
+          const total = totalesAlumno.get(a.rut);
+          return { ...a, asistencia: Number((total.presentes / total.registros * 100).toFixed(1)) };
+        })
+        .sort((a, b) => a.asistencia - b.asistencia || a.apellidos.localeCompare(b.apellidos));
+    }
 
     const topAtrasos = topSinJustificar(atrasos, 'atrasos');
     const topInasistencias = topSinJustificar(inasistencias, 'inasistencias');
@@ -123,6 +158,8 @@ router.get('/', (req, res) => {
       atrasosPorCurso,
       justificacion,
       inasistenciasPorDia,
+      inasistenciasPorDiaSemana,
+      asistenciaPorAlumno,
       topAtrasos,
       topInasistencias,
     });
