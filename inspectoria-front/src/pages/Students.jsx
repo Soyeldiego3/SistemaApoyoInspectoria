@@ -12,9 +12,11 @@ import { sincronizarPortal } from '../portal.js';
 import { coincide, formatearRut, plural } from '../texto.js';
 
 // Forma esperada de cada alumno (la API la entregará):
-// { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
+// { rut, nombres, apellidos, curso, atrasos, pendientes, atrasosTotal, pendientesTotal }
 //   atrasos    = atrasos sin justificar del período elegido
 //   pendientes = inasistencias sin justificar del período elegido
+//   atrasosTotal / pendientesTotal = lo mismo, pero de todo el año descargado
+// "Al día" = no le queda nada sin justificar en todo el año (no solo en el período).
 // Período: por defecto "Este mes" (igual que "Reincidencias" en Inicio); así los números no
 // suman todo el año. En la URL: ?periodo=mes o ?periodo=personalizado&desde=&hasta=
 // Filtro = estado (chips). Con inasistencias o atrasos se elige además un rango de cantidad
@@ -46,6 +48,12 @@ const BUSQUEDA_STORAGE_KEY = 'inspectoria.alumnos.busqueda';
 const RANGO_STORAGE_KEY = 'inspectoria.alumnos.rango';
 const PERIODO_STORAGE_KEY = 'inspectoria.alumnos.periodo';
 
+// Sin inasistencias ni atrasos sin justificar en todo el año descargado
+const alDia = (a) => (a.pendientesTotal ?? a.pendientes) === 0 && (a.atrasosTotal ?? a.atrasos) === 0;
+// Sin pendientes en el período, pero sí en otras fechas del año
+const pendientesFuera = (a) => (a.pendientes === 0 && a.atrasos === 0
+  ? (a.pendientesTotal ?? 0) + (a.atrasosTotal ?? 0) : 0);
+
 const PERIODOS_ALUMNOS = PERIODOS.filter((o) => ['mes', 'mesAnterior', '30dias', 'anio', 'personalizado'].includes(o.id));
 const PERIODO_INICIAL = 'mes';
 const fechaValida = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
@@ -69,6 +77,27 @@ function rangoGuardado() {
     if (r && Number.isInteger(r.desde) && (r.hasta === null || Number.isInteger(r.hasta))) return r;
   } catch { /* sin almacenamiento */ }
   return null;
+}
+
+// Sin alumnos que mostrar con los filtros actuales: mensaje según el chip elegido
+// (con búsqueda o curso, el mensaje general y el botón para limpiar)
+const SIN_RESULTADOS = {
+  ok: ['Nadie está al día', 'Todos los alumnos tienen al menos una inasistencia o un atraso sin justificar en el año.'],
+  inasist: ['Nadie tiene inasistencias pendientes', 'No hay inasistencias sin justificar en este período.'],
+  atrasos: ['Nadie tiene atrasos pendientes', 'No hay atrasos sin justificar en este período.'],
+};
+function SinResultados({ base, buscando, onLimpiar }) {
+  const [titulo, detalle] = (!buscando && SIN_RESULTADOS[base])
+    || ['Ningún alumno coincide', 'Prueba con otra búsqueda, curso o filtro.'];
+  return (
+    <section className="card" role="status">
+      <h2>{titulo}</h2>
+      <p className="muted" style={{ marginTop: 8 }}>{detalle}</p>
+      <button type="button" className="linkbtn" style={{ marginTop: 10 }} onClick={onLimpiar}>
+        <X size={14} /> Limpiar filtros
+      </button>
+    </section>
+  );
 }
 
 export default function Students() {
@@ -223,7 +252,7 @@ export default function Students() {
       (base === 'todos' ||
         (base === 'inasist' && enRango(a.pendientes)) ||
         (base === 'atrasos' && enRango(a.atrasos)) ||
-        (base === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
+        (base === 'ok' && alDia(a))));
   }, [alumnos, q, base, desde, hasta, curso]);
 
   // Con un filtro activo, cada tarjeta muestra solo el dato de ese filtro
@@ -287,7 +316,9 @@ export default function Students() {
       <div className="row muted">
         <span>
           {plural(lista.length, 'alumno')}
-          {fechas.desde && fechas.hasta && ` · pendientes del ${fechaCorta(fechas.desde)} al ${fechaCorta(fechas.hasta)}`}
+          {base === 'ok'
+            ? ' · sin nada pendiente en todo el año'
+            : fechas.desde && fechas.hasta && ` · pendientes del ${fechaCorta(fechas.desde)} al ${fechaCorta(fechas.hasta)}`}
         </span>
         {hayFiltros &&<button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
       </div>
@@ -308,7 +339,9 @@ export default function Students() {
                 </button>
               </section>
             )
-            : <EmptyState texto={error || 'Ningún alumno coincide con los filtros.'} filas={3} />
+            : error
+              ? <EmptyState texto={error} filas={3} />
+              : <SinResultados base={base} buscando={Boolean(q || curso || rangoCambiado)} onLimpiar={limpiarTodo} />
         : <div className="list cols">{lista.map((a) => (
             <Link key={a.rut}
               to={`/alumnos/${encodeURIComponent(a.rut)}${VISTA_POR_FILTRO[base] ? `?vista=${VISTA_POR_FILTRO[base]}` : ''}`}
@@ -326,7 +359,13 @@ export default function Students() {
                     <Clock size={13} aria-hidden />{plural(a.atrasos, 'atraso')}{a.atrasos >= 3 ? ' · reincidente' : ''}
                   </span>
                 )}
-                {a.pendientes === 0 && a.atrasos === 0 && <span className="tag ok">Al día</span>}
+                {alDia(a) && <span className="tag ok">Al día</span>}
+                {pendientesFuera(a) > 0 && (
+                  <span className="tag" style={{ color: 'var(--muted)' }}
+                    title="Nada pendiente en este período, pero sí en otras fechas del año">
+                    {plural(pendientesFuera(a), 'pendiente')} en otras fechas
+                  </span>
+                )}
               </div>
             </Link>))}</div>}
     </>
