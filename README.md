@@ -3,6 +3,8 @@ Sistema de Apoyo para la auditoria y registro de justificaciones para la asisten
 
 ![Vista Demo del Proyecto](./demos/demo_dark.png)
 
+![Vista Demo Graficos](./demos//graphics_white.png)
+
 ## instrucciones para crear el ejecutable portable windows y linux.
 
 1. cd desktop
