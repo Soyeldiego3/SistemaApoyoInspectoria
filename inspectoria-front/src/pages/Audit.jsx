@@ -17,6 +17,9 @@ import {
 import { descargar } from '../descargas.js';
 import { diaSemana, fechaCorta, fechaLocal, tituloMes } from '../fechas.js';
 import { memoriaAuditar } from '../filtrosAuditar.js';
+import {
+  PERIODOS, PREFIJO_MES, claveMes, esPeriodoMes, rangoPeriodo,
+} from '../periodos.js';
 import { sincronizarPortal } from '../portal.js';
 import { coincide, formatearRut, plural } from '../texto.js';
 
@@ -34,21 +37,12 @@ const TIPOS = [
   { id: 'atrasos', label: 'Atrasos' },
 ];
 
-const PERIODOS = [
-  { id: 'hoy', label: 'Hoy' },
-  { id: 'ayer', label: 'Ayer' },
-  { id: 'semana', label: 'Esta semana' },
-  { id: '30dias', label: 'Últimos 30 días' },
-  { id: 'mes', label: 'Este mes' },
-  { id: 'mesAnterior', label: 'Mes anterior' },
-  { id: '2meses', label: 'Últimos 2 meses' },
-  { id: 'personalizado', label: 'Elegir fechas…' },
-];
-
 // Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
 // más cortos. "Este mes" tampoco, porque a fin de mes recién llega al mínimo.
 const PERIODOS_ALERTAS = ['30dias', '2meses', 'personalizado'];
 const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// Períodos que también tiene la pantalla Alumnos (pages/Students.jsx)
+const PERIODOS_ALUMNOS = ['mes', 'mesAnterior', '30dias'];
 // Período por defecto de cada pestaña
 const periodoInicial = (tab) => (tab === 'alertas' ? '30dias' : 'mes');
 
@@ -74,11 +68,6 @@ function fechaDelDia(dia, fechaElegida, estado) {
   return fechaLocal(hoy);
 }
 
-// Un mes descargado puntual: 'mes:2026-10'
-const PREFIJO_MES = 'mes:';
-const esPeriodoMes = (id) => /^mes:\d{4}-(0[1-9]|1[0-2])$/.test(id || '');
-const claveMes = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-
 // Opciones del selector. En "A quién citar" y "Comparar cursos" se agrega un ítem por
 // cada mes descargado (salvo este mes y el anterior, que ya tienen su opción).
 function periodosDe(tab, mesesConDatos = []) {
@@ -96,48 +85,6 @@ function periodosDe(tab, mesesConDatos = []) {
 const periodoValido = (tab, id) => (
   PERIODOS.some((p) => p.id === id && periodosDe(tab).includes(p)) || (tab !== 'alertas' && esPeriodoMes(id))
 );
-
-function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '') {
-  const hoy = new Date();
-  const fin = fechaLocal(hoy);
-  // Mes completo (o hasta hoy si es el mes en curso)
-  const rangoMes = (anio, mesIndice) => {
-    const ultimo = fechaLocal(new Date(anio, mesIndice + 1, 0));
-    return { desde: fechaLocal(new Date(anio, mesIndice, 1)), hasta: ultimo < fin ? ultimo : fin };
-  };
-  if (periodo === 'mesAnterior') return rangoMes(hoy.getFullYear(), hoy.getMonth() - 1);
-  if (esPeriodoMes(periodo)) {
-    const [anio, mes] = periodo.slice(PREFIJO_MES.length).split('-').map(Number);
-    return rangoMes(anio, mes - 1);
-  }
-  if (periodo === 'ayer') {
-    const ayer = new Date(hoy);
-    ayer.setDate(ayer.getDate() - 1);
-    const fecha = fechaLocal(ayer);
-    return { desde: fecha, hasta: fecha };
-  }
-  if (periodo === 'semana') {
-    const inicio = new Date(hoy);
-    inicio.setDate(hoy.getDate() - (hoy.getDay() === 0 ? 6 : hoy.getDay() - 1));
-    return { desde: fechaLocal(inicio), hasta: fin };
-  }
-  if (periodo === 'mes') {
-    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fin };
-  }
-  if (periodo === '30dias') {
-    const inicio = new Date(hoy);
-    inicio.setDate(hoy.getDate() - 29);
-    return { desde: fechaLocal(inicio), hasta: fin };
-  }
-  if (periodo === '2meses') {
-    // Mes anterior + actual: lo mismo que se sincroniza por defecto
-    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)), hasta: fin };
-  }
-  if (periodo === 'personalizado') {
-    return { desde: personalizadoDesde, hasta: personalizadoHasta };
-  }
-  return { desde: fin, hasta: fin };
-}
 
 // Si el rango es un solo día y cae en sábado o domingo, devuelve esa fecha (si no, null)
 function diaFinDeSemana(desde, hasta) {
@@ -373,7 +320,7 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
   );
 }
 
-function Cursos({ datos, q, hayFiltros, onLimpiar }) {
+function Cursos({ datos, q, hayFiltros, onLimpiar, periodoAlumnos }) {
   if (!datos?.cursos?.length) return <EmptyState texto="No hay datos para este período." filas={3} />;
   const visibles = datos.cursos.filter((curso) => coincide(q, curso.curso));
   // Cuánto más (o menos) falta el curso que el promedio del colegio
@@ -396,7 +343,7 @@ function Cursos({ datos, q, hayFiltros, onLimpiar }) {
     <div className="list">
       {visibles.map((curso) => (
         <Link className="item enlace curso-item" key={curso.curso}
-          to={`/alumnos?curso=${encodeURIComponent(curso.curso)}`}
+          to={`/alumnos?${new URLSearchParams({ curso: curso.curso, ...periodoAlumnos })}`}
           title={`Ver alumnos de ${curso.curso}`}>
           <div>
             <b>{curso.curso}</b>
@@ -941,6 +888,9 @@ export default function Audit() {
     }
   };
 
+  // Período para abrir Alumnos desde "Comparar cursos" (mismo id si Alumnos lo tiene)
+  const periodoAlumnos = PERIODOS_ALUMNOS.includes(periodo) ? { periodo }
+    : { periodo: 'personalizado', ...rangoPeriodo(periodo, desde, hasta) };
   const tieneDatos = Boolean(estadoDatos?.ultimaFechaAsistencia || estadoDatos?.ultimaFechaAtrasos);
   const ultimaTexto = haceCuanto(estadoDatos?.ultimaSincronizacionExitosa);
   const rangoActual = rangoPeriodo(periodo, desde, hasta);
@@ -1050,7 +1000,8 @@ export default function Audit() {
               {tab === 'prioridad'
                 ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} q={q}
                     nivel={nivel} setNivel={setNivel} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />
-                : <Cursos datos={datos} q={q} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />}
+                : <Cursos datos={datos} q={q} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros}
+                    periodoAlumnos={periodoAlumnos} />}
             </>
           )}
         </>

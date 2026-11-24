@@ -90,8 +90,12 @@ export function cambiarPasswordCuenta(actual, nueva) {
   });
 }
 
-export function getAlumnos() {
-  return request('/asistencia/alumnos');
+// Pendientes por alumno; con desde/hasta (YYYY-MM-DD) cuenta solo ese rango
+export function getAlumnos({ desde, hasta } = {}, options = {}) {
+  const p = new URLSearchParams();
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  return request(`/asistencia/alumnos${p.toString() ? `?${p}` : ''}`, { signal: options.signal });
 }
 
 export function getDashboard() {

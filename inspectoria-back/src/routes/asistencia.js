@@ -14,18 +14,26 @@ function obtenerDbWritable() {
 // Un justificativo cubre inasistencias, atrasos o ambos (aplica_a NULL = justificativos antiguos)
 const APLICA_A = ['inasistencia', 'atraso'];
 
+// Pendientes por alumno. Con ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (opcionales) cuenta solo ese rango;
+// sin ellos, todo lo descargado.
 router.get('/alumnos', (req, res) => {
+  const fecha = (valor) => (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : null);
+  const rango = { desde: fecha(req.query.desde), hasta: fecha(req.query.hasta) };
   try {
     const alumnos = db.prepare(`
       SELECT a.rut, a.nombres, a.apellidos, c.nombre AS curso,
         (SELECT COUNT(*) FROM atraso t
           WHERE t.id_matricula = m.id_matricula
             AND t.justificado_portal = 0
+            AND (@desde IS NULL OR t.fecha >= @desde)
+            AND (@hasta IS NULL OR t.fecha <= @hasta)
             AND NOT ${sqlJustificado('a.rut', 't.fecha', 'atraso')}
         ) AS atrasos,
         (SELECT COUNT(*) FROM asistencia s
           WHERE s.id_matricula = m.id_matricula
             AND s.estado IN ('A', 'F')
+            AND (@desde IS NULL OR s.fecha >= @desde)
+            AND (@hasta IS NULL OR s.fecha <= @hasta)
             AND NOT ${sqlJustificado('a.rut', 's.fecha', 'inasistencia')}
         ) AS pendientes
       FROM alumno a
@@ -33,7 +41,7 @@ router.get('/alumnos', (req, res) => {
       JOIN curso c ON c.id_curso = m.id_curso
       WHERE m.anio = (SELECT MAX(anio) FROM matricula)
       ORDER BY c.nombre, a.apellidos, a.nombres
-    `).all();
+    `).all(rango);
 
     res.json({ alumnos });
   } catch (error) {

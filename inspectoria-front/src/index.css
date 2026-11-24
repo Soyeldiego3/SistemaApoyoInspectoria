@@ -332,11 +332,15 @@ a { color: inherit; text-decoration: none; }
 .filterbar.con-select { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .filterbar.con-select .chips { display: none; }
 .filterbar.con-select select { min-width: 0; padding: 11px 8px; border-radius: 12px; font-size: .82rem; }
+/* El período va en su propia fila en el teléfono */
+.filterbar.con-select select.periodo { grid-column: 1 / -1; }
 @media (min-width: 900px) {
-  .filterbar.con-select { grid-template-columns: 1fr 220px; gap: 10px; }
+  .filterbar.con-select { grid-template-columns: 1fr 190px 190px; gap: 10px; }
   .filterbar.con-select .chips { display: flex; }
   .filterbar.con-select .filtro-select { display: none; }
-  .filterbar.con-select select.curso { padding: 10px 14px; border-radius: 14px; font-size: inherit; }
+  .filterbar.con-select select.curso,
+  .filterbar.con-select select.periodo { padding: 10px 14px; border-radius: 14px; font-size: inherit; }
+  .filterbar.con-select select.periodo { grid-column: auto; }
 }
 
 /* Animación de carga 3x3 durante la extracción automática */
