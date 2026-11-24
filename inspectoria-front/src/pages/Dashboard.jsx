@@ -6,7 +6,7 @@ import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
 import { getDashboard } from '../api.js';
 import {
-  ERRORES_LOGIN, esPc, intentarSync, irACredenciales, registrarSync, ultimaSync,
+  ERRORES_LOGIN, esPc, intentarSync, irACredenciales, registrarSync, tareaEnCurso, ultimaSync,
 } from '../portal.js';
 
 export default function Dashboard() {
@@ -49,7 +49,19 @@ export default function Dashboard() {
   useEffect(() => {
     activoRef.current = true;
     if (!esPc) {
-      setSyncEstado('sinDatos');
+      // El teléfono no sincroniza solo: muestra la última que pidió en esta sesión, o la que
+      // el PC esté haciendo ahora (p. ej. la automática al abrir la app)
+      const previa = ultimaSync();
+      if (previa) {
+        aplicarSync(previa);
+      } else {
+        setSyncEstado('sinDatos');
+        tareaEnCurso().then((tarea) => {
+          if (tarea?.tipo !== 'completa' || !activoRef.current || ultimaSync()) return;
+          setSyncEstado('cargando');
+          aplicarSync(registrarSync(intentarSync(tarea)));
+        });
+      }
     } else {
       // La automática corre una vez por sesión; si otra pantalla sincronizó después, se ve eso
       aplicarSync(ultimaSync() || registrarSync(intentarSync()));
@@ -58,11 +70,11 @@ export default function Dashboard() {
   }, []);
 
   // Reintenta aquí mismo; solo si el problema son las credenciales se va a Ajustes
-  // (allí, al guardarlas, se sincroniza solo)
+  // (allí, al guardarlas, se sincroniza solo). En el teléfono se le pide al PC.
   const reintentar = async () => {
     setSyncEstado('cargando');
     const resultado = await aplicarSync(registrarSync(intentarSync()));
-    if (resultado && (resultado.estado === 'requiere' || ERRORES_LOGIN.includes(resultado.codigo))) {
+    if (esPc && resultado && (resultado.estado === 'requiere' || ERRORES_LOGIN.includes(resultado.codigo))) {
       irACredenciales(navigate, resultado.mensaje || 'Configura las credenciales del portal para sincronizar.');
     }
   };
@@ -76,20 +88,21 @@ export default function Dashboard() {
         </div>
         <div className="row inicio-fila">
           <p className="muted">
-            {syncEstado === 'cargando' ? 'Sincronizando…' :
+            {syncEstado === 'cargando' ? (esPc ? 'Sincronizando…' : 'El PC está sincronizando…') :
               syncEstado === 'ok' ? syncMensaje :
-              !esPc ? 'Los datos se sincronizan desde el PC' :
               syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
               syncEstado === 'error' ? 'No se pudo sincronizar' :
+              !esPc ? 'La descarga del portal la hace el PC' :
               'Sin datos sincronizados todavía'}
           </p>
           <div className="inicio-acciones">
-            {syncEstado === 'error' || (esPc && syncEstado === 'cargando') ? (
+            {syncEstado === 'error' || syncEstado === 'cargando' || (!esPc && syncEstado !== 'requiere') ? (
               <button type="button" className="btn dark" style={{ width: 'auto' }}
                 onClick={reintentar} disabled={syncEstado === 'cargando'}>
                 <RefreshCw size={15} className={syncEstado === 'cargando' ? 'audit-spin' : undefined}
                   style={{ verticalAlign: -2, marginRight: 5 }} />
-                {syncEstado === 'cargando' ? 'Sincronizando…' : 'Reintentar'}
+                {syncEstado === 'cargando' ? 'Sincronizando…'
+                  : syncEstado === 'error' ? 'Reintentar' : 'Sincronizar en el PC'}
               </button>
             ) : (
               <Link to="/ajustes" state={{ abrirCredenciales: syncEstado === 'requiere', accionModal: 'sync' }}

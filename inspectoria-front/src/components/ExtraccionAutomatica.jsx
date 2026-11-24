@@ -12,7 +12,9 @@ import {
 import { fechaCorta } from '../fechas.js';
 import GridLoader from './GridLoader.jsx';
 import CredencialesSheet from './CredencialesSheet.jsx';
-import { MENSAJES_PORTAL, esPc, marcarSyncExitosa } from '../portal.js';
+import {
+  MENSAJES_PORTAL, MENSAJES_TELEFONO, esPc, esperarTarea, marcarSyncExitosa, pedirAlPc, tareaEnCurso, tareaSyncCompleta,
+} from '../portal.js';
 
 // RF-01: obtener asistencia por extracción automática (Playwright). Tarjeta de Ajustes.
 // Otras pantallas llegan a Ajustes con state { abrirCredenciales, accionModal, mensaje }
@@ -58,6 +60,14 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
 
   useEffect(() => {
     cargarEstadoPortal();
+    // Teléfono: si el PC ya está sincronizando (p. ej. lo pidió Inicio), se muestra y se espera
+    if (!esPc) {
+      tareaEnCurso().then((tarea) => {
+        if (tarea?.tipo !== 'completa' || controllerRef.current) return;
+        periodoRef.current = tarea.parametros?.periodo === 'anio' ? 'anio' : 'mes';
+        sincronizar(undefined, tarea);
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -87,7 +97,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
 
   const mostrarError = (e) => {
     const codigo = e.code;
-    const mensaje = MENSAJES_PORTAL[codigo]
+    const mensaje = (!esPc && MENSAJES_TELEFONO[codigo]) || MENSAJES_PORTAL[codigo]
       || (e instanceof TypeError ? 'No hay conexión con el servidor local.' : (e.message || 'Ocurrió un error inesperado.'));
     setMensaje(mensaje);
     setEstado('error');
@@ -112,7 +122,8 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
     }));
   };
 
-  const sincronizar = async (datos) => {
+  // `enCurso`: en el teléfono, una sincronización completa que el PC ya está haciendo
+  const sincronizar = async (datos, enCurso) => {
     setEstado('cargando');
     setProcesando(true);
     setMensaje('');
@@ -130,7 +141,11 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
     }, 600000); // la primera sincronización trae el año escolar (varios meses por curso)
     try {
       const cuerpo = anual ? { ...(datos || {}), periodo: 'anio' } : datos;
-      const data = await iniciarSync(cuerpo, { signal: controllerRef.current.signal });
+      const { signal } = controllerRef.current;
+      // En el teléfono se le pide al PC como tarea (usa las credenciales guardadas allí)
+      const data = esPc ? await iniciarSync(cuerpo, { signal })
+        : enCurso ? await esperarTarea(enCurso.id, { signal })
+          : await pedirAlPc(tareaSyncCompleta(cuerpo), { signal });
       const errores = data.errores?.length || 0;
       const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
       const detalleMeses = data.meses?.length > 1 ? ` Meses: ${data.meses[0]} a ${data.meses.at(-1)}.` : '';
@@ -172,6 +187,11 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
     periodoRef.current = periodo;
     setEstado('cargando');
     setMensaje('');
+    // El teléfono no puede ver las credenciales: el PC avisa si faltan
+    if (!esPc) {
+      await sincronizar();
+      return;
+    }
     try {
       const info = await getCredencialesPortal();
       setPortal(info);
@@ -331,13 +351,14 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
           {sincronizandoFuera
             ? <GridLoader pequeno />
             : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
-          {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
+          {estado === 'cargando' ? 'Sincronizando…' : esPc ? 'Sincronizar todos' : 'Sincronizar en el PC'}
         </button>
         {sincronizandoFuera && (
           <p className="muted" role="status" style={{ marginTop: 10 }}>
             {periodoRef.current === 'anio'
               ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
               : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}
+            {!esPc && ' La descarga la hace el PC; puedes bloquear el teléfono y volver.'}
           </p>
         )}
 

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarClock, ChevronRight, Download, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronRight, Download, RefreshCw, Search } from 'lucide-react';
+import Contador from '../components/Contador.jsx';
+import PorClase from '../components/PorClase.jsx';
 import Segmented from '../components/Segmented.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
 import {
@@ -14,7 +16,10 @@ import {
 } from '../api.js';
 import { descargar } from '../descargas.js';
 import { diaSemana, fechaCorta, fechaLocal, tituloMes } from '../fechas.js';
-import { memoriaAuditar } from '../filtrosAuditar.js';
+import { PERIODO_AVISO, memoriaAuditar } from '../filtrosAuditar.js';
+import {
+  PERIODOS, PREFIJO_MES, claveMes, esPeriodoMes, rangoPeriodo,
+} from '../periodos.js';
 import { sincronizarPortal } from '../portal.js';
 import { coincide, formatearRut, plural } from '../texto.js';
 
@@ -22,6 +27,8 @@ const TABS = [
   { id: 'alertas', label: 'Alertas' },
   { id: 'prioridad', label: 'A quién citar' },
   { id: 'cursos', label: 'Comparar cursos' },
+  // Asistencia por bloque horario de un día (components/PorClase.jsx)
+  { id: 'clase', label: 'Por clase' },
 ];
 
 const TIPOS = [
@@ -30,88 +37,59 @@ const TIPOS = [
   { id: 'atrasos', label: 'Atrasos' },
 ];
 
-const PERIODOS = [
-  { id: 'hoy', label: 'Hoy' },
-  { id: 'ayer', label: 'Ayer' },
-  { id: 'semana', label: 'Esta semana' },
-  { id: '30dias', label: 'Últimos 30 días' },
-  { id: 'mes', label: 'Este mes' },
-  { id: 'mesAnterior', label: 'Mes anterior' },
-  { id: '2meses', label: 'Últimos 2 meses' },
-  { id: 'personalizado', label: 'Elegir fechas…' },
-];
-
 // Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
 // más cortos. "Este mes" tampoco, porque a fin de mes recién llega al mínimo.
 const PERIODOS_ALERTAS = ['30dias', '2meses', 'personalizado'];
-const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// "Ayer" no se ofrece: "Hoy" sin datos ya propone ver el último día con datos
+const PERIODOS_GENERALES = ['hoy', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// Opción del selector que abre un segundo selector con los meses antiguos (no es un período)
+const OTRO_MES = 'otroMes';
+// Períodos que también tiene la pantalla Alumnos (pages/Students.jsx)
+const PERIODOS_ALUMNOS = ['mes', 'mesAnterior', '30dias'];
 // Período por defecto de cada pestaña
 const periodoInicial = (tab) => (tab === 'alertas' ? '30dias' : 'mes');
 
-// Un mes descargado puntual: 'mes:2026-10'
-const PREFIJO_MES = 'mes:';
-const esPeriodoMes = (id) => /^mes:\d{4}-(0[1-9]|1[0-2])$/.test(id || '');
-const claveMes = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+// "Por clase" mira un solo día (las columnas de su tabla son los bloques de ese día)
+const DIAS_CLASE = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'ayer', label: 'Día de clases anterior' },
+  { id: 'ultimo', label: 'Último día con datos' },
+  { id: 'personalizado', label: 'Elegir día…' },
+];
 
-// Opciones del selector. En "A quién citar" y "Comparar cursos" se agrega un ítem por
-// cada mes descargado (salvo este mes y el anterior, que ya tienen su opción).
+// Fecha (YYYY-MM-DD) de la opción elegida. "Día de clases anterior" salta el fin de semana
+// (un lunes da el viernes); "Último día con datos" sale del estado ('' mientras no carga)
+function fechaDelDia(dia, fechaElegida, estado) {
+  const hoy = new Date();
+  if (dia === 'ayer') {
+    const anterior = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
+    while (anterior.getDay() === 0 || anterior.getDay() === 6) anterior.setDate(anterior.getDate() - 1);
+    return fechaLocal(anterior);
+  }
+  if (dia === 'ultimo') return estado?.ultimaFechaClase || '';
+  if (dia === 'personalizado') return fechaElegida;
+  return fechaLocal(hoy);
+}
+
+// Meses descargados ('YYYY-MM') salvo este mes y el anterior, que ya tienen su opción
+function mesesAntiguos(mesesConDatos = []) {
+  const hoy = new Date();
+  const yaIncluidos = new Set([claveMes(hoy), claveMes(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1))]);
+  return mesesConDatos.filter((mes) => !yaIncluidos.has(mes));
+}
+
+// Opciones del selector. En "A quién citar" y "Comparar cursos" los meses antiguos van
+// todos bajo "Otro mes…" (se eligen en un segundo selector), para no alargar la lista.
 function periodosDe(tab, mesesConDatos = []) {
   const ids = tab === 'alertas' ? PERIODOS_ALERTAS : PERIODOS_GENERALES;
   const fijos = PERIODOS.filter((p) => ids.includes(p.id));
-  if (tab === 'alertas') return fijos;
-  const hoy = new Date();
-  const yaIncluidos = new Set([claveMes(hoy), claveMes(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1))]);
-  const meses = mesesConDatos
-    .filter((mes) => !yaIncluidos.has(mes))
-    .map((mes) => ({ id: `${PREFIJO_MES}${mes}`, label: tituloMes(mes) }));
-  return [...fijos.slice(0, -1), ...meses, fijos.at(-1)];
+  if (tab === 'alertas' || !mesesAntiguos(mesesConDatos).length) return fijos;
+  return [...fijos.slice(0, -1), { id: OTRO_MES, label: 'Otro mes…' }, fijos.at(-1)];
 }
 
 const periodoValido = (tab, id) => (
   PERIODOS.some((p) => p.id === id && periodosDe(tab).includes(p)) || (tab !== 'alertas' && esPeriodoMes(id))
 );
-
-function rangoPeriodo(periodo, personalizadoDesde = '', personalizadoHasta = '') {
-  const hoy = new Date();
-  const fin = fechaLocal(hoy);
-  // Mes completo (o hasta hoy si es el mes en curso)
-  const rangoMes = (anio, mesIndice) => {
-    const ultimo = fechaLocal(new Date(anio, mesIndice + 1, 0));
-    return { desde: fechaLocal(new Date(anio, mesIndice, 1)), hasta: ultimo < fin ? ultimo : fin };
-  };
-  if (periodo === 'mesAnterior') return rangoMes(hoy.getFullYear(), hoy.getMonth() - 1);
-  if (esPeriodoMes(periodo)) {
-    const [anio, mes] = periodo.slice(PREFIJO_MES.length).split('-').map(Number);
-    return rangoMes(anio, mes - 1);
-  }
-  if (periodo === 'ayer') {
-    const ayer = new Date(hoy);
-    ayer.setDate(ayer.getDate() - 1);
-    const fecha = fechaLocal(ayer);
-    return { desde: fecha, hasta: fecha };
-  }
-  if (periodo === 'semana') {
-    const inicio = new Date(hoy);
-    inicio.setDate(hoy.getDate() - (hoy.getDay() === 0 ? 6 : hoy.getDay() - 1));
-    return { desde: fechaLocal(inicio), hasta: fin };
-  }
-  if (periodo === 'mes') {
-    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fin };
-  }
-  if (periodo === '30dias') {
-    const inicio = new Date(hoy);
-    inicio.setDate(hoy.getDate() - 29);
-    return { desde: fechaLocal(inicio), hasta: fin };
-  }
-  if (periodo === '2meses') {
-    // Mes anterior + actual: lo mismo que se sincroniza por defecto
-    return { desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)), hasta: fin };
-  }
-  if (periodo === 'personalizado') {
-    return { desde: personalizadoDesde, hasta: personalizadoHasta };
-  }
-  return { desde: fin, hasta: fin };
-}
 
 // Si el rango es un solo día y cae en sábado o domingo, devuelve esa fecha (si no, null)
 function diaFinDeSemana(desde, hasta) {
@@ -238,21 +216,6 @@ function senales(alumno, criterios) {
   return lista;
 }
 
-// "N alumnos" + "Limpiar filtros" (igual que en Alumnos)
-function Contador({ cantidad, singular, pluralTexto, hayFiltros, onLimpiar, accion = null }) {
-  return (
-    <div className="row muted">
-      <span>{plural(cantidad, singular, pluralTexto)}</span>
-      <span className="row" style={{ gap: 16 }}>
-        {hayFiltros && (
-          <button className="linkbtn" type="button" onClick={onLimpiar}><X size={14} /> Limpiar filtros</button>
-        )}
-        {accion}
-      </span>
-    </div>
-  );
-}
-
 // Atajo al respaldo de Ajustes: descarga las notas de alertas (y los justificativos aprobados)
 function RespaldarNotas() {
   const [estado, setEstado] = useState('');
@@ -362,7 +325,7 @@ function Prioridad({ datos, tipo, rutaRetorno, q, nivel, setNivel, hayFiltros, o
   );
 }
 
-function Cursos({ datos, q, hayFiltros, onLimpiar }) {
+function Cursos({ datos, q, hayFiltros, onLimpiar, periodoAlumnos }) {
   if (!datos?.cursos?.length) return <EmptyState texto="No hay datos para este período." filas={3} />;
   const visibles = datos.cursos.filter((curso) => coincide(q, curso.curso));
   // Cuánto más (o menos) falta el curso que el promedio del colegio
@@ -385,7 +348,7 @@ function Cursos({ datos, q, hayFiltros, onLimpiar }) {
     <div className="list">
       {visibles.map((curso) => (
         <Link className="item enlace curso-item" key={curso.curso}
-          to={`/alumnos?curso=${encodeURIComponent(curso.curso)}`}
+          to={`/alumnos?${new URLSearchParams({ curso: curso.curso, ...periodoAlumnos })}`}
           title={`Ver alumnos de ${curso.curso}`}>
           <div>
             <b>{curso.curso}</b>
@@ -424,7 +387,7 @@ const ESTADOS_ALERTA = {
 
 const MAX_FECHAS = 8;
 
-function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
+function TarjetaAlerta({ alerta, rutaRetorno, onCambio, onVerPorClase }) {
   const [nota, setNota] = useState(alerta.gestion?.nota || '');
   const [editandoNota, setEditandoNota] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -516,10 +479,9 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
         )}
         <Link className="linkbtn" {...ficha}>Ver ficha</Link>
         {alerta.tipo === 'falta_bloque' && (
-          <Link className="linkbtn" state={ficha.state}
-            to={`/asistencia-clase?${new URLSearchParams({ curso: alerta.curso, fecha: alerta.ultimaEvidencia })}`}>
+          <button className="linkbtn" type="button" onClick={() => onVerPorClase(alerta.curso, alerta.ultimaEvidencia)}>
             Ver por clase
-          </Link>
+          </button>
         )}
       </div>
     </article>
@@ -527,7 +489,7 @@ function TarjetaAlerta({ alerta, rutaRetorno, onCambio }) {
 }
 
 function Alertas({
-  datos, rutaRetorno, periodo, onUltimos30, onRangoCompleto, onCambio,
+  datos, rutaRetorno, periodo, onUltimos30, onRangoCompleto, onCambio, onVerPorClase,
   q, tipoAlerta, setTipoAlerta, prioridadAlerta, setPrioridadAlerta, hayFiltros, onLimpiar,
 }) {
   const [filtro, setFiltroEstado] = useState(memoriaAuditar.filtroAlertas);
@@ -561,7 +523,7 @@ function Alertas({
           )}
         </div>
       )}
-      <div className="audit-filter-grid sin-tipo">
+      <div className="audit-filter-grid dos-columnas">
         <select className="input" value={tipoAlerta} onChange={(e) => setTipoAlerta(e.target.value)} aria-label="Tipo de alerta">
           <option value="todos">Todos los tipos de alerta</option>
           {TIPOS_ALERTA.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
@@ -590,7 +552,7 @@ function Alertas({
             <div className="list">
               {delTipo.map((alerta) => (
                 <TarjetaAlerta key={`${alerta.clave}:${alerta.estado}`} alerta={alerta}
-                  rutaRetorno={rutaRetorno} onCambio={onCambio} />
+                  rutaRetorno={rutaRetorno} onCambio={onCambio} onVerPorClase={onVerPorClase} />
               ))}
             </div>
           </details>
@@ -606,10 +568,14 @@ function filtrosDesdeUrl(search) {
   if (![...p.keys()].length) return null;
   const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
   const tab = valido(TABS, p.get('tab'), 'prioridad');
-  // Desde el badge del menú (?tab=alertas sin período) se abre "Últimos 30 días"
+  // Desde el aviso del menú (?tab=alertas sin período) se abre "Últimos 30 días"
   const pedido = p.get('periodo');
   const periodo = periodoValido(tab, pedido) ? pedido : periodoInicial(tab);
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+  // "Por clase": la opción de día (?dia=) y la fecha si se eligió una (?fecha=)
+  const fechaUrl = fecha(p.get('fecha'));
+  const diaClase = valido(DIAS_CLASE, p.get('dia'), fechaUrl ? 'personalizado' : 'hoy');
+  const fechaClase = fechaUrl || fechaLocal(new Date());
   // Desde "Ver patrones" de la ficha: todas las fechas descargadas (se completan al cargar el estado)
   if (p.get('rango') === 'completo') {
     return {
@@ -620,6 +586,8 @@ function filtrosDesdeUrl(search) {
       periodo: 'personalizado',
       desde: '',
       hasta: '',
+      diaClase,
+      fechaClase,
       rangoCompleto: true,
     };
   }
@@ -632,6 +600,8 @@ function filtrosDesdeUrl(search) {
     curso: p.get('curso') || '',
     q: p.get('q') || '',
     periodo,
+    diaClase,
+    fechaClase,
     ...rango,
   };
 }
@@ -658,6 +628,9 @@ export default function Audit() {
   const [periodo, setPeriodo] = useState(restaurados?.periodo ?? 'mes');
   const [desde, setDesde] = useState(restaurados?.desde ?? '');
   const [hasta, setHasta] = useState(restaurados?.hasta ?? '');
+  // "Por clase" mira un solo día (no usa el período): opción de DIAS_CLASE y fecha de "Elegir día…"
+  const [diaClase, setDiaClase] = useState(restaurados?.diaClase ?? 'hoy');
+  const [fechaClase, setFechaClase] = useState(restaurados?.fechaClase || fechaLocal(new Date()));
   // Búsqueda y filtros internos: se aplican en el navegador sobre lo que entrega el back
   const [q, setQ] = useState(restaurados?.q ?? '');
   const [nivel, setNivelEstado] = useState(memoriaAuditar.nivel);
@@ -678,8 +651,8 @@ export default function Audit() {
   const [ultimoDia, setUltimoDia] = useState(null);
 
   useEffect(() => {
-    memoriaAuditar.filtros = { tab, tipo, curso, periodo, desde, hasta, q };
-  }, [tab, tipo, curso, periodo, desde, hasta, q]);
+    memoriaAuditar.filtros = { tab, tipo, curso, periodo, desde, hasta, q, diaClase, fechaClase };
+  }, [tab, tipo, curso, periodo, desde, hasta, q, diaClase, fechaClase]);
   const consultaAbortRef = useRef(null);
   const syncAbortRef = useRef(null);
 
@@ -720,15 +693,21 @@ export default function Audit() {
     });
   };
 
-  // Desde la ficha de un alumno se vuelve con los filtros en la URL; si la URL cambia
-  // estando ya en Auditar (p. ej. el badge la primera vez), se aplica la pestaña pedida
+  // Desde el aviso del menú (?origen=aviso): la misma vista que cuenta el número rojo
+  // (Alertas → Pendientes, "Últimos 30 días", todos los cursos, sin búsqueda ni filtros).
+  // Se aplica también si ya se estaba en Auditoría; luego se limpia la URL.
+  const [reinicioAlertas, setReinicioAlertas] = useState(0);
   useEffect(() => {
-    const pedida = new URLSearchParams(location.search).get('tab');
-    if (pedida === 'alertas' && tab !== 'alertas') {
-      setTab('alertas');
-      cambiarPeriodo('30dias');
-    }
-  }, [location.search]);
+    if (new URLSearchParams(location.search).get('origen') !== 'aviso') return;
+    setTab('alertas');
+    if (periodo !== PERIODO_AVISO) cambiarPeriodo(PERIODO_AVISO);
+    setCurso('');
+    setQ('');
+    setTipoAlerta('todos');
+    setPrioridadAlerta('todas');
+    setReinicioAlertas((n) => n + 1); // vuelve a montar Alertas para que tome "Pendientes"
+    navigate('/auditar', { replace: true });
+  }, [location.key]);
 
   useEffect(() => {
     let activo = true;
@@ -768,15 +747,17 @@ export default function Audit() {
   const parametros = useMemo(() => {
     const rango = rangoPeriodo(periodo, desde, hasta);
     const resultado = { tipo };
-    if (curso) resultado.curso = curso;
+    // "Comparar cursos" siempre compara todos los cursos (no tiene filtro de curso)
+    if (curso && tab !== 'cursos') resultado.curso = curso;
     if (rango.desde) resultado.desde = rango.desde;
     if (rango.hasta) resultado.hasta = rango.hasta;
     return resultado;
-  }, [curso, desde, hasta, periodo, tipo]);
+  }, [curso, desde, hasta, periodo, tipo, tab]);
 
   useEffect(() => {
-    // Sin fechas todavía (esperando el estado de los datos en la primera entrada)
-    if (!desde && !hasta) return undefined;
+    // Sin fechas todavía (esperando el estado de los datos en la primera entrada).
+    // "Por clase" carga lo suyo en components/PorClase.jsx
+    if ((!desde && !hasta) || tab === 'clase') return undefined;
     const temporizador = setTimeout(() => {
       consultaAbortRef.current?.abort();
       const controller = new AbortController();
@@ -807,19 +788,24 @@ export default function Audit() {
     const p = new URLSearchParams();
     if (tab !== 'prioridad') p.set('tab', tab);
     if (tipo !== 'ambos') p.set('tipo', tipo);
-    if (curso) p.set('curso', curso);
-    if (q.trim()) p.set('q', q.trim());
+    if (curso && tab !== 'cursos') p.set('curso', curso);
+    if (q.trim() && tab !== 'cursos') p.set('q', q.trim());
     // Siempre lleva al menos el período, para que Auditoría sepa que debe restaurar
     p.set('periodo', periodo);
     if (periodo === 'personalizado') {
       if (desde) p.set('desde', desde);
       if (hasta) p.set('hasta', hasta);
     }
+    if (tab === 'clase') {
+      p.set('dia', diaClase);
+      if (diaClase === 'personalizado') p.set('fecha', fechaClase);
+    }
     return `/auditar?${p}`;
-  }, [tab, tipo, curso, periodo, desde, hasta, q]);
+  }, [tab, tipo, curso, periodo, desde, hasta, q, diaClase, fechaClase]);
 
   // Solo cuentan los filtros que aplican a la pestaña actual (el período no es un filtro aquí)
-  const hayFiltros = Boolean(q.trim() || curso
+  // ("Comparar cursos" no usa búsqueda ni curso: se conservan para las otras pestañas)
+  const hayFiltros = Boolean((tab !== 'cursos' && (q.trim() || curso))
     || (tab !== 'alertas' && tipo !== 'ambos')
     || (tab === 'prioridad' && nivel !== 'todos')
     || (tab === 'alertas' && (tipoAlerta !== 'todos' || prioridadAlerta !== 'todas')));
@@ -855,6 +841,22 @@ export default function Audit() {
     if (nuevoTab === tab) return;
     if (!periodoValido(nuevoTab, periodo)) cambiarPeriodo(periodoInicial(nuevoTab));
     setTab(nuevoTab);
+  };
+
+  // Desde una alerta "Falta a clases estando en el colegio": su curso y su último día
+  const verPorClase = (cursoAlerta, fecha) => {
+    setCurso(cursoAlerta || '');
+    if (fecha) {
+      setDiaClase('personalizado');
+      setFechaClase(fecha);
+    }
+    setTab('clase');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Tras actualizar "Por clase" desde el portal: "Último día con datos" y "Última sincronización"
+  const recargarEstado = () => {
+    getAuditoriaEstado().then(setEstadoDatos).catch(() => {});
   };
 
   const verDia = (fecha) => {
@@ -899,6 +901,9 @@ export default function Audit() {
     }
   };
 
+  // Período para abrir Alumnos desde "Comparar cursos" (mismo id si Alumnos lo tiene)
+  const periodoAlumnos = PERIODOS_ALUMNOS.includes(periodo) ? { periodo }
+    : { periodo: 'personalizado', ...rangoPeriodo(periodo, desde, hasta) };
   const tieneDatos = Boolean(estadoDatos?.ultimaFechaAsistencia || estadoDatos?.ultimaFechaAtrasos);
   const ultimaTexto = haceCuanto(estadoDatos?.ultimaSincronizacionExitosa);
   const rangoActual = rangoPeriodo(periodo, desde, hasta);
@@ -913,33 +918,60 @@ export default function Audit() {
     <>
       <div className="audit-header">
         <h2>Auditoría</h2>
-        <Link className="btn ghost alumnos-exportar" to="/asistencia-clase" state={{ returnTo: rutaRetorno }}>
-          <CalendarClock size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Por clase
-        </Link>
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">
-        <div className="searchbox">
-          <Search size={18} />
-          <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder={tab === 'cursos' ? 'Buscar curso' : 'RUT, nombre o curso'}
-            aria-label={tab === 'cursos' ? 'Buscar curso' : 'Buscar alumno'} />
-        </div>
-        <div className={tab === 'alertas' ? 'audit-filter-grid sin-tipo' : 'audit-filter-grid'}>
-          <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
-            <option value="">Todos los cursos</option>
-            {cursos.map((opcion) => <option key={opcion.curso} value={opcion.curso}>{opcion.curso}</option>)}
-          </select>
+        {/* "Comparar cursos" muestra todos los cursos: sin buscador ni selector de curso */}
+        {tab !== 'cursos' && (
+          <div className="searchbox">
+            <Search size={18} />
+            <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder={tab === 'clase' ? 'RUT o nombre' : 'RUT, nombre o curso'}
+              aria-label="Buscar alumno" />
+          </div>
+        )}
+        <div className={tab === 'alertas' || tab === 'cursos' ? 'audit-filter-grid dos-columnas' : 'audit-filter-grid'}>
+          {tab !== 'cursos' && (
+            <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
+              <option value="">Todos los cursos</option>
+              {cursos.map((opcion) => <option key={opcion.curso} value={opcion.curso}>{opcion.curso}</option>)}
+            </select>
+          )}
           {tab !== 'alertas' && (
             <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo">
               {TIPOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
             </select>
           )}
-          <select className="input" value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} aria-label="Período">
-            {periodosDe(tab, mesesSelector).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
-          </select>
+          {tab === 'clase' ? (
+            <select className="input" value={diaClase} onChange={(e) => setDiaClase(e.target.value)} aria-label="Día">
+              {DIAS_CLASE
+                .filter((opcion) => opcion.id !== 'ultimo' || estadoDatos?.ultimaFechaClase || diaClase === 'ultimo')
+                .map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+            </select>
+          ) : (
+            <select className="input" value={esPeriodoMes(periodo) ? OTRO_MES : periodo} aria-label="Período"
+              onChange={(e) => cambiarPeriodo(e.target.value === OTRO_MES
+                ? `${PREFIJO_MES}${mesesAntiguos(mesesSelector)[0]}` // el mes antiguo más reciente
+                : e.target.value)}>
+              {periodosDe(tab, mesesSelector).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
+            </select>
+          )}
         </div>
-        {periodo === 'personalizado' && (
+        {tab === 'clase' && diaClase === 'personalizado' && (
+          <div className="audit-custom-dates">
+            <input className="input" type="date" value={fechaClase} max={fechaLocal(new Date())}
+              onChange={(e) => setFechaClase(e.target.value)} aria-label="Día" />
+          </div>
+        )}
+        {esPeriodoMes(periodo) && tab !== 'clase' && tab !== 'alertas' && (
+          <div className="audit-custom-dates un-campo">
+            <select className="input" value={periodo.slice(PREFIJO_MES.length)} aria-label="Mes"
+              onChange={(e) => cambiarPeriodo(`${PREFIJO_MES}${e.target.value}`)}>
+              {mesesAntiguos(mesesSelector).map((mes) => <option key={mes} value={mes}>{tituloMes(mes)}</option>)}
+            </select>
+          </div>
+        )}
+        {periodo === 'personalizado' && tab !== 'clase' && (
           <div className="audit-custom-dates">
             <input className="input" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} aria-label="Fecha desde" />
             <input className="input" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} aria-label="Fecha hasta" />
@@ -951,7 +983,7 @@ export default function Audit() {
 
       {ultimaTexto && <p className="muted audit-last-sync">Última sincronización: {ultimaTexto}</p>}
       {avisoRango && <p className="msg" role="status">{avisoRango}</p>}
-      {ultimoDia && periodo === 'hoy' && !finDeSemana && (
+      {tab !== 'clase' && ultimoDia && periodo === 'hoy' && !finDeSemana && (
         <div className="msg aviso" role="status">
           <p>Todavía no hay datos de hoy ({fechaCorta(fechaLocal(new Date()))}).</p>
           <button className="btn" type="button" onClick={() => verDia(ultimoDia)}>
@@ -959,10 +991,14 @@ export default function Audit() {
           </button>
         </div>
       )}
-      {datos && <p className="muted">{mostrarRango(datos)}</p>}
+      {datos && tab !== 'clase' && <p className="muted">{mostrarRango(datos)}</p>}
       {error && <p className="msg error" role="alert">{error}</p>}
 
-      {!cargando && !tieneDatos ? (
+      {tab === 'clase' ? (
+        <PorClase curso={curso} fecha={fechaDelDia(diaClase, fechaClase, estadoDatos)} q={q} tipo={tipo}
+          rutaRetorno={rutaRetorno} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros}
+          onElegirCurso={setCurso} onActualizado={recargarEstado} />
+      ) : !cargando && !tieneDatos ? (
         <section className="card" role="status">
           <h2>Aún no hay datos</h2>
           <p className="muted" style={{ margin: '8px 0 14px' }}>Descarga los datos del portal para empezar.</p>
@@ -981,8 +1017,8 @@ export default function Audit() {
           <Avisos datos={datos} descargando={sincronizando}
             onDescargar={({ desde: inicio, hasta: fin }) => sincronizar({ desde: inicio, hasta: fin, soloFaltantes: true })} />
           {tab === 'alertas' ? (
-            <Alertas datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
-              periodo={periodo} onUltimos30={() => cambiarPeriodo('30dias')}
+            <Alertas key={reinicioAlertas} datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
+              periodo={periodo} onUltimos30={() => cambiarPeriodo('30dias')} onVerPorClase={verPorClase}
               onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? usarRangoCompleto : null}
               q={q} tipoAlerta={tipoAlerta} setTipoAlerta={setTipoAlerta}
               prioridadAlerta={prioridadAlerta} setPrioridadAlerta={setPrioridadAlerta}
@@ -993,7 +1029,8 @@ export default function Audit() {
               {tab === 'prioridad'
                 ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} q={q}
                     nivel={nivel} setNivel={setNivel} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />
-                : <Cursos datos={datos} q={q} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />}
+                : <Cursos datos={datos} q="" hayFiltros={hayFiltros} onLimpiar={limpiarFiltros}
+                    periodoAlumnos={periodoAlumnos} />}
             </>
           )}
         </>

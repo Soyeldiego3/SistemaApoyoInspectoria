@@ -4,9 +4,15 @@
 
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
-- Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
-
 - Pantalla de carga ante de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
+
+- Asegurarse que la conexion con el backend es seguro. y no existen urls ni nada sin protejer ni asegurar.
+
+- evitar subir archivos que no sean excel y asegurar medidas de control para evitar posibles ejecuciones de codigo malisioso.
+
+- revisar que las consultas sql sean statements para evitar la inyeccion sql.
+
+- Al no tener usuario creado en la bd. mostar crear usuario primero al abrir el programa.
 
 ## En progreso
 
@@ -14,7 +20,9 @@
 
 ## Completado
 
-- - Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
+- Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
+
+- Extraer desde el portal institucional los bloques de clases. y usarlos para algo. 
 
 - Acceso "Ver patrones" en la ficha del alumno: abre Auditoría → Alertas filtrado por su RUT, con todas las fechas descargadas y todas las alertas (pendientes y atendidas).
 

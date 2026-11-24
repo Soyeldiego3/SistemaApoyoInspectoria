@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, List } from 'lucide-react';
 import AttendanceRow from '../components/AttendanceRow.jsx';
+import CalendarioAlumno from '../components/CalendarioAlumno.jsx';
 import JustifySheet, { SIN_JUSTIFICAR, motivoCorto } from '../components/JustifySheet.jsx';
 import Chips from '../components/Chips.jsx';
 import Segmented from '../components/Segmented.jsx';
@@ -22,6 +23,29 @@ const VISTAS = ['inasistencias', 'atrasos'];
 const FILTROS_VER = ['pendientes', 'todas'];
 const APLICA_A = { inasistencias: 'inasistencia', atrasos: 'atraso' };
 const SIN_SELECCION = { inasistencias: [], atrasos: [] };
+
+// Tipo de visualización (lista o calendario), recordado entre sesiones como en una tienda
+const MODO_STORAGE_KEY = 'inspectoria.alumno.modo';
+const MODOS = [
+  { id: 'lista', label: 'Ver como lista', Icono: List },
+  { id: 'calendario', label: 'Ver como calendario', Icono: CalendarDays },
+];
+const leerModo = () => {
+  try { return localStorage.getItem(MODO_STORAGE_KEY) === 'calendario' ? 'calendario' : 'lista'; } catch { return 'lista'; }
+};
+
+function ModoVista({ valor, onChange }) {
+  return (
+    <div className="modo-vista" role="group" aria-label="Tipo de vista">
+      {MODOS.map(({ id, label, Icono }) => (
+        <button key={id} type="button" className={valor === id ? 'on' : ''} aria-pressed={valor === id}
+          title={label} aria-label={label} onClick={() => onChange(id)}>
+          <Icono size={18} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Resumen({ resumen }) {
   const pct = resumen?.porcentajeAsistencia;
@@ -67,6 +91,7 @@ export default function StudentDetail() {
   const [resumen, setResumen] = useState(null);
   const [inasistencias, setInasistencias] = useState([]);
   const [atrasos, setAtrasos] = useState([]);
+  const [fechasRegistradas, setFechasRegistradas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
@@ -74,6 +99,13 @@ export default function StudentDetail() {
   const [abierto, setAbierto] = useState(false);
   // Meses abiertos/cerrados a mano ('vista:YYYY-MM' → boolean); el resto usa el valor por defecto
   const [mesesManual, setMesesManual] = useState({});
+  const [modo, setModo] = useState(leerModo);
+  // Mes visible en la vista calendario ('YYYY-MM'); null = el más reciente con datos
+  const [mesCal, setMesCal] = useState(null);
+  const cambiarModo = (m) => {
+    setModo(m);
+    try { localStorage.setItem(MODO_STORAGE_KEY, m); } catch { /* sin almacenamiento: solo no se recuerda */ }
+  };
 
   const cargar = () => {
     setCargando(true);
@@ -84,12 +116,13 @@ export default function StudentDetail() {
         setResumen(data.resumen);
         setInasistencias(data.inasistencias);
         setAtrasos(data.atrasos);
+        setFechasRegistradas(data.fechasRegistradas || []);
       })
       .catch((e) => setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message))
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => { setSel(SIN_SELECCION); setMensaje(''); setMesesManual({}); cargar(); }, [rut]);
+  useEffect(() => { setSel(SIN_SELECCION); setMensaje(''); setMesesManual({}); setMesCal(null); cargar(); }, [rut]);
 
   // Pestaña en la URL (?vista=atrasos). Sin parámetro, se abre la que tenga pendientes.
   const vistaUrl = searchParams.get('vista');
@@ -146,6 +179,15 @@ export default function StudentDetail() {
     ...s,
     [vista]: s[vista].includes(clave) ? s[vista].filter((x) => x !== clave) : [...s[vista], clave],
   }));
+  // Calendario: un día puede tener varios atrasos; se seleccionan o quitan todos juntos
+  const elegirVarios = (claves) => setSel((s) => {
+    const actuales = s[vista];
+    const todas = claves.every((c) => actuales.includes(c));
+    return {
+      ...s,
+      [vista]: todas ? actuales.filter((c) => !claves.includes(c)) : [...new Set([...actuales, ...claves])],
+    };
+  });
   const seleccion = sel[vista];
   const filasSeleccion = vista === 'atrasos'
     ? atrasos.filter((t) => seleccion.includes(t.id_atraso))
@@ -242,11 +284,21 @@ export default function StudentDetail() {
 
       <Segmented opciones={opciones} valor={vista} onChange={cambiarVista} />
 
-      {registros.length > 0 && <Chips opciones={filtrosVer} valor={ver} onChange={cambiarVer} />}
+      {(registros.length > 0 || fechasRegistradas.length > 0) && (
+        <div className="vista-controles">
+          {modo === 'lista' && registros.length > 0
+            ? <Chips opciones={filtrosVer} valor={ver} onChange={cambiarVer} />
+            : <span />}
+          <ModoVista valor={modo} onChange={cambiarModo} />
+        </div>
+      )}
 
       {error && <p className="msg" role="alert" style={{ color: 'var(--bad)' }}>{error}</p>}
       {mensaje && <p className="msg" role="status">{mensaje}</p>}
-      {vacio || (
+      {modo === 'calendario' && (registros.length > 0 || fechasRegistradas.length > 0) ? (
+        <CalendarioAlumno vista={vista} registros={registros} fechasRegistradas={fechasRegistradas}
+          mes={mesCal} onCambiarMes={setMesCal} seleccion={seleccion} onElegir={elegirVarios} />
+      ) : vacio || (
         <div className="meses" role="tabpanel">
           {meses.map(({ clave, filas }, i) => {
             const { total = 0, pendientes = 0 } = totalesMes[clave] || {};

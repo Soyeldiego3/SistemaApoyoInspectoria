@@ -37,7 +37,15 @@ async function request(path, options = {}) {
       : `Error de API (${response.status})`;
     const error = new Error(message);
     error.code = typeof data === 'object' ? (data?.codigo || data?.code) : undefined;
+    error.datos = typeof data === 'object' ? data : undefined;
     throw error;
+  }
+
+  // Cualquier cambio de datos (sincronizar, justificar, gestionar o importar alertas…)
+  // puede cambiar las alertas pendientes: se avisa al menú para actualizar su número
+  const metodo = (options.method || 'GET').toUpperCase();
+  if (metodo !== 'GET' && !path.startsWith('/auth/')) {
+    window.dispatchEvent(new Event('alertas-actualizadas'));
   }
 
   return data;
@@ -89,8 +97,12 @@ export function cambiarPasswordCuenta(actual, nueva) {
   });
 }
 
-export function getAlumnos() {
-  return request('/asistencia/alumnos');
+// Pendientes por alumno; con desde/hasta (YYYY-MM-DD) cuenta solo ese rango
+export function getAlumnos({ desde, hasta } = {}, options = {}) {
+  const p = new URLSearchParams();
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  return request(`/asistencia/alumnos${p.toString() ? `?${p}` : ''}`, { signal: options.signal });
 }
 
 export function getDashboard() {
@@ -140,8 +152,6 @@ export async function gestionarAlerta(clave, datos) {
     method: 'PUT',
     body: JSON.stringify(datos),
   });
-  // Avisa al menú para actualizar el contador de alertas nuevas
-  window.dispatchEvent(new Event('alertas-actualizadas'));
   return respuesta;
 }
 
@@ -238,8 +248,9 @@ export function iniciarSync(credenciales, options = {}) {
 
 // ---------- Asistencia por clase (bloques horarios) ----------
 // Lee lo guardado en la BD: { curso, fecha, bloques: [{ hora_inicio, hora_fin, alumnos: [{ rut, apellidos, nombres, estado }] }] }
+// Sin curso (todos los cursos): { fecha, cursos: [{ curso, bloques }] }
 export function getAsistenciaClase({ curso, fecha }) {
-  return request(`/asistencia/clase?${new URLSearchParams({ curso, fecha })}`);
+  return request(`/asistencia/clase?${new URLSearchParams({ ...(curso ? { curso } : {}), fecha })}`);
 }
 
 // Abre el portal una vez y trae la asistencia por clase de TODOS los cursos en esa fecha.
@@ -250,6 +261,28 @@ export function extraerAsistenciaClase(fecha, options = {}) {
     body: JSON.stringify({ fecha }),
     signal: options.signal,
   });
+}
+
+// ---------- Sincronización como tarea en el PC (la usa el teléfono) ----------
+// El PC responde al tiro { tarea } y extrae en segundo plano; el estado se consulta con getTareaSync.
+// Tarea: { id, tipo: 'completa'|'clase', parametros, origen, estado: 'en_curso'|'ok'|'error', resultado, error }
+export function iniciarTareaSync(cuerpo) {
+  return request('/sync/descargar-e-importar', {
+    method: 'POST',
+    body: JSON.stringify({ ...(cuerpo || {}), segundoPlano: true }),
+  });
+}
+
+export function iniciarTareaClase(fecha) {
+  return request('/sync/asistencia-clase', {
+    method: 'POST',
+    body: JSON.stringify({ fecha, segundoPlano: true }),
+  });
+}
+
+// Sin id: la tarea en curso o la última terminada ({ tarea: null } si no hay)
+export function getTareaSync(id) {
+  return request(id ? `/sync/tarea/${encodeURIComponent(id)}` : '/sync/tarea');
 }
 
 export function getCredencialesPortal() {
