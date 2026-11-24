@@ -9,6 +9,7 @@ const {
 const router = express.Router();
 const TOP_ALUMNOS = 5;
 const FECHA_OK = /^\d{4}-\d{2}-\d{2}$/;
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
 
 // Recorta el rango de una fuente al período pedido; sin cruce -> sin datos
 function recortar(fuente, desde, hasta) {
@@ -28,6 +29,20 @@ function ordenCurso(a, b) {
   const [na, la] = nivel(a.curso);
   const [nb, lb] = nivel(b.curso);
   return na - nb || la.localeCompare(lb);
+}
+
+// Los TOP_ALUMNOS alumnos con más registros sin justificar; campo = 'atrasos' | 'inasistencias'
+function topSinJustificar(lista, campo) {
+  const porAlumno = new Map();
+  for (const i of lista) {
+    if (i.justificado) continue;
+    const alumno = porAlumno.get(i.rut) || { rut: i.rut, nombres: i.nombres, apellidos: i.apellidos, curso: i.curso, [campo]: 0 };
+    alumno[campo] += 1;
+    porAlumno.set(i.rut, alumno);
+  }
+  return [...porAlumno.values()]
+    .sort((a, b) => b[campo] - a[campo] || a.apellidos.localeCompare(b.apellidos))
+    .slice(0, TOP_ALUMNOS);
 }
 
 // Cuenta elementos agrupados por una clave, conservando el orden en que aparecen.
@@ -57,9 +72,12 @@ router.get('/', (req, res) => {
     // Fecha más antigua de la base: hasta dónde se puede retroceder en el front
     const inicios = [fuentes.asistencia.desde, fuentes.atrasos.desde].filter(Boolean).sort();
     const filtroCurso = curso || undefined;
+    // Los gráficos por curso muestran siempre todos los cursos (el elegido se resalta en el front);
+    // el resto de los gráficos usa solo las filas del curso elegido.
+    const delCurso = (lista) => (filtroCurso ? lista.filter((x) => x.curso === filtroCurso) : lista);
 
     // Asistencia por curso: % de registros "presente" sobre el total del curso
-    const registros = obtenerRegistrosAsistencia(db, { ...rangoAsistencia, curso: filtroCurso });
+    const registros = obtenerRegistrosAsistencia(db, rangoAsistencia);
     const totalesCurso = new Map();
     for (const registro of registros) {
       const total = totalesCurso.get(registro.curso) || { registros: 0, presentes: 0 };
@@ -74,20 +92,28 @@ router.get('/', (req, res) => {
       }))
       .sort(ordenCurso);
 
-    const inasistencias = obtenerIncidentes(db, { ...rangoAsistencia, curso: filtroCurso, tipo: 'inasistencias' });
-    const atrasos = obtenerIncidentes(db, { ...rangoAtrasos, curso: filtroCurso, tipo: 'atrasos' });
+    const todosAtrasos = obtenerIncidentes(db, { ...rangoAtrasos, tipo: 'atrasos' });
+    const inasistencias = delCurso(obtenerIncidentes(db, { ...rangoAsistencia, tipo: 'inasistencias' }));
+    const atrasos = delCurso(todosAtrasos);
 
     // Todos los días con registro de asistencia (aunque tengan 0 inasistencias), ordenados por fecha.
     // Así el calendario distingue "0 inasistencias" de "sin datos ese día". "2026-11-03" -> "03-11"
     const porFecha = contarPor(inasistencias, (i) => i.fecha);
-    const fechasConRegistro = [...new Set(registros.map((r) => r.fecha))].sort();
+    const fechasConRegistro = [...new Set(delCurso(registros).map((r) => r.fecha))].sort();
     const inasistenciasPorDia = fechasConRegistro.map((fecha) => ({
       fecha,
       dia: `${fecha.slice(8, 10)}-${fecha.slice(5, 7)}`,
       inasistencias: porFecha.get(fecha) || 0,
     }));
 
-    const atrasosPorCurso = [...contarPor(atrasos, (a) => a.curso).entries()]
+    // Total de inasistencias por día de la semana (lunes a viernes); getDay(): 1 = lunes
+    const porDiaSemana = contarPor(inasistencias, (i) => new Date(`${i.fecha}T00:00:00`).getDay());
+    const inasistenciasPorDiaSemana = DIAS_SEMANA.map((dia, indice) => ({
+      dia,
+      inasistencias: porDiaSemana.get(indice + 1) || 0,
+    }));
+
+    const atrasosPorCurso = [...contarPor(todosAtrasos, (a) => a.curso).entries()]
       .map(([nombre, total]) => ({ curso: nombre, atrasos: total }))
       .sort(ordenCurso);
 
@@ -95,22 +121,35 @@ router.get('/', (req, res) => {
     const justificados = incidentes.filter((i) => i.justificado).length;
     const justificacion = { justificados, sinJustificar: incidentes.length - justificados };
 
-    const porAlumno = new Map();
-    for (const atraso of atrasos) {
-      if (atraso.justificado) continue;
-      const alumno = porAlumno.get(atraso.rut) || {
-        rut: atraso.rut,
-        nombres: atraso.nombres,
-        apellidos: atraso.apellidos,
-        curso: atraso.curso,
-        atrasos: 0,
-      };
-      alumno.atrasos += 1;
-      porAlumno.set(atraso.rut, alumno);
+    // % de asistencia de cada alumno, solo con un curso elegido (con todos serían cientos de filas).
+    // De menor a mayor: los casos críticos quedan arriba.
+    let asistenciaPorAlumno = [];
+    if (filtroCurso) {
+      const totalesAlumno = new Map();
+      for (const registro of delCurso(registros)) {
+        const total = totalesAlumno.get(registro.rut) || { registros: 0, presentes: 0 };
+        total.registros += 1;
+        if (registro.estado === 'P') total.presentes += 1;
+        totalesAlumno.set(registro.rut, total);
+      }
+      const alumnosCurso = db.prepare(`
+        SELECT DISTINCT a.rut, a.nombres, a.apellidos
+        FROM matricula m
+        JOIN alumno a ON a.rut = m.rut_alumno
+        JOIN curso c ON c.id_curso = m.id_curso
+        WHERE c.nombre = ?
+      `).all(filtroCurso);
+      asistenciaPorAlumno = alumnosCurso
+        .filter((a) => totalesAlumno.has(a.rut))
+        .map((a) => {
+          const total = totalesAlumno.get(a.rut);
+          return { ...a, asistencia: Number((total.presentes / total.registros * 100).toFixed(1)) };
+        })
+        .sort((a, b) => a.asistencia - b.asistencia || a.apellidos.localeCompare(b.apellidos));
     }
-    const topAtrasos = [...porAlumno.values()]
-      .sort((a, b) => b.atrasos - a.atrasos || a.apellidos.localeCompare(b.apellidos))
-      .slice(0, TOP_ALUMNOS);
+
+    const topAtrasos = topSinJustificar(atrasos, 'atrasos');
+    const topInasistencias = topSinJustificar(inasistencias, 'inasistencias');
 
     res.json({
       periodo: { asistencia: rangoAsistencia, atrasos: rangoAtrasos },
@@ -119,7 +158,10 @@ router.get('/', (req, res) => {
       atrasosPorCurso,
       justificacion,
       inasistenciasPorDia,
+      inasistenciasPorDiaSemana,
+      asistenciaPorAlumno,
       topAtrasos,
+      topInasistencias,
     });
   } catch (error) {
     console.error('Error al consultar datos de gráficos:', error.message);

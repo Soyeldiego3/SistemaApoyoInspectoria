@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from 'recharts';
 import { Skeleton } from './Skeleton.jsx';
 import { useTema } from '../tema.jsx';
 
@@ -7,9 +7,11 @@ import { useTema } from '../tema.jsx';
 // ejeX: campo de la categoría (por defecto "dia"; en Gráficos también "curso").
 // horizontal: barras acostadas, una fila por categoría. valores: muestra el número sin pasar el mouse.
 // sufijo: texto tras el número (ej. "%").
+// resaltado: valor de ejeX que conserva su color; las demás barras quedan en gris de fondo.
+// onElegir: al hacer clic en una barra recibe su valor de ejeX.
 export default function BarsChart({
   data = [], dataKey = 'atrasos', color = 'accent', ejeX = 'dia',
-  horizontal = false, valores = false, sufijo = '',
+  horizontal = false, valores = false, sufijo = '', resaltado = '', onElegir,
 }) {
   const { colores } = useTema();
   if (!data.length) return <Skeleton h={160} />;
@@ -26,7 +28,13 @@ export default function BarsChart({
             ? <YAxis type="category" dataKey={ejeX} width={56} {...estiloEje} />
             : <XAxis dataKey={ejeX} {...estiloEje} />}
           <Tooltip cursor={{ fill: colores.hover }} contentStyle={{ background: colores['card-2'], border: 0, borderRadius: 10 }} />
-          <Bar dataKey={dataKey} fill={colores[color]} radius={horizontal ? [0, 8, 8, 0] : [8, 8, 0, 0]}>
+          <Bar dataKey={dataKey} fill={colores[color]} radius={horizontal ? [0, 8, 8, 0] : [8, 8, 0, 0]}
+            onClick={onElegir ? (barra) => onElegir(barra.payload?.[ejeX] ?? barra[ejeX]) : undefined} style={onElegir ? { cursor: 'pointer' } : undefined}>
+            {resaltado && data.map((fila) => (
+              fila[ejeX] === resaltado
+                ? <Cell key={fila[ejeX]} fill={colores[color]} />
+                : <Cell key={fila[ejeX]} fill={colores.muted} fillOpacity={0.3} />
+            ))}
             {valores && (
               <LabelList dataKey={dataKey} position={horizontal ? 'right' : 'top'} fill={colores.muted} fontSize={12}
                 formatter={(v) => `${v}${sufijo}`} />
