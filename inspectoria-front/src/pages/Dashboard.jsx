@@ -5,6 +5,7 @@ import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
 import { getDashboard } from '../api.js';
+import { useDetalleSync } from '../detalleSync.js';
 import {
   ERRORES_LOGIN, esPc, intentarSync, irACredenciales, registrarSync, tareaEnCurso, ultimaSync,
 } from '../portal.js';
@@ -35,8 +36,7 @@ export default function Dashboard() {
     return () => { activo = false; };
   }, []);
 
-  // Muestra el resultado de una sincronización (la automática, un reintento o una hecha en otra
-  // pantalla). Devuelve el resultado, o null si Inicio ya no está montado.
+  // Muestra el resultado de una sincronización
   const aplicarSync = async (promesa) => {
     const resultado = await promesa;
     if (!activoRef.current) return null;
@@ -69,8 +69,10 @@ export default function Dashboard() {
     return () => { activoRef.current = false; };
   }, []);
 
+  //sincronización en el PC
+  const detalleSync = useDetalleSync(syncEstado === 'cargando');
+
   // Reintenta aquí mismo; solo si el problema son las credenciales se va a Ajustes
-  // (allí, al guardarlas, se sincroniza solo). En el teléfono se le pide al PC.
   const reintentar = async () => {
     setSyncEstado('cargando');
     const resultado = await aplicarSync(registrarSync(intentarSync()));
@@ -88,7 +90,7 @@ export default function Dashboard() {
         </div>
         <div className="row inicio-fila">
           <p className="muted">
-            {syncEstado === 'cargando' ? (esPc ? 'Sincronizando…' : 'El PC está sincronizando…') :
+            {syncEstado === 'cargando' ? (detalleSync || (esPc ? 'Sincronizando…' : 'El PC está sincronizando…')) :
               syncEstado === 'ok' ? syncMensaje :
               syncEstado === 'requiere' ? 'Sin datos. Configura las credenciales para sincronizar' :
               syncEstado === 'error' ? 'No se pudo sincronizar' :

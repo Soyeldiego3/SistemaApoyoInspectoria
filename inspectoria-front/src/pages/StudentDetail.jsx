@@ -199,9 +199,13 @@ export default function StudentDetail() {
   const guardar = ({ tipo, desde, hasta, duracionMs, aplicaA }) => {
     setError('');
     return crearJustificativo(decodeURIComponent(rut), { tipo, desde, hasta, duracionMs, aplicaA })
-      .then(() => cargar())
-      .then(() => {
-        setMensaje(tipo === SIN_JUSTIFICAR ? 'Marcado como no justificado.' : 'Justificativo guardado correctamente.');
+      .then((respuesta) => cargar().then(() => respuesta))
+      .then((respuesta) => {
+        const n = respuesta?.fechasSinRegistro?.length || 0;
+        const falta = vista === 'atrasos' ? 'atraso' : 'inasistencia';
+        setMensaje(tipo === SIN_JUSTIFICAR ? 'Marcado como no justificado.'
+          : n ? `Justificativo guardado. ${n === 1 ? '1 día' : `${n} días`} del rango no ${n === 1 ? 'figura' : 'figuran'} como ${falta} en los datos sincronizados (se guardó igual).`
+            : 'Justificativo guardado correctamente.');
         setAbierto(false);
         setSel((s) => ({ ...s, [vista]: [] }));
       })

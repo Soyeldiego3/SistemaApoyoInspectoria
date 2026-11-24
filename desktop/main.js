@@ -8,9 +8,35 @@ const PORT = 3005;
 let mainWindow = null;
 let backend = null;
 
-// Evita abrir dos instancias (y dos backends)
+// Evita abrir dos instancias (y dos backends). Si se abre otra vez, se muestra la ventana existente.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
+}
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
+// "Abrir al iniciar Windows" (Ajustes): el backend lo pide por mensajes (services/inicio_windows.js).
+// En el build portable el .exe se descomprime en una carpeta temporal; se registra el .exe real.
+const exeReal = () => process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+const inicioDisponible = () => app.isPackaged && process.platform === 'win32';
+function estadoInicioWindows() {
+  if (!inicioDisponible()) return { disponible: false, activo: false };
+  return { disponible: true, activo: app.getLoginItemSettings({ path: exeReal() }).openAtLogin };
+}
+function atenderInicioWindows(proceso, message) {
+  if (message?.type !== 'inicio-windows:consultar' && message?.type !== 'inicio-windows:cambiar') return;
+  try {
+    if (message.type === 'inicio-windows:cambiar' && inicioDisponible()) {
+      app.setLoginItemSettings({ openAtLogin: Boolean(message.activo), path: exeReal() });
+    }
+    proceso.send({ type: 'inicio-windows:estado', ...estadoInicioWindows() });
+  } catch (error) {
+    console.error('Inicio con Windows:', error.message);
+  }
 }
 
 function startBackend() {
@@ -43,6 +69,7 @@ function startBackend() {
   proceso.stdout.on('data', (d) => console.log('[back]', d.toString()));
   proceso.stderr.on('data', (d) => console.error('[back]', d.toString()));
   proceso.on('error', (error) => console.error('Error del backend:', error.message));
+  proceso.on('message', (message) => atenderInicioWindows(proceso, message));
   proceso.on('exit', (code) => {
     console.log('Backend terminó con código', code);
     backend = null;

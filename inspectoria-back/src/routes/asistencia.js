@@ -1,7 +1,10 @@
 const express = require('express');
 const db = require('../db/conexion');
 const { abrirDb, normalizarRut, transaccion } = require('../services/asistencia');
-const { sqlJustificado, sqlUltimoTipo, recortarSuperpuestos } = require('../services/justificativos');
+const {
+  sqlJustificado, sqlUltimoTipo, recortarSuperpuestos, SIN_JUSTIFICAR,
+} = require('../services/justificativos');
+const auditoriaSistema = require('../services/auditoria_sistema');
 
 const router = express.Router();
 let dbWritable;
@@ -148,7 +151,30 @@ router.post('/alumnos/:rut/justificativos', (req, res) => {
       recortarSuperpuestos(dbw, nuevo);
       return lastInsertRowid;
     });
-    res.status(201).json({ id });
+
+    // PR-04: días del rango con asistencia cargada que no son la falta que se justifica
+    // (presente, o sin atraso si es un justificativo de atrasos). Se guarda igual, pero
+    // se avisa y queda registrado como inconsistencia en sistema.log.
+    const fechasSinRegistro = tipo.trim() === SIN_JUSTIFICAR ? [] : dbw.prepare(aplicaA === 'atraso'
+      ? `SELECT s.fecha FROM asistencia s
+          JOIN matricula m ON m.id_matricula = s.id_matricula
+          WHERE m.rut_alumno = ? AND s.fecha BETWEEN ? AND ?
+            AND NOT EXISTS (SELECT 1 FROM atraso t WHERE t.id_matricula = s.id_matricula AND t.fecha = s.fecha)
+          ORDER BY s.fecha`
+      : `SELECT s.fecha FROM asistencia s
+          JOIN matricula m ON m.id_matricula = s.id_matricula
+          WHERE m.rut_alumno = ? AND s.fecha BETWEEN ? AND ? AND s.estado = 'P'
+          ORDER BY s.fecha`).pluck().all(alumno.rut, desde, hasta);
+    if (fechasSinRegistro.length) {
+      try {
+        auditoriaSistema.registrar('justificativo.inconsistencia', req.usuario?.nombre, {
+          id, rut: alumno.rut, aplicaA: aplicaA ?? null, fechas: fechasSinRegistro,
+        });
+      } catch (error) {
+        console.error('No se pudo registrar la inconsistencia del justificativo:', error.message);
+      }
+    }
+    res.status(201).json({ id, fechasSinRegistro });
   } catch (error) {
     console.error('Error al crear justificativo:', error.message);
     res.status(500).json({ error: 'No se pudo guardar el justificativo.' });

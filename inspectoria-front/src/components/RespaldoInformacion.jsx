@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import {
   descargarRespaldo,
   descargarRespaldoAutomatico,
+  getConfigRespaldo,
   listarRespaldosAutomaticos,
   restaurarRespaldo,
+  setConfigRespaldo,
 } from '../api.js';
-import { useAuth } from '../auth.jsx';
 import { descargar } from '../descargas.js';
 import { fechaCorta } from '../fechas.js';
 import { esPc } from '../portal.js';
 import { plural } from '../texto.js';
+
+const ERRORES_CLAVE = ['CLAVE_REQUERIDA', 'CLAVE_INCORRECTA'];
 
 function textoResumen({ alertas, justificativos }) {
   const restauradas = alertas.nuevas + alertas.actualizadas;
@@ -24,14 +27,110 @@ function textoResumen({ alertas, justificativos }) {
   return `Respaldo restaurado: ${partes.join(' y ')}.${extra}`;
 }
 
+// Qué se puede hacer con el archivo descargado, según cómo quedó cifrado
+function textoDescarga(clave) {
+  if (clave === 'contrasena') {
+    return 'Respaldo descargado y cifrado con la contraseña de respaldo. Guárdalo en un pendrive: se puede restaurar en otro computador con esa contraseña.';
+  }
+  return 'Respaldo descargado y cifrado. Como no hay contraseña de respaldo, solo se puede restaurar en este computador.';
+}
+
+// Contraseña de respaldo y carpeta externa (pendrive). Cualquier usuario, desde el PC.
+function ProteccionRespaldo() {
+  const [config, setConfig] = useState(null);
+  const [contrasena, setContrasena] = useState('');
+  const [carpeta, setCarpeta] = useState('');
+  const [guardando, setGuardando] = useState(null); // null | 'contrasena' | 'carpeta'
+  const [aviso, setAviso] = useState(null);
+
+  useEffect(() => {
+    getConfigRespaldo()
+      .then((c) => { setConfig(c); setCarpeta(c.carpetaExterna || ''); })
+      .catch(() => setConfig(null));
+  }, []);
+
+  const guardar = async (campo, cambios, textoOk) => {
+    setGuardando(campo);
+    setAviso(null);
+    try {
+      const nueva = await setConfigRespaldo(cambios);
+      setConfig(nueva);
+      setCarpeta(nueva.carpetaExterna || '');
+      if (campo === 'contrasena') setContrasena('');
+      setAviso({ tipo: 'ok', texto: textoOk });
+    } catch (error) {
+      setAviso({ tipo: 'error', texto: error.message || 'No se pudo guardar.' });
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  if (!config) return null;
+  const minimo = config.minContrasena || 8;
+  return (
+    <details style={{ marginTop: 14 }}>
+      <summary className="muted" style={{ cursor: 'pointer' }}>
+        Contraseña y copia externa {config.conContrasena ? '· protegido con contraseña' : '· sin contraseña'}
+      </summary>
+      <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+        <p className="muted" style={{ fontSize: '.85rem' }}>
+          Los respaldos siempre se guardan cifrados. Con una contraseña de respaldo, además se pueden
+          restaurar en otro computador (por ejemplo, si este se daña).
+        </p>
+        <form className="row" style={{ gap: 8 }} onSubmit={(e) => {
+          e.preventDefault();
+          guardar('contrasena', { contrasena }, 'Contraseña de respaldo guardada. Los próximos respaldos la usarán.');
+        }}>
+          <input className="input" type="password" autoComplete="new-password" value={contrasena}
+            onChange={(e) => setContrasena(e.target.value)} minLength={minimo}
+            placeholder={config.conContrasena ? 'Nueva contraseña de respaldo' : `Contraseña de respaldo (mín. ${minimo})`}
+            aria-label="Contraseña de respaldo" />
+          <button className="btn" type="submit" style={{ width: 'auto' }}
+            disabled={guardando !== null || contrasena.length < minimo}>
+            {guardando === 'contrasena' ? 'Guardando…' : 'Guardar'}
+          </button>
+        </form>
+        <p className="muted" style={{ fontSize: '.85rem' }}>
+          Anótala en un lugar seguro: sin ella no se puede abrir el respaldo en otro equipo.
+        </p>
+        <form className="row" style={{ gap: 8 }} onSubmit={(e) => {
+          e.preventDefault();
+          guardar('carpeta', { carpetaExterna: carpeta }, carpeta.trim()
+            ? 'Carpeta externa guardada. Cada respaldo automático también se copiará ahí.'
+            : 'Se quitó la copia a carpeta externa.');
+        }}>
+          <input className="input" value={carpeta} onChange={(e) => setCarpeta(e.target.value)}
+            placeholder="Carpeta del pendrive, por ejemplo E:\Respaldos" aria-label="Carpeta para copia externa" />
+          <button className="btn outline" type="submit" style={{ width: 'auto' }} disabled={guardando !== null}>
+            {guardando === 'carpeta' ? 'Guardando…' : 'Guardar'}
+          </button>
+        </form>
+        <p className="muted" style={{ fontSize: '.85rem' }}>
+          {config.conContrasena
+            ? 'Se copian los últimos 7 respaldos. Si el pendrive no está conectado, el respaldo queda igual en este computador.'
+            : 'La copia externa empieza cuando definas una contraseña de respaldo.'}
+        </p>
+        {aviso && (
+          <p className={aviso.tipo === 'error' ? 'msg error' : 'msg'} role={aviso.tipo === 'error' ? 'alert' : 'status'}>
+            {aviso.texto}
+          </p>
+        )}
+      </div>
+    </details>
+  );
+}
+
 // Tarjeta de Ajustes: respaldar y restaurar las notas de alertas y los justificativos aprobados
 export default function RespaldoInformacion() {
-  const { esAdmin } = useAuth();
   const [procesando, setProcesando] = useState(null); // null | 'respaldar' | 'restaurar'
   const [aviso, setAviso] = useState(null); // { tipo: 'ok' | 'error', texto }
   const [automaticos, setAutomaticos] = useState(null);
+  // Respaldo con contraseña elegido para restaurar: se pide la contraseña antes de enviarlo
+  const [pendiente, setPendiente] = useState(null); // File | null
+  const [claveRestaurar, setClaveRestaurar] = useState('');
   const inputRef = useRef(null);
-  const verAutomaticos = esAdmin && esPc;
+  // Lo que toca archivos del PC (lista de automáticos, pendrive) solo se ve desde el PC
+  const verAutomaticos = esPc;
 
   const cargarAutomaticos = () => {
     listarRespaldosAutomaticos()
@@ -47,9 +146,9 @@ export default function RespaldoInformacion() {
     setProcesando('respaldar');
     setAviso(null);
     try {
-      const { blob, nombre } = await descargarRespaldo();
+      const { blob, nombre, clave } = await descargarRespaldo();
       descargar(blob, nombre);
-      setAviso({ tipo: 'ok', texto: 'Respaldo descargado. Guárdalo en un pendrive o en la nube.' });
+      setAviso({ tipo: 'ok', texto: textoDescarga(clave) });
     } catch (error) {
       setAviso({ tipo: 'error', texto: error.message || 'No se pudo generar el respaldo.' });
     } finally {
@@ -57,15 +156,24 @@ export default function RespaldoInformacion() {
     }
   };
 
-  const restaurar = async (archivo) => {
+  const restaurar = async (archivo, contrasena) => {
     if (!archivo) return;
     setProcesando('restaurar');
     setAviso(null);
     try {
-      const { resumen } = await restaurarRespaldo(archivo);
+      const { resumen } = await restaurarRespaldo(archivo, contrasena);
       setAviso({ tipo: 'ok', texto: textoResumen(resumen) });
+      setPendiente(null);
+      setClaveRestaurar('');
     } catch (error) {
-      setAviso({ tipo: 'error', texto: error.message || 'No se pudo restaurar el respaldo.' });
+      if (ERRORES_CLAVE.includes(error.code)) {
+        // Se queda con el archivo y pide (de nuevo) la contraseña
+        setPendiente(archivo);
+        if (error.code === 'CLAVE_INCORRECTA') setAviso({ tipo: 'error', texto: error.message });
+      } else {
+        setPendiente(null);
+        setAviso({ tipo: 'error', texto: error.message || 'No se pudo restaurar el respaldo.' });
+      }
     } finally {
       setProcesando(null);
       if (inputRef.current) inputRef.current.value = '';
@@ -85,35 +193,43 @@ export default function RespaldoInformacion() {
     <section className="card">
       <h2>Respaldo de información</h2>
       <p className="muted">
-        Guarda las notas y estados de las alertas y los justificativos aprobados. No incluye la asistencia
-        ni los atrasos, que se vuelven a sincronizar desde el portal.
+        Guarda las notas y estados de las alertas y los justificativos aprobados, comprimidos y cifrados.
+        No incluye la asistencia ni los atrasos, que se vuelven a sincronizar desde el portal.
       </p>
       <div className="portal-acciones">
         <button className="btn" type="button" disabled={Boolean(procesando)} onClick={respaldar}>
           {procesando === 'respaldar' ? 'Respaldando…' : 'Respaldar información'}
         </button>
-        {esAdmin && (
-          <button className="btn outline" type="button" disabled={Boolean(procesando)}
-            onClick={() => inputRef.current?.click()}>
-            {procesando === 'restaurar' ? 'Restaurando…' : 'Restaurar respaldo'}
-          </button>
-        )}
+        <button className="btn outline" type="button" disabled={Boolean(procesando)}
+          onClick={() => { setPendiente(null); inputRef.current?.click(); }}>
+          {procesando === 'restaurar' ? 'Restaurando…' : 'Restaurar respaldo'}
+        </button>
       </div>
-      {esAdmin && (
-        <input ref={inputRef} type="file" accept=".json,application/json" hidden
-          onChange={(e) => restaurar(e.target.files?.[0])} />
+      <input ref={inputRef} type="file" accept=".inspbak,.json" hidden
+        onChange={(e) => restaurar(e.target.files?.[0])} />
+      {pendiente && (
+        <form className="row" style={{ gap: 8, marginTop: 12 }}
+          onSubmit={(e) => { e.preventDefault(); restaurar(pendiente, claveRestaurar); }}>
+          <input className="input" type="password" autoFocus value={claveRestaurar}
+            onChange={(e) => setClaveRestaurar(e.target.value)}
+            placeholder={`Contraseña de "${pendiente.name}"`} aria-label="Contraseña del respaldo" />
+          <button className="btn" type="submit" style={{ width: 'auto' }}
+            disabled={Boolean(procesando) || !claveRestaurar}>Restaurar</button>
+          <button className="linkbtn" type="button" onClick={() => { setPendiente(null); setClaveRestaurar(''); }}>
+            Cancelar
+          </button>
+        </form>
       )}
-      {esAdmin && (
-        <p className="muted" style={{ marginTop: 10, fontSize: '.85rem' }}>
-          Al restaurar no se pierde nada: si una nota cambió después del respaldo, se mantiene la más reciente.
-        </p>
-      )}
+      <p className="muted" style={{ marginTop: 10, fontSize: '.85rem' }}>
+        Al restaurar no se pierde nada: si una nota cambió después del respaldo, se mantiene la más reciente.
+      </p>
       {aviso && (
         <p className={aviso.tipo === 'error' ? 'msg error' : 'msg'} role={aviso.tipo === 'error' ? 'alert' : 'status'}
           style={{ marginTop: 12 }}>
           {aviso.texto}
         </p>
       )}
+      {verAutomaticos && <ProteccionRespaldo />}
       {verAutomaticos && (
         <details style={{ marginTop: 14 }} onToggle={(e) => { if (e.currentTarget.open) cargarAutomaticos(); }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>

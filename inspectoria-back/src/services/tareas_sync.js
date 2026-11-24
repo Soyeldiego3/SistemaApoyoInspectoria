@@ -35,6 +35,8 @@ function ejecutar({ tipo, parametros = {}, origen }, fn) {
     fin: null,
     resultado: null,
     error: null,
+    // Texto de avance mientras corre (p. ej. "Reintentando (2 de 3)…"); null si no hay nada que contar
+    detalle: null,
   };
   actual = tarea;
 
@@ -50,6 +52,7 @@ function ejecutar({ tipo, parametros = {}, origen }, fn) {
       };
     }
     const exitosa = respuesta.estado >= 200 && respuesta.estado < 300;
+    tarea.detalle = null;
     tarea.estado = exitosa ? 'ok' : 'error';
     tarea.fin = new Date().toISOString();
     if (exitosa) tarea.resultado = respuesta.datos;
@@ -66,9 +69,15 @@ function ejecutar({ tipo, parametros = {}, origen }, fn) {
   return { tarea: publica(tarea), terminado };
 }
 
+// Avance de la tarea en curso (lo leen el PC y el teléfono al consultar la tarea)
+function actualizarDetalle(texto) {
+  if (actual?.estado === 'en_curso') actual.detalle = texto || null;
+}
+
 module.exports = {
   ocupado,
   obtenerActual,
   obtener,
   ejecutar,
+  actualizarDetalle,
 };

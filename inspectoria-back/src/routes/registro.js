@@ -46,6 +46,11 @@ router.post('/importar', express.raw({ type: 'application/octet-stream', limit: 
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     return res.status(400).json({ error: 'No se recibió ningún archivo.' });
   }
+  // PR-07: un .xlsx es un ZIP (empieza con "PK\x03\x04"). Así no se intenta leer un CSV, HTML
+  // u otro archivo renombrado, que XLSX.read también aceptaría.
+  if (req.body.length < 4 || req.body.readUInt32BE(0) !== 0x504B0304) {
+    return res.status(400).json({ error: 'El archivo debe ser un Excel (.xlsx).' });
+  }
   try {
     let wb;
     try {

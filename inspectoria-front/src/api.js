@@ -213,21 +213,42 @@ async function descargarArchivo(path, nombrePorDefecto) {
     throw new Error(data.error || data.mensaje || `Error de API (${response.status})`);
   }
   const simple = /filename="([^"]+)"/i.exec(response.headers.get('content-disposition') || '');
-  return { blob: await response.blob(), nombre: simple?.[1] || nombrePorDefecto };
+  return {
+    blob: await response.blob(),
+    nombre: simple?.[1] || nombrePorDefecto,
+    // 'contrasena' | 'equipo' | 'plano': con 'equipo' el archivo solo se restaura en este PC
+    clave: response.headers.get('x-respaldo-clave') || null,
+  };
 }
 
-// Devuelve { blob, nombre } con el respaldo en JSON
+// Devuelve { blob, nombre, clave } con el respaldo cifrado (.inspbak)
 export function descargarRespaldo() {
-  return descargarArchivo('/respaldo', 'respaldo-inspectoria.json');
+  return descargarArchivo('/respaldo', 'respaldo-inspectoria.inspbak');
 }
 
 // Devuelve { ok, resumen: { alertas: {nuevas, actualizadas, omitidas}, justificativos: {nuevos, omitidos} } }
-export function restaurarRespaldo(archivo) {
+// Si el respaldo tiene contraseña y falta o no corresponde, lanza un Error con code
+// 'CLAVE_REQUERIDA' | 'CLAVE_INCORRECTA'.
+export function restaurarRespaldo(archivo, contrasena) {
   return request('/respaldo/restaurar', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream' },
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      // Un header solo admite ASCII: la contraseña va codificada
+      ...(contrasena ? { 'X-Clave-Respaldo': encodeURIComponent(contrasena) } : {}),
+    },
     body: archivo,
   });
+}
+
+// { conContrasena, carpetaExterna, minContrasena } (admin, solo desde el PC)
+export function getConfigRespaldo() {
+  return request('/respaldo/config');
+}
+
+// { contrasena?, carpetaExterna? } → misma forma que getConfigRespaldo
+export function setConfigRespaldo(cambios) {
+  return request('/respaldo/config', { method: 'PUT', body: JSON.stringify(cambios) });
 }
 
 export function listarRespaldosAutomaticos() {
@@ -306,6 +327,14 @@ export function probarCredencialesPortal(credenciales, options = {}) {
     method: 'POST',
     body: JSON.stringify(credenciales || {}),
     signal: options.signal,
+  });
+}
+
+// { activo: boolean } → { inicioWindows: { disponible, activo } } (admin, solo desde el PC)
+export function setInicioWindows(activo) {
+  return request('/ajustes/inicio-windows', {
+    method: 'PUT',
+    body: JSON.stringify({ activo }),
   });
 }
 

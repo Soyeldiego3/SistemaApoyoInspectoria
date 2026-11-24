@@ -9,6 +9,7 @@ import {
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
+import { useDetalleSync } from '../detalleSync.js';
 import { fechaCorta } from '../fechas.js';
 import GridLoader from './GridLoader.jsx';
 import CredencialesSheet from './CredencialesSheet.jsx';
@@ -337,6 +338,8 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
   };
 
   const sincronizandoFuera = estado === 'cargando' && !mostrarCredenciales;
+  // Avance en el PC (p. ej. "Reintentando (2 de 3)…" si el portal falló)
+  const detalleSync = useDetalleSync(estado === 'cargando');
   // Si los datos no parten en marzo, faltan meses del año escolar (p. ej. para el Master)
   const hoy = new Date();
   const faltanMeses = rango?.desde && Number(rango.desde.slice(5, 7)) > 3 && hoy.getMonth() > 2;
@@ -355,6 +358,7 @@ export default function ExtraccionAutomatica({ onSincronizado }) {
         </button>
         {sincronizandoFuera && (
           <p className="muted" role="status" style={{ marginTop: 10 }}>
+            {detalleSync && <><b>{detalleSync}</b><br /></>}
             {periodoRef.current === 'anio'
               ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
               : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}

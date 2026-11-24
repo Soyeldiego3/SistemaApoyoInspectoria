@@ -235,11 +235,15 @@ function Leyenda() {
   );
 }
 
-// Tabla alumno × bloque con P / A / T
+// Tabla alumno × bloque con P / A / T.
 function Matriz({ bloques, filas, ficha }) {
   return (
     <div className="card clase-tabla-caja">
-      <table className="clase-tabla">
+      <table className="clase-tabla" style={{ minWidth: 240 + bloques.length * 64 }}>
+        <colgroup>
+          <col className="clase-col-alumno" />
+          {bloques.map((b) => <col key={b.hora_inicio} />)}
+        </colgroup>
         <thead>
           <tr>
             <th>Alumno</th>

@@ -82,7 +82,7 @@ app.use('/api/graficos', requerirSesion, graficosRouter);
 app.use('/api/registro', requerirSesion, registroRouter);
 app.use('/api/exportar', requerirSesion, exportarRouter);
 app.use('/api/respaldo', requerirSesion, respaldoRouter);
-app.use('/api/ajustes', requerirSesion, requerirLoopback, requerirRol('admin'), ajustesRouter);
+app.use('/api/ajustes', requerirSesion, requerirLoopback, ajustesRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {
     const cursos = require('./db/conexion').prepare(`

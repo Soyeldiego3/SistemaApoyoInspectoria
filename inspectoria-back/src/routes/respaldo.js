@@ -1,12 +1,14 @@
-// Respaldo de información: GET / descarga, POST /restaurar (admin),
-// GET /automaticos y GET /automaticos/:archivo (admin, solo desde el PC)
+// Respaldo de información.
+// GET / descarga (cifrada), POST /restaurar,
+// GET /automaticos y GET /automaticos/:archivo (solo desde el PC),
+// GET/PUT /config: contraseña de respaldo y carpeta externa (solo desde el PC)
 const express = require('express');
 const fs = require('fs');
 const { abrirDb } = require('../services/asistencia');
 const {
   generarRespaldo, restaurarRespaldo, listarAutomaticos, rutaAutomatico, fechaLocal, ErrorRespaldo,
+  empaquetar, desempaquetar, claveDeArchivo, configRespaldo, configurarRespaldo, respaldoAutomatico, EXTENSION,
 } = require('../services/respaldo');
-const { requerirRol } = require('../middleware/roles');
 const { requerirLoopback } = require('../middleware/loopback');
 const auditoriaSistema = require('../services/auditoria_sistema');
 
@@ -18,14 +20,35 @@ function obtenerDbWritable() {
   return dbWritable;
 }
 
-function enviarJson(res, contenido, nombreArchivo) {
+// clave: 'contrasena' | 'equipo' | 'plano' (el front avisa si el archivo no sirve en otro equipo)
+function enviarArchivo(res, contenido, nombreArchivo, clave) {
   res.set({
-    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Type': 'application/octet-stream',
     'Content-Disposition': `attachment; filename="${nombreArchivo}"`,
-    'Access-Control-Expose-Headers': 'Content-Disposition',
+    'X-Respaldo-Clave': clave,
+    'Access-Control-Expose-Headers': 'Content-Disposition, X-Respaldo-Clave',
   });
   res.send(contenido);
 }
+
+// La contraseña llega codificada (encodeURIComponent) porque un header solo admite ASCII
+function contrasenaDe(req) {
+  const valor = req.get('X-Clave-Respaldo');
+  if (!valor) return null;
+  try {
+    return decodeURIComponent(valor);
+  } catch {
+    return valor;
+  }
+}
+
+const responderError = (res, error, mensaje) => {
+  if (error instanceof ErrorRespaldo) {
+    return res.status(error.status).json({ error: error.message, codigo: error.codigo });
+  }
+  console.error(`${mensaje}:`, error.message);
+  return res.status(500).json({ error: `${mensaje}.` });
+};
 
 function registrar(evento, req, detalle) {
   try {
@@ -38,11 +61,12 @@ function registrar(evento, req, detalle) {
 router.get('/', (req, res) => {
   try {
     const respaldo = generarRespaldo(obtenerDbWritable());
+    const archivo = empaquetar(respaldo);
     registrar('respaldo.descargado', req, {
       alertas: respaldo.alerta_gestion.length,
       justificativos: respaldo.justificativos.length,
     });
-    enviarJson(res, JSON.stringify(respaldo, null, 2), `respaldo-inspectoria-${fechaLocal()}.json`);
+    enviarArchivo(res, archivo, `respaldo-inspectoria-${fechaLocal()}${EXTENSION}`, claveDeArchivo(archivo));
   } catch (error) {
     console.error('Error al generar el respaldo:', error.message);
     res.status(500).json({ error: 'No se pudo generar el respaldo.' });
@@ -50,28 +74,21 @@ router.get('/', (req, res) => {
 });
 
 // El archivo llega como bytes (el express.json global solo acepta 100 kb)
-router.post('/restaurar', requerirRol('admin'), express.raw({ type: 'application/octet-stream', limit: '5mb' }), (req, res) => {
+router.post('/restaurar', express.raw({ type: 'application/octet-stream', limit: '5mb' }), (req, res) => {
   try {
     if (!Buffer.isBuffer(req.body) || !req.body.length) {
       return res.status(400).json({ error: 'Elige un archivo de respaldo.' });
     }
-    let datos;
-    try {
-      datos = JSON.parse(req.body.toString('utf8').replace(/^﻿/, ''));
-    } catch {
-      return res.status(400).json({ error: 'El archivo no es un respaldo válido.' });
-    }
+    const datos = desempaquetar(req.body, contrasenaDe(req));
     const resumen = restaurarRespaldo(obtenerDbWritable(), datos);
     registrar('respaldo.restaurado', req, resumen);
     res.json({ ok: true, resumen });
   } catch (error) {
-    if (error instanceof ErrorRespaldo) return res.status(error.status).json({ error: error.message });
-    console.error('Error al restaurar el respaldo:', error.message);
-    res.status(500).json({ error: 'No se pudo restaurar el respaldo.' });
+    responderError(res, error, 'No se pudo restaurar el respaldo');
   }
 });
 
-router.get('/automaticos', requerirLoopback, requerirRol('admin'), (req, res) => {
+router.get('/automaticos', requerirLoopback, (req, res) => {
   try {
     res.json({ respaldos: listarAutomaticos() });
   } catch (error) {
@@ -80,14 +97,42 @@ router.get('/automaticos', requerirLoopback, requerirRol('admin'), (req, res) =>
   }
 });
 
-router.get('/automaticos/:archivo', requerirLoopback, requerirRol('admin'), (req, res) => {
+router.get('/automaticos/:archivo', requerirLoopback, (req, res) => {
   try {
     const ruta = rutaAutomatico(req.params.archivo);
     if (!ruta) return res.status(404).json({ error: 'No se encontró ese respaldo.' });
-    enviarJson(res, fs.readFileSync(ruta), req.params.archivo);
+    const contenido = fs.readFileSync(ruta);
+    enviarArchivo(res, contenido, req.params.archivo, claveDeArchivo(contenido));
   } catch (error) {
     console.error('Error al descargar respaldo automático:', error.message);
     res.status(500).json({ error: 'No se pudo descargar el respaldo.' });
+  }
+});
+
+router.get('/config', requerirLoopback, (req, res) => {
+  try {
+    res.json(configRespaldo());
+  } catch (error) {
+    responderError(res, error, 'No se pudo leer la configuración del respaldo');
+  }
+});
+
+router.put('/config', requerirLoopback, (req, res) => {
+  try {
+    const { contrasena, carpetaExterna } = req.body ?? {};
+    const config = configurarRespaldo({ contrasena, carpetaExterna });
+    registrar('respaldo.configurado', req, {
+      contrasena: contrasena !== undefined ? 'cambiada' : 'sin cambios',
+      carpetaExterna: config.carpetaExterna || null,
+    });
+    try {
+      respaldoAutomatico(obtenerDbWritable());
+    } catch (error) {
+      console.error('No se pudo escribir el respaldo tras configurar:', error.message);
+    }
+    res.json(config);
+  } catch (error) {
+    responderError(res, error, 'No se pudo guardar la configuración del respaldo');
   }
 });
 
