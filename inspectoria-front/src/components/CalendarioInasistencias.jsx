@@ -1,7 +1,7 @@
 import { Skeleton } from './Skeleton.jsx';
 import { fechaLocal } from '../fechas.js';
 
-const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+export const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 // Opacidad de cada nivel de intensidad (también la usa la leyenda, así coinciden)
 const NIVELES = [0.35, 0.55, 0.75, 1];
 
@@ -9,7 +9,7 @@ const NIVELES = [0.35, 0.55, 0.75, 1];
 const aFecha = (iso) => new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
 
 // Semanas de lunes a domingo que cubren desde..hasta; los días fuera del período quedan en null.
-function semanasDe(desde, hasta) {
+export function semanasDe(desde, hasta) {
   const inicio = aFecha(desde);
   inicio.setDate(inicio.getDate() - ((inicio.getDay() + 6) % 7)); // lunes de la primera semana
   const semanas = [];

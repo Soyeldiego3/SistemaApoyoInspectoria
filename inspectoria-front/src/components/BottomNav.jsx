@@ -3,8 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutGrid, ClipboardCheck, Users, BarChart3, UserPlus, Settings } from 'lucide-react';
 import { useAuth } from '../auth.jsx';
 import { getConteoAlertas } from '../api.js';
-import { hayFiltrosAuditar } from '../filtrosAuditar.js';
-import { fechaLocal } from '../fechas.js';
+import { PERIODO_AVISO, RUTA_AVISO, prepararAvisoAlertas } from '../filtrosAuditar.js';
+import { rangoPeriodo } from '../periodos.js';
 
 const tabs = [
   { to: '/', label: 'Inicio', Icon: LayoutGrid, end: true },
@@ -29,20 +29,23 @@ export default function BottomNav() {
     if (to === '/alumnos') return isActive && !desdeAuditoria && !desdeGraficos;
     return isActive;
   };
-  // Alertas de patrones nuevas (badge sobre "Auditar"); se refresca al navegar y al gestionar una
+  // Alertas de patrones pendientes (número sobre "Auditoría"): las mismas que muestra
+  // Auditoría → Alertas → Pendientes con "Últimos 30 días" y sin filtros.
+  // Se refresca al navegar, al volver a la ventana y tras cualquier cambio de datos
+  // (gestionar una alerta, sincronizar, justificar, importar).
   const [alertasNuevas, setAlertasNuevas] = useState(0);
   useEffect(() => {
     let activo = true;
-    // Mismo rango que abre el badge: "Este mes"
-    const hoy = new Date();
-    const cargar = () => getConteoAlertas({ desde: fechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: fechaLocal(hoy) })
+    const cargar = () => getConteoAlertas(rangoPeriodo(PERIODO_AVISO))
       .then((datos) => { if (activo) setAlertasNuevas(datos?.nuevas || 0); })
       .catch(() => {});
     cargar();
     window.addEventListener('alertas-actualizadas', cargar);
+    window.addEventListener('focus', cargar);
     return () => {
       activo = false;
       window.removeEventListener('alertas-actualizadas', cargar);
+      window.removeEventListener('focus', cargar);
     };
   }, [pathname]);
   const visibleTabs = tabs.filter((tab) => {
@@ -52,12 +55,13 @@ export default function BottomNav() {
   return (
     <nav className="nav" aria-label="Navegación principal">
       {visibleTabs.map(({ to, label, Icon, end, abajo }) => (
-        <NavLink key={to} to={to === '/auditar' && alertasNuevas && !hayFiltrosAuditar() ? '/auditar?tab=alertas' : to} end={end}
+        <NavLink key={to} to={to === '/auditar' && alertasNuevas > 0 ? RUTA_AVISO : to} end={end}
+          onClick={to === '/auditar' && alertasNuevas > 0 ? prepararAvisoAlertas : undefined}
           className={({ isActive }) => [activa(to, isActive) ? 'active' : '', abajo ? 'nav-bottom' : ''].join(' ').trim()}>
           <span className="nav-icono">
             <Icon size={22} />
             {to === '/auditar' && alertasNuevas > 0 && (
-              <span className="nav-badge" aria-label={`${alertasNuevas} alertas nuevas`}>
+              <span className="nav-badge" aria-label={`${alertasNuevas} alertas pendientes`} title={`${alertasNuevas} alertas pendientes (últimos 30 días)`}>
                 {alertasNuevas > 99 ? '99+' : alertasNuevas}
               </span>
             )}

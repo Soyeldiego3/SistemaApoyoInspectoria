@@ -41,6 +41,13 @@ async function request(path, options = {}) {
     throw error;
   }
 
+  // Cualquier cambio de datos (sincronizar, justificar, gestionar o importar alertas…)
+  // puede cambiar las alertas pendientes: se avisa al menú para actualizar su número
+  const metodo = (options.method || 'GET').toUpperCase();
+  if (metodo !== 'GET' && !path.startsWith('/auth/')) {
+    window.dispatchEvent(new Event('alertas-actualizadas'));
+  }
+
   return data;
 }
 
@@ -145,8 +152,6 @@ export async function gestionarAlerta(clave, datos) {
     method: 'PUT',
     body: JSON.stringify(datos),
   });
-  // Avisa al menú para actualizar el contador de alertas nuevas
-  window.dispatchEvent(new Event('alertas-actualizadas'));
   return respuesta;
 }
 

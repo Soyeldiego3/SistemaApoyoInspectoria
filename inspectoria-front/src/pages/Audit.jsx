@@ -16,7 +16,7 @@ import {
 } from '../api.js';
 import { descargar } from '../descargas.js';
 import { diaSemana, fechaCorta, fechaLocal, tituloMes } from '../fechas.js';
-import { memoriaAuditar } from '../filtrosAuditar.js';
+import { PERIODO_AVISO, memoriaAuditar } from '../filtrosAuditar.js';
 import {
   PERIODOS, PREFIJO_MES, claveMes, esPeriodoMes, rangoPeriodo,
 } from '../periodos.js';
@@ -40,7 +40,10 @@ const TIPOS = [
 // Alertas necesita al menos 15 días de clase con datos (y "caída" 20): no ofrece períodos
 // más cortos. "Este mes" tampoco, porque a fin de mes recién llega al mínimo.
 const PERIODOS_ALERTAS = ['30dias', '2meses', 'personalizado'];
-const PERIODOS_GENERALES = ['hoy', 'ayer', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// "Ayer" no se ofrece: "Hoy" sin datos ya propone ver el último día con datos
+const PERIODOS_GENERALES = ['hoy', 'semana', 'mes', 'mesAnterior', 'personalizado'];
+// Opción del selector que abre un segundo selector con los meses antiguos (no es un período)
+const OTRO_MES = 'otroMes';
 // Períodos que también tiene la pantalla Alumnos (pages/Students.jsx)
 const PERIODOS_ALUMNOS = ['mes', 'mesAnterior', '30dias'];
 // Período por defecto de cada pestaña
@@ -68,18 +71,20 @@ function fechaDelDia(dia, fechaElegida, estado) {
   return fechaLocal(hoy);
 }
 
-// Opciones del selector. En "A quién citar" y "Comparar cursos" se agrega un ítem por
-// cada mes descargado (salvo este mes y el anterior, que ya tienen su opción).
+// Meses descargados ('YYYY-MM') salvo este mes y el anterior, que ya tienen su opción
+function mesesAntiguos(mesesConDatos = []) {
+  const hoy = new Date();
+  const yaIncluidos = new Set([claveMes(hoy), claveMes(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1))]);
+  return mesesConDatos.filter((mes) => !yaIncluidos.has(mes));
+}
+
+// Opciones del selector. En "A quién citar" y "Comparar cursos" los meses antiguos van
+// todos bajo "Otro mes…" (se eligen en un segundo selector), para no alargar la lista.
 function periodosDe(tab, mesesConDatos = []) {
   const ids = tab === 'alertas' ? PERIODOS_ALERTAS : PERIODOS_GENERALES;
   const fijos = PERIODOS.filter((p) => ids.includes(p.id));
-  if (tab === 'alertas') return fijos;
-  const hoy = new Date();
-  const yaIncluidos = new Set([claveMes(hoy), claveMes(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1))]);
-  const meses = mesesConDatos
-    .filter((mes) => !yaIncluidos.has(mes))
-    .map((mes) => ({ id: `${PREFIJO_MES}${mes}`, label: tituloMes(mes) }));
-  return [...fijos.slice(0, -1), ...meses, fijos.at(-1)];
+  if (tab === 'alertas' || !mesesAntiguos(mesesConDatos).length) return fijos;
+  return [...fijos.slice(0, -1), { id: OTRO_MES, label: 'Otro mes…' }, fijos.at(-1)];
 }
 
 const periodoValido = (tab, id) => (
@@ -518,7 +523,7 @@ function Alertas({
           )}
         </div>
       )}
-      <div className="audit-filter-grid sin-tipo">
+      <div className="audit-filter-grid dos-columnas">
         <select className="input" value={tipoAlerta} onChange={(e) => setTipoAlerta(e.target.value)} aria-label="Tipo de alerta">
           <option value="todos">Todos los tipos de alerta</option>
           {TIPOS_ALERTA.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
@@ -563,7 +568,7 @@ function filtrosDesdeUrl(search) {
   if (![...p.keys()].length) return null;
   const valido = (lista, valor, porDefecto) => (lista.some((o) => o.id === valor) ? valor : porDefecto);
   const tab = valido(TABS, p.get('tab'), 'prioridad');
-  // Desde el badge del menú (?tab=alertas sin período) se abre "Últimos 30 días"
+  // Desde el aviso del menú (?tab=alertas sin período) se abre "Últimos 30 días"
   const pedido = p.get('periodo');
   const periodo = periodoValido(tab, pedido) ? pedido : periodoInicial(tab);
   const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
@@ -688,15 +693,21 @@ export default function Audit() {
     });
   };
 
-  // Desde la ficha de un alumno se vuelve con los filtros en la URL; si la URL cambia
-  // estando ya en Auditar (p. ej. el badge la primera vez), se aplica la pestaña pedida
+  // Desde el aviso del menú (?origen=aviso): la misma vista que cuenta el número rojo
+  // (Alertas → Pendientes, "Últimos 30 días", todos los cursos, sin búsqueda ni filtros).
+  // Se aplica también si ya se estaba en Auditoría; luego se limpia la URL.
+  const [reinicioAlertas, setReinicioAlertas] = useState(0);
   useEffect(() => {
-    const pedida = new URLSearchParams(location.search).get('tab');
-    if (pedida === 'alertas' && tab !== 'alertas') {
-      setTab('alertas');
-      cambiarPeriodo('30dias');
-    }
-  }, [location.search]);
+    if (new URLSearchParams(location.search).get('origen') !== 'aviso') return;
+    setTab('alertas');
+    if (periodo !== PERIODO_AVISO) cambiarPeriodo(PERIODO_AVISO);
+    setCurso('');
+    setQ('');
+    setTipoAlerta('todos');
+    setPrioridadAlerta('todas');
+    setReinicioAlertas((n) => n + 1); // vuelve a montar Alertas para que tome "Pendientes"
+    navigate('/auditar', { replace: true });
+  }, [location.key]);
 
   useEffect(() => {
     let activo = true;
@@ -736,11 +747,12 @@ export default function Audit() {
   const parametros = useMemo(() => {
     const rango = rangoPeriodo(periodo, desde, hasta);
     const resultado = { tipo };
-    if (curso) resultado.curso = curso;
+    // "Comparar cursos" siempre compara todos los cursos (no tiene filtro de curso)
+    if (curso && tab !== 'cursos') resultado.curso = curso;
     if (rango.desde) resultado.desde = rango.desde;
     if (rango.hasta) resultado.hasta = rango.hasta;
     return resultado;
-  }, [curso, desde, hasta, periodo, tipo]);
+  }, [curso, desde, hasta, periodo, tipo, tab]);
 
   useEffect(() => {
     // Sin fechas todavía (esperando el estado de los datos en la primera entrada).
@@ -776,8 +788,8 @@ export default function Audit() {
     const p = new URLSearchParams();
     if (tab !== 'prioridad') p.set('tab', tab);
     if (tipo !== 'ambos') p.set('tipo', tipo);
-    if (curso) p.set('curso', curso);
-    if (q.trim()) p.set('q', q.trim());
+    if (curso && tab !== 'cursos') p.set('curso', curso);
+    if (q.trim() && tab !== 'cursos') p.set('q', q.trim());
     // Siempre lleva al menos el período, para que Auditoría sepa que debe restaurar
     p.set('periodo', periodo);
     if (periodo === 'personalizado') {
@@ -792,7 +804,8 @@ export default function Audit() {
   }, [tab, tipo, curso, periodo, desde, hasta, q, diaClase, fechaClase]);
 
   // Solo cuentan los filtros que aplican a la pestaña actual (el período no es un filtro aquí)
-  const hayFiltros = Boolean(q.trim() || curso
+  // ("Comparar cursos" no usa búsqueda ni curso: se conservan para las otras pestañas)
+  const hayFiltros = Boolean((tab !== 'cursos' && (q.trim() || curso))
     || (tab !== 'alertas' && tipo !== 'ambos')
     || (tab === 'prioridad' && nivel !== 'todos')
     || (tab === 'alertas' && (tipoAlerta !== 'todos' || prioridadAlerta !== 'todas')));
@@ -908,17 +921,22 @@ export default function Audit() {
       </div>
 
       <section className="card audit-filters" aria-label="Filtros de auditoría">
-        <div className="searchbox">
-          <Search size={18} />
-          <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder={tab === 'cursos' ? 'Buscar curso' : tab === 'clase' ? 'RUT o nombre' : 'RUT, nombre o curso'}
-            aria-label={tab === 'cursos' ? 'Buscar curso' : 'Buscar alumno'} />
-        </div>
-        <div className={tab === 'alertas' ? 'audit-filter-grid sin-tipo' : 'audit-filter-grid'}>
-          <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
-            <option value="">Todos los cursos</option>
-            {cursos.map((opcion) => <option key={opcion.curso} value={opcion.curso}>{opcion.curso}</option>)}
-          </select>
+        {/* "Comparar cursos" muestra todos los cursos: sin buscador ni selector de curso */}
+        {tab !== 'cursos' && (
+          <div className="searchbox">
+            <Search size={18} />
+            <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder={tab === 'clase' ? 'RUT o nombre' : 'RUT, nombre o curso'}
+              aria-label="Buscar alumno" />
+          </div>
+        )}
+        <div className={tab === 'alertas' || tab === 'cursos' ? 'audit-filter-grid dos-columnas' : 'audit-filter-grid'}>
+          {tab !== 'cursos' && (
+            <select className="input" value={curso} onChange={(e) => setCurso(e.target.value)} aria-label="Curso">
+              <option value="">Todos los cursos</option>
+              {cursos.map((opcion) => <option key={opcion.curso} value={opcion.curso}>{opcion.curso}</option>)}
+            </select>
+          )}
           {tab !== 'alertas' && (
             <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo">
               {TIPOS.map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
@@ -931,7 +949,10 @@ export default function Audit() {
                 .map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
             </select>
           ) : (
-            <select className="input" value={periodo} onChange={(e) => cambiarPeriodo(e.target.value)} aria-label="Período">
+            <select className="input" value={esPeriodoMes(periodo) ? OTRO_MES : periodo} aria-label="Período"
+              onChange={(e) => cambiarPeriodo(e.target.value === OTRO_MES
+                ? `${PREFIJO_MES}${mesesAntiguos(mesesSelector)[0]}` // el mes antiguo más reciente
+                : e.target.value)}>
               {periodosDe(tab, mesesSelector).map((opcion) => <option key={opcion.id} value={opcion.id}>{opcion.label}</option>)}
             </select>
           )}
@@ -940,6 +961,14 @@ export default function Audit() {
           <div className="audit-custom-dates">
             <input className="input" type="date" value={fechaClase} max={fechaLocal(new Date())}
               onChange={(e) => setFechaClase(e.target.value)} aria-label="Día" />
+          </div>
+        )}
+        {esPeriodoMes(periodo) && tab !== 'clase' && tab !== 'alertas' && (
+          <div className="audit-custom-dates un-campo">
+            <select className="input" value={periodo.slice(PREFIJO_MES.length)} aria-label="Mes"
+              onChange={(e) => cambiarPeriodo(`${PREFIJO_MES}${e.target.value}`)}>
+              {mesesAntiguos(mesesSelector).map((mes) => <option key={mes} value={mes}>{tituloMes(mes)}</option>)}
+            </select>
           </div>
         )}
         {periodo === 'personalizado' && tab !== 'clase' && (
@@ -988,7 +1017,7 @@ export default function Audit() {
           <Avisos datos={datos} descargando={sincronizando}
             onDescargar={({ desde: inicio, hasta: fin }) => sincronizar({ desde: inicio, hasta: fin, soloFaltantes: true })} />
           {tab === 'alertas' ? (
-            <Alertas datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
+            <Alertas key={reinicioAlertas} datos={datos} rutaRetorno={rutaRetorno} onCambio={actualizarAlerta}
               periodo={periodo} onUltimos30={() => cambiarPeriodo('30dias')} onVerPorClase={verPorClase}
               onRangoCompleto={estadoDatos?.primeraFechaAsistencia ? usarRangoCompleto : null}
               q={q} tipoAlerta={tipoAlerta} setTipoAlerta={setTipoAlerta}
@@ -1000,7 +1029,7 @@ export default function Audit() {
               {tab === 'prioridad'
                 ? <Prioridad datos={datos} tipo={tipo} rutaRetorno={rutaRetorno} q={q}
                     nivel={nivel} setNivel={setNivel} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros} />
-                : <Cursos datos={datos} q={q} hayFiltros={hayFiltros} onLimpiar={limpiarFiltros}
+                : <Cursos datos={datos} q="" hayFiltros={hayFiltros} onLimpiar={limpiarFiltros}
                     periodoAlumnos={periodoAlumnos} />}
             </>
           )}

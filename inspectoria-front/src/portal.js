@@ -82,7 +82,11 @@ export async function esperarTarea(id, { signal, intervalo = 2000 } = {}) {
       }
       throw e;
     }
-    if (tarea.estado === 'ok') return tarea.resultado;
+    if (tarea.estado === 'ok') {
+      // Llegaron datos nuevos: el menú recalcula las alertas pendientes
+      window.dispatchEvent(new Event('alertas-actualizadas'));
+      return tarea.resultado;
+    }
     if (tarea.estado === 'error') {
       const error = new Error(tarea.error?.mensaje || 'No se pudo sincronizar.');
       error.code = tarea.error?.codigo;

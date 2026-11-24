@@ -15,4 +15,13 @@ export const memoriaAuditar = {
   prioridadAlerta: 'todas',
 };
 
-export const hayFiltrosAuditar = () => Boolean(memoriaAuditar.filtros);
+// Aviso del menú (número rojo sobre "Auditoría"): cuenta las alertas pendientes de este
+// período, en todos los cursos. Al hacer clic se abre exactamente esa vista
+// (Alertas → Pendientes, sin filtros), así el número coincide con lo que se ve.
+export const PERIODO_AVISO = '30dias';
+export const RUTA_AVISO = '/auditar?tab=alertas&origen=aviso';
+export function prepararAvisoAlertas() {
+  memoriaAuditar.filtroAlertas = 'nuevas';
+  memoriaAuditar.tipoAlerta = 'todos';
+  memoriaAuditar.prioridadAlerta = 'todas';
+}

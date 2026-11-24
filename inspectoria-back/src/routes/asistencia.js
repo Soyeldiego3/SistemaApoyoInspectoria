@@ -89,9 +89,11 @@ router.get('/alumnos/:rut', (req, res) => {
       ORDER BY fecha DESC, hora_llegada DESC
     `).all(parametros);
 
-    const { diasRegistrados } = db.prepare(
-      'SELECT COUNT(*) AS diasRegistrados FROM asistencia WHERE id_matricula = @id_matricula',
-    ).get(parametros);
+    // Días con asistencia cargada (la vista calendario distingue "presente" de "sin registro")
+    const fechasRegistradas = db.prepare(
+      'SELECT DISTINCT fecha FROM asistencia WHERE id_matricula = @id_matricula ORDER BY fecha',
+    ).pluck().all(parametros);
+    const diasRegistrados = fechasRegistradas.length;
 
     const resumen = {
       diasRegistrados,
@@ -105,7 +107,7 @@ router.get('/alumnos/:rut', (req, res) => {
     };
 
     delete alumno.id_matricula;
-    res.json({ alumno, resumen, inasistencias, atrasos });
+    res.json({ alumno, resumen, inasistencias, atrasos, fechasRegistradas });
   } catch (error) {
     console.error('Error al consultar detalle del alumno:', error.message);
     res.status(500).json({ error: 'No se pudo cargar el detalle del alumno.' });
