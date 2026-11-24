@@ -2,10 +2,6 @@
 
 ## Pendiente
 
-- aparte de mostrat top 5 atrasos. mostrar top 5 de inasistencias. 
-
-- grafico de top curso, etc. 
-
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
 - Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
@@ -25,6 +21,8 @@
 - Respaldo de información: "Respaldar información" / "Restaurar respaldo" en Ajustes (notas y estados de alertas + justificativos aprobados, en JSON). Atajo "Respaldar notas" en Auditoría. Respaldos automáticos al abrir y cerrar la app (últimos 7, en la carpeta de datos/respaldos).
 
 - Dejar más explícita la asistencia y los atrasos de los estudiantes de la seccion de alumnos: ficha con resumen y pestañas Inasistencias/Atrasos; cada justificativo aplica solo a su tipo
+
+- grafico de top curso, etc. 
 
 - Añadir un usuario admin y su panel correspondiente
 
@@ -77,6 +75,8 @@
 - Importar y exportar atrasos como Excel
 
 - en ves de sincronizar solo 2 meses, ver la forma de sincronizar el año escolar completo. para asi poder generar el porcentaje de asistencia anual en los archivos excel y  graficos.
+
+- aparte de mostrat top 5 atrasos. mostrar top 5 de inasistencias. 
 
 ## Descartado / pendiente
 
