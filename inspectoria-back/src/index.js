@@ -3,8 +3,17 @@ const { iniciarServidor } = require('./services/servidor');
 const { abrirDb } = require('./services/asistencia');
 const { limpiarDatosSincronizados } = require('./services/limpieza');
 const { leer } = require('./services/configuracion');
+const respaldoProgramado = require('./services/respaldo_programado');
 
 iniciarServidor();
+
+// Respaldo automático de notas de alertas y justificativos: al abrir, cada cierto tiempo
+// (temporizador de Ajustes) y al cerrar. Al cerrar puede no alcanzar a ejecutarse
+// (corte de luz, cierre forzado), por eso también al iniciar.
+const respaldar = respaldoProgramado.respaldarAhora;
+
+respaldar({ soloSiFaltaHoy: true });
+respaldoProgramado.iniciar();
 
 process.on('unhandledRejection', (reason) => {
   const mensaje = reason?.code || reason?.name || 'Rechazo de promesa no manejado';
@@ -18,6 +27,7 @@ process.on('uncaughtException', (error) => {
 
 process.on('message', (message) => {
   if (message?.type !== 'limpiar-datos') return;
+  respaldar(); // antes de limpiar, y aunque la limpieza esté desactivada
   try {
     if (leer().limpiarAlCerrar !== false) {
       const db = abrirDb();

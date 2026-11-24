@@ -1,23 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FileUp, RefreshCw } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CalendarRange, RefreshCw } from 'lucide-react';
 import {
   getCredencialesPortal,
+  getRangoDatos,
   guardarCredencialesPortal,
   iniciarSync,
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
-import GridLoader from '../components/GridLoader.jsx';
-import CredencialesSheet, { MENSAJES_PORTAL } from '../components/CredencialesSheet.jsx';
+import { useDetalleSync } from '../detalleSync.js';
+import { fechaCorta } from '../fechas.js';
+import GridLoader from './GridLoader.jsx';
+import CredencialesSheet from './CredencialesSheet.jsx';
+import {
+  MENSAJES_PORTAL, MENSAJES_TELEFONO, esPc, esperarTarea, marcarSyncExitosa, pedirAlPc, tareaEnCurso, tareaSyncCompleta,
+} from '../portal.js';
 
-// RF-01: obtener asistencia por extracción automática (Playwright) o importando CSV/Excel
-export default function Sync() {
+// RF-01: obtener asistencia por extracción automática (Playwright). Tarjeta de Ajustes.
+// Otras pantallas llegan a Ajustes con state { abrirCredenciales, accionModal, mensaje }
+// para abrir aquí el modal de credenciales.
+export default function ExtraccionAutomatica({ onSincronizado }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  const tarjetaRef = useRef(null);
+  const [rango, setRango] = useState(null);
   const [estado, setEstado] = useState('inactivo'); // inactivo | cargando | ok | error
-  const [archivo, setArchivo] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [mostrarCredenciales, setMostrarCredenciales] = useState(false);
   const [guardadas, setGuardadas] = useState(false);
@@ -26,6 +34,9 @@ export default function Sync() {
   const [procesando, setProcesando] = useState(false);
   const [mensajeModal, setMensajeModal] = useState('');
   const passRef = useRef(null);
+  // 'mes' = mes actual (lo de siempre) · 'anio' = año escolar completo (marzo a hoy)
+  const periodoRef = useRef('mes');
+  const [versionDatos, setVersionDatos] = useState(0);
   const controllerRef = useRef(null);
   const timeoutRef = useRef(null);
   const [credenciales, setCredenciales] = useState({
@@ -50,9 +61,24 @@ export default function Sync() {
 
   useEffect(() => {
     cargarEstadoPortal();
-  }, [esPc]);
+    // Teléfono: si el PC ya está sincronizando (p. ej. lo pidió Inicio), se muestra y se espera
+    if (!esPc) {
+      tareaEnCurso().then((tarea) => {
+        if (tarea?.tipo !== 'completa' || controllerRef.current) return;
+        periodoRef.current = tarea.parametros?.periodo === 'anio' ? 'anio' : 'mes';
+        sincronizar(undefined, tarea);
+      });
+    }
+  }, []);
 
   useEffect(() => {
+    getRangoDatos().then(setRango).catch(() => setRango(null));
+  }, [versionDatos]);
+
+  useEffect(() => {
+    if (location.state?.abrirCredenciales || location.state?.mensaje) {
+      tarjetaRef.current?.scrollIntoView({ block: 'center' });
+    }
     if (location.state?.abrirCredenciales) {
       setMostrarCredenciales(true);
       if (location.state.accionModal) setAccionModal(location.state.accionModal);
@@ -72,7 +98,7 @@ export default function Sync() {
 
   const mostrarError = (e) => {
     const codigo = e.code;
-    const mensaje = MENSAJES_PORTAL[codigo]
+    const mensaje = (!esPc && MENSAJES_TELEFONO[codigo]) || MENSAJES_PORTAL[codigo]
       || (e instanceof TypeError ? 'No hay conexión con el servidor local.' : (e.message || 'Ocurrió un error inesperado.'));
     setMensaje(mensaje);
     setEstado('error');
@@ -97,7 +123,8 @@ export default function Sync() {
     }));
   };
 
-  const sincronizar = async (datos) => {
+  // `enCurso`: en el teléfono, una sincronización completa que el PC ya está haciendo
+  const sincronizar = async (datos, enCurso) => {
     setEstado('cargando');
     setProcesando(true);
     setMensaje('');
@@ -105,21 +132,37 @@ export default function Sync() {
     controllerRef.current?.abort();
     controllerRef.current = new AbortController();
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const anual = periodoRef.current === 'anio';
     timeoutRef.current = setTimeout(() => {
       controllerRef.current?.abort();
       setProcesando(false);
       setEstado('error');
       setMensaje('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
       setMensajeModal('La operación tardó demasiado. Puedes cancelarla o intentarlo nuevamente.');
-    }, 45000);
+    }, 600000); // la primera sincronización trae el año escolar (varios meses por curso)
     try {
-      const data = await iniciarSync(datos, { signal: controllerRef.current.signal });
+      const cuerpo = anual ? { ...(datos || {}), periodo: 'anio' } : datos;
+      const { signal } = controllerRef.current;
+      // En el teléfono se le pide al PC como tarea (usa las credenciales guardadas allí)
+      const data = esPc ? await iniciarSync(cuerpo, { signal })
+        : enCurso ? await esperarTarea(enCurso.id, { signal })
+          : await pedirAlPc(tareaSyncCompleta(cuerpo), { signal });
       const errores = data.errores?.length || 0;
       const detalleErrores = errores ? ` ${errores} cursos tuvieron errores.` : '';
-      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleErrores}`);
+      const detalleMeses = data.meses?.length > 1 ? ` Meses: ${data.meses[0]} a ${data.meses.at(-1)}.` : '';
+      const detalleAvisos = data.advertencias?.length ? ` ${data.advertencias.length} meses no se pudieron descargar.` : '';
+      const segundos = Math.round((data.duracionMs || 0) / 1000);
+      const detalleDuracion = data.duracionMs
+        ? ` Tardó ${segundos >= 60 ? `${Math.floor(segundos / 60)} min ${segundos % 60} s` : `${segundos} s`}.`
+        : '';
+      setMensaje(`Asistencia actualizada: ${data.cursosProcesados} de ${data.totalCursos} cursos, ${data.totalAlumnos} alumnos, ${data.filasAsistencia} registros y ${data.filasAtrasos} atrasos.${detalleMeses}${detalleAvisos}${detalleErrores}${detalleDuracion}`);
       setEstado(errores ? 'error' : 'ok');
+      // Inicio deja de mostrar "Reintentar" si la sincronización automática había fallado
+      if (!errores) marcarSyncExitosa();
+      setVersionDatos((v) => v + 1);
       setMostrarCredenciales(false);
       if (datos?.recordar) setGuardadas(true);
+      onSincronizado?.();
     } catch (e) {
       if (controllerRef.current?.signal.aborted) {
         setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -141,9 +184,15 @@ export default function Sync() {
     }
   };
 
-  const extraer = async () => {
+  const extraer = async (periodo = 'mes') => {
+    periodoRef.current = periodo;
     setEstado('cargando');
     setMensaje('');
+    // El teléfono no puede ver las credenciales: el PC avisa si faltan
+    if (!esPc) {
+      await sincronizar();
+      return;
+    }
     try {
       const info = await getCredencialesPortal();
       setPortal(info);
@@ -198,6 +247,7 @@ export default function Sync() {
         setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
+        onSincronizado?.();
       } catch (error) {
         if (controllerRef.current?.signal.aborted) {
           setMensajeModal('Operación cancelada o detenida por timeout.');
@@ -213,6 +263,8 @@ export default function Sync() {
         setCredenciales((actuales) => ({ ...actuales, pass: '' }));
       }
     } else if (accionModal === 'guardar') {
+      // En esta tarjeta el panel se abre en 'guardar' cuando se quería sincronizar (desde Inicio,
+      // Auditar, Alumnos o por credenciales inválidas): al guardarlas, se sincroniza solo.
       setEstado('cargando');
       setProcesando(true);
       setMensajeModal('');
@@ -222,10 +274,10 @@ export default function Sync() {
       timeoutRef.current = setTimeout(() => {
         controllerRef.current?.abort();
       }, 45000);
+      let guardadasOk = false;
       try {
         await guardarCredencialesPortal(datos, { signal: controllerRef.current.signal });
-        setMensaje('Credenciales guardadas y verificadas.');
-        setEstado('ok');
+        guardadasOk = true;
         setMensajeModal('');
         setMostrarCredenciales(false);
         await cargarEstadoPortal();
@@ -242,6 +294,10 @@ export default function Sync() {
         timeoutRef.current = null;
         setProcesando(false);
         setCredenciales((actuales) => ({ ...actuales, pass: '' }));
+      }
+      if (guardadasOk) {
+        onSincronizado?.(); // refresca la tarjeta "Credenciales del portal"
+        await sincronizar(); // mismo período que se pidió (mes, o año escolar)
       }
     } else {
       await sincronizar({
@@ -275,68 +331,63 @@ export default function Sync() {
       setCredenciales({ usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false });
       setMensaje('Credenciales olvidadas en este equipo.');
       setEstado('ok');
+      onSincronizado?.();
     } catch (e) {
       mostrarError(e);
     }
   };
 
-  const importar = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!/\.(csv|xlsx?)$/i.test(f.name)) {
-      setArchivo('');
-      setMensaje('Archivo no válido. Usa un .csv o .xlsx con las columnas de asistencia.');
-      setEstado('error');
-      return;
-    }
-    setArchivo(f.name);
-    // TODO: POST /api/import con el archivo (aún no existe el endpoint)
-    setMensaje('');
-    setEstado('ok');
-  };
+  const sincronizandoFuera = estado === 'cargando' && !mostrarCredenciales;
+  // Avance en el PC (p. ej. "Reintentando (2 de 3)…" si el portal falló)
+  const detalleSync = useDetalleSync(estado === 'cargando');
+  // Si los datos no parten en marzo, faltan meses del año escolar (p. ej. para el Master)
+  const hoy = new Date();
+  const faltanMeses = rango?.desde && Number(rango.desde.slice(5, 7)) > 3 && hoy.getMonth() > 2;
 
   return (
     <>
-      <div className="cols2">
-        <section className="card">
-          <h2>Extracción automática</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes actual.</p>
+      <section className="card sync-card" ref={tarjetaRef}>
+        <h2>Extracción automática</h2>
+        <p className="muted" style={{ margin: '4px 0 14px' }}>Descarga la asistencia de todos los cursos del mes anterior y el actual.</p>
 
-          <button className={estado === 'cargando' && !mostrarCredenciales ? 'btn sincronizando' : 'btn'} onClick={extraer} disabled={estado === 'cargando'}>
-            {estado === 'cargando' && !mostrarCredenciales
-              ? <GridLoader pequeno />
-              : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
-            {estado === 'cargando' ? 'Sincronizando…' : 'Sincronizar todos'}
-          </button>
-          {estado === 'cargando' && !mostrarCredenciales && (
-            <p className="muted" role="status" style={{ marginTop: 10 }}>
-              Descargando todos los cursos desde el portal, puede tardar unos segundos.
-            </p>
-          )}
-          {esPc && (
-            <Link to="/ajustes" className="muted" style={{ display: 'inline-block', marginTop: 10, fontSize: '.85rem' }}>
-              Configurar credenciales en Ajustes
-            </Link>
-          )}
-        </section>
+        <button className={sincronizandoFuera ? 'btn sincronizando' : 'btn'} onClick={() => extraer('mes')} disabled={estado === 'cargando'}>
+          {sincronizandoFuera
+            ? <GridLoader pequeno />
+            : <RefreshCw size={16} style={{ verticalAlign: -3, marginRight: 8 }} />}
+          {estado === 'cargando' ? 'Sincronizando…' : esPc ? 'Sincronizar todos' : 'Sincronizar en el PC'}
+        </button>
+        {sincronizandoFuera && (
+          <p className="muted" role="status" style={{ marginTop: 10 }}>
+            {detalleSync && <><b>{detalleSync}</b><br /></>}
+            {periodoRef.current === 'anio'
+              ? 'Descargando el año escolar de todos los cursos (un archivo por mes); puede tardar varios minutos.'
+              : 'Descargando todos los cursos desde el portal, puede tardar unos segundos.'}
+            {!esPc && ' La descarga la hace el PC; puedes bloquear el teléfono y volver.'}
+          </p>
+        )}
 
-        <section className="card">
-          <h2>Importar archivo</h2>
-          <p className="muted" style={{ margin: '4px 0 14px' }}>Alternativa si el portal no está disponible (CSV o Excel).</p>
-          <label className="btn ghost" style={{ display: 'block', textAlign: 'center', cursor: 'pointer' }}>
-            <FileUp size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Elegir archivo
-            <input type="file" accept=".csv,.xls,.xlsx" onChange={importar} hidden />
-          </label>
-          {archivo && <p className="muted" style={{ marginTop: 10 }}>{archivo}</p>}
-        </section>
-      </div>
-
-      {estado === 'ok' && <p className="msg" role="status">{mensaje || 'Asistencia actualizada.'}</p>}
-      {estado === 'error' && (
-        <p className="msg" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }} role="alert">
-          {mensaje}
+        <p className="muted sync-rango">
+          <CalendarRange size={14} style={{ verticalAlign: -2, marginRight: 6 }} />
+          {rango?.desde
+            ? `Datos cargados: ${fechaCorta(rango.desde)} a ${fechaCorta(rango.hasta)} (${rango.dias} días).`
+            : 'Aún no hay asistencia cargada.'}
+          {faltanMeses && ' Faltan meses del año escolar.'}
         </p>
-      )}
+        <button type="button" className="linkbtn" disabled={estado === 'cargando'} onClick={() => {
+          if (window.confirm('Se descargará la asistencia de marzo a hoy de todos los cursos. Puede tardar varios minutos. ¿Continuar?')) {
+            extraer('anio');
+          }
+        }}>
+          Sincronizar año escolar (marzo a hoy)
+        </button>
+
+        {estado === 'ok' && <p className="msg" role="status" style={{ marginTop: 12 }}>{mensaje || 'Asistencia actualizada.'}</p>}
+        {estado === 'error' && mensaje && (
+          <p className="msg error" style={{ marginTop: 12 }} role="alert">
+            {mensaje}
+          </p>
+        )}
+      </section>
 
       {mostrarCredenciales && (
         <CredencialesSheet
@@ -346,6 +397,7 @@ export default function Sync() {
           procesando={procesando}
           mensajeError={estado === 'error' ? mensajeModal : ''}
           guardadas={guardadas}
+          sincronizaAlGuardar
           passRef={passRef}
           onSubmit={enviarCredenciales}
           onCerrar={() => setMostrarCredenciales(false)}

@@ -8,9 +8,59 @@ const PORT = 3005;
 let mainWindow = null;
 let backend = null;
 
-// Evita abrir dos instancias (y dos backends)
+// Evita abrir dos instancias (y dos backends). Si se abre otra vez, se muestra la ventana existente.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
+}
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
+// "Abrir al iniciar Windows" (Ajustes): el backend lo pide por mensajes (services/inicio_windows.js).
+// En el build portable el .exe se descomprime en una carpeta temporal; se registra el .exe real.
+const exeReal = () => process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+const inicioDisponible = () => app.isPackaged && process.platform === 'win32';
+function estadoInicioWindows() {
+  if (!inicioDisponible()) return { disponible: false, activo: false };
+  return { disponible: true, activo: app.getLoginItemSettings({ path: exeReal() }).openAtLogin };
+}
+function atenderInicioWindows(proceso, message) {
+  if (message?.type !== 'inicio-windows:consultar' && message?.type !== 'inicio-windows:cambiar') return;
+  try {
+    if (message.type === 'inicio-windows:cambiar' && inicioDisponible()) {
+      app.setLoginItemSettings({ openAtLogin: Boolean(message.activo), path: exeReal() });
+    }
+    proceso.send({ type: 'inicio-windows:estado', ...estadoInicioWindows() });
+  } catch (error) {
+    console.error('Inicio con Windows:', error.message);
+  }
+}
+
+// "Buscar carpeta…" de la copia externa de respaldos (routes/respaldo.js → /elegir-carpeta)
+async function atenderElegirCarpeta(proceso, message) {
+  if (message?.type !== 'respaldo:elegir-carpeta') return;
+  let ruta = null;
+  try {
+    const opciones = {
+      title: 'Carpeta para la copia de respaldo',
+      buttonLabel: 'Elegir carpeta',
+      properties: ['openDirectory', 'createDirectory'],
+    };
+    const { canceled, filePaths } = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opciones)
+      : await dialog.showOpenDialog(opciones);
+    if (!canceled && filePaths?.[0]) ruta = filePaths[0];
+  } catch (error) {
+    console.error('Elegir carpeta de respaldo:', error.message);
+  }
+  try {
+    if (proceso.connected) proceso.send({ type: 'respaldo:carpeta', ruta });
+  } catch (error) {
+    console.error('Elegir carpeta de respaldo:', error.message);
+  }
 }
 
 function startBackend() {
@@ -23,6 +73,10 @@ function startBackend() {
   delete backendEnv.PASS;
   delete backendEnv.AUTH_SECRET;
 
+  // Firefox incluido (solo en el build de Linux); en Windows se usa Edge del sistema
+  const browsersDir = path.join(process.resourcesPath, 'browsers');
+  if (fs.existsSync(browsersDir)) backendEnv.PLAYWRIGHT_BROWSERS_PATH = browsersDir;
+
   const proceso = fork(path.join(backendDir, 'src', 'index.js'), [], {
     cwd: backendDir,
     silent: true,
@@ -31,7 +85,6 @@ function startBackend() {
       PORT: String(PORT),
       DATA_DIR: app.getPath('userData'),
       FRONT_DIR: path.join(process.resourcesPath, 'front-dist'),
-      PLAYWRIGHT_BROWSERS_PATH: path.join(process.resourcesPath, 'browsers'), // <- nueva línea
       NODE_ENV: 'production',
     },
   });
@@ -40,6 +93,10 @@ function startBackend() {
   proceso.stdout.on('data', (d) => console.log('[back]', d.toString()));
   proceso.stderr.on('data', (d) => console.error('[back]', d.toString()));
   proceso.on('error', (error) => console.error('Error del backend:', error.message));
+  proceso.on('message', (message) => {
+    atenderInicioWindows(proceso, message);
+    atenderElegirCarpeta(proceso, message);
+  });
   proceso.on('exit', (code) => {
     console.log('Backend terminó con código', code);
     backend = null;
@@ -72,8 +129,9 @@ function waitForBackend(retries = 40) {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
-    height: 800,
+    height: 1000,
     backgroundColor: '#1c1c1e', // evita el destello blanco al abrir
+    icon: path.join(__dirname, 'assets', 'icons', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -143,27 +201,12 @@ app.whenReady().then(async () => {
 
 let cleanupStarted = false;
 
-function limpiarAlCerrarHabilitado() {
-  const configPath = path.join(app.getPath('userData'), 'app.config.json');
-  if (!fs.existsSync(configPath)) return true;
-  try {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8')).limpiarAlCerrar !== false;
-  } catch (error) {
-    console.error('No se pudo leer la configuración de cierre:', error.message);
-    return true;
-  }
-}
-
+// Siempre se avisa al backend antes de cerrar: guarda el respaldo automático y,
+// si "limpiarAlCerrar" está activo (lo decide el backend), borra los datos sincronizados.
 app.on('before-quit', (event) => {
   if (cleanupStarted) return;
   const proceso = backend;
   if (!proceso) return;
-
-  if (!limpiarAlCerrarHabilitado()) {
-    cleanupStarted = true;
-    proceso.kill();
-    return;
-  }
 
   event.preventDefault();
   cleanupStarted = true;

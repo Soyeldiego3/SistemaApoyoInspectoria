@@ -18,7 +18,14 @@ export const PALETAS = [
   { id: 'lasalle', label: 'De La Salle', muestra: 'linear-gradient(135deg, #1f4fa3 50%, #ffcc00 50%)' },
 ];
 
-const POR_DEFECTO = { modo: 'oscuro', paleta: 'oficina' };
+// Tamaño del texto (accesibilidad). Todo el CSS usa rem, así que basta con escalar <html>.
+export const TAMANOS = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'grande', label: 'Grande' },
+  { id: 'muy-grande', label: 'Muy grande' },
+];
+
+const POR_DEFECTO = { modo: 'oscuro', paleta: 'oficina', texto: 'normal' };
 const CONSULTA_CLARO = '(prefers-color-scheme: light)';
 
 // Si no hay nada guardado (o el navegador no deja leer), se usa Oscuro + Oficina.
@@ -28,6 +35,7 @@ export function leerPreferencia() {
     return {
       modo: MODOS.some((m) => m.id === guardada?.modo) ? guardada.modo : POR_DEFECTO.modo,
       paleta: PALETAS.some((p) => p.id === guardada?.paleta) ? guardada.paleta : POR_DEFECTO.paleta,
+      texto: TAMANOS.some((t) => t.id === guardada?.texto) ? guardada.texto : POR_DEFECTO.texto,
     };
   } catch {
     return { ...POR_DEFECTO };
@@ -42,12 +50,13 @@ function guardarPreferencia(preferencia) {
   }
 }
 
-// Pone data-modo y data-paleta en <html>; "auto" sigue la configuración del sistema.
-export function aplicarTema({ modo, paleta }) {
+// Pone data-modo, data-paleta y data-texto en <html>; "auto" sigue la configuración del sistema.
+export function aplicarTema({ modo, paleta, texto = POR_DEFECTO.texto }) {
   const raiz = document.documentElement;
   const sistemaClaro = window.matchMedia?.(CONSULTA_CLARO).matches;
   raiz.dataset.modo = modo === 'auto' ? (sistemaClaro ? 'claro' : 'oscuro') : modo;
   raiz.dataset.paleta = paleta;
+  raiz.dataset.texto = texto;
   const fondo = getComputedStyle(raiz).getPropertyValue('--bg').trim();
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', fondo);
 }
@@ -64,6 +73,9 @@ function leerColores() {
     muted: color('muted'),
     'card-2': color('card-2'),
     hover: color('hover'),
+    'graf-1': color('graf-1'),
+    'graf-2': color('graf-2'),
+    'graf-3': color('graf-3'),
   };
 }
 
@@ -88,9 +100,11 @@ export function TemaProvider({ children }) {
     <TemaContext.Provider value={{
       modo: preferencia.modo,
       paleta: preferencia.paleta,
+      texto: preferencia.texto,
       colores,
       cambiarModo: (modo) => setPreferencia((actual) => ({ ...actual, modo })),
       cambiarPaleta: (paleta) => setPreferencia((actual) => ({ ...actual, paleta })),
+      cambiarTexto: (texto) => setPreferencia((actual) => ({ ...actual, texto })),
     }}>
       {children}
     </TemaContext.Provider>

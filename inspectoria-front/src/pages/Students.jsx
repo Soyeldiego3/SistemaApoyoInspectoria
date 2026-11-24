@@ -1,121 +1,199 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { RefreshCw, Search, X } from 'lucide-react';
+import { ArrowDownUp, CalendarX, Clock, RefreshCw, Search, X } from 'lucide-react';
 import Chips from '../components/Chips.jsx';
+import ExportarImportarSheet from '../components/ExportarImportarSheet.jsx';
+import RangoSlider from '../components/RangoSlider.jsx';
 import { EmptyState } from '../components/Skeleton.jsx';
-import { getAlumnos, getCredencialesPortal, iniciarSync } from '../api.js';
-
-const MENSAJES_PORTAL = {
-  LOGIN_RECHAZADO: 'El portal rechazó el usuario o la contraseña',
-  PORTAL_INACCESIBLE: 'No se pudo conectar con el portal; revisa la red o la URL',
-  NAVEGADOR_NO_DISPONIBLE: 'No se encontró Microsoft Edge',
-  ESTRUCTURA_CAMBIADA: 'El portal cambió y no se pudo extraer la información',
-};
+import { getAlumnos } from '../api.js';
+import { fechaCorta } from '../fechas.js';
+import { PERIODOS, rangoPeriodo } from '../periodos.js';
+import { sincronizarPortal } from '../portal.js';
+import { coincide, formatearRut, plural } from '../texto.js';
 
 // Forma esperada de cada alumno (la API la entregará):
-// { rut, nombres, apellidos, curso, atrasos: number, pendientes: number }
-//   atrasos    = atrasos acumulados sin justificar
-//   pendientes = inasistencias sin justificar
-const FILTROS = [
-  // Estados de asistencia entregados por la API: presente, ausente y atraso.
+// { rut, nombres, apellidos, curso, atrasos, pendientes, atrasosTotal, pendientesTotal }
+//   atrasos    = atrasos sin justificar del período elegido
+//   pendientes = inasistencias sin justificar del período elegido
+//   atrasosTotal / pendientesTotal = lo mismo, pero de todo el año descargado
+// "Al día" = no le queda nada sin justificar en todo el año (no solo en el período).
+// Período: por defecto "Este mes" (igual que "Reincidencias" en Inicio); así los números no
+// suman todo el año. En la URL: ?periodo=mes o ?periodo=personalizado&desde=&hasta=
+// Filtro = estado (chips). Con inasistencias o atrasos se elige además un rango de cantidad
+// con el slider (ej. de 3 a 20). En la URL: ?filtro=atrasos&min=3&max=20
+const CHIPS = [
   { id: 'todos', label: 'Todos' },
-  { id: 'sin', label: 'Sin justificar' },
-  { id: 'reinc', label: '+3 Sin justificar' },
+  { id: 'inasist', label: 'Inasistencias pendientes' },
+  { id: 'atrasos', label: 'Atrasos pendientes' },
   { id: 'ok', label: 'Al día' },
 ];
+const CON_RANGO = ['inasist', 'atrasos'];
+const CAMPO_RANGO = { inasist: 'pendientes', atrasos: 'atrasos' };
+const RANGO_INICIAL = { desde: 1, hasta: null }; // hasta null = hasta el máximo registrado
+
+// Filtros antiguos: 'reinc' (reincidentes) y el sufijo '3' de "Solo 3 o más" (ej. 'atrasos3')
+function leerFiltro(f) {
+  if (f === 'reinc') return { filtro: 'atrasos', desde: 3 };
+  const base = (f || '').replace(/3$/, '');
+  if (!CHIPS.some((o) => o.id === base)) return null;
+  return { filtro: base, desde: f.endsWith('3') ? 3 : 1 };
+}
+const entero = (v) => (/^\d+$/.test(v || '') ? Number(v) : null);
+// Con un filtro de inasistencias o atrasos, la ficha se abre directo en esa pestaña
+const VISTA_POR_FILTRO = { inasist: 'inasistencias', atrasos: 'atrasos' };
 
 const CURSO_STORAGE_KEY = 'inspectoria.alumnos.curso';
 const FILTRO_STORAGE_KEY = 'inspectoria.alumnos.filtro';
+const BUSQUEDA_STORAGE_KEY = 'inspectoria.alumnos.busqueda';
+const RANGO_STORAGE_KEY = 'inspectoria.alumnos.rango';
+const PERIODO_STORAGE_KEY = 'inspectoria.alumnos.periodo';
 
-// Ignora tildes, mayúsculas, puntos y guion del RUT
-const limpiar = (s) => s.normalize('NFD').replace(/[\u0300-\u036f.\-]/g, '').toLowerCase();
+// Sin inasistencias ni atrasos sin justificar en todo el año descargado
+const alDia = (a) => (a.pendientesTotal ?? a.pendientes) === 0 && (a.atrasosTotal ?? a.atrasos) === 0;
+// Sin pendientes en el período, pero sí en otras fechas del año
+const pendientesFuera = (a) => (a.pendientes === 0 && a.atrasos === 0
+  ? (a.pendientesTotal ?? 0) + (a.atrasosTotal ?? 0) : 0);
+
+const PERIODOS_ALUMNOS = PERIODOS.filter((o) => ['mes', 'mesAnterior', '30dias', 'anio', 'personalizado'].includes(o.id));
+const PERIODO_INICIAL = 'mes';
+const fechaValida = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+// { periodo, desde, hasta } (desde/hasta solo cuentan con 'personalizado'), o null si no es válido
+function leerPeriodo(periodo, desde, hasta) {
+  if (!PERIODOS_ALUMNOS.some((o) => o.id === periodo)) return null;
+  return { periodo, desde: fechaValida(desde), hasta: fechaValida(hasta) };
+}
+function periodoGuardado() {
+  try {
+    const g = JSON.parse(sessionStorage.getItem(PERIODO_STORAGE_KEY) || 'null');
+    return g ? leerPeriodo(g.periodo, g.desde, g.hasta) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rangoGuardado() {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(RANGO_STORAGE_KEY) || 'null');
+    if (r && Number.isInteger(r.desde) && (r.hasta === null || Number.isInteger(r.hasta))) return r;
+  } catch { /* sin almacenamiento */ }
+  return null;
+}
+
+// Sin alumnos que mostrar con los filtros actuales: mensaje según el chip elegido
+// (con búsqueda o curso, el mensaje general y el botón para limpiar)
+const SIN_RESULTADOS = {
+  ok: ['Nadie está al día', 'Todos los alumnos tienen al menos una inasistencia o un atraso sin justificar en el año.'],
+  inasist: ['Nadie tiene inasistencias pendientes', 'No hay inasistencias sin justificar en este período.'],
+  atrasos: ['Nadie tiene atrasos pendientes', 'No hay atrasos sin justificar en este período.'],
+};
+function SinResultados({ base, buscando, onLimpiar }) {
+  const [titulo, detalle] = (!buscando && SIN_RESULTADOS[base])
+    || ['Ningún alumno coincide', 'Prueba con otra búsqueda, curso o filtro.'];
+  return (
+    <section className="card" role="status">
+      <h2>{titulo}</h2>
+      <p className="muted" style={{ marginTop: 8 }}>{detalle}</p>
+      <button type="button" className="linkbtn" style={{ marginTop: 10 }} onClick={onLimpiar}>
+        <X size={14} /> Limpiar filtros
+      </button>
+    </section>
+  );
+}
 
 export default function Students() {
   const location = useLocation();
   const navigate = useNavigate();
-  const esPc = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
   const parametros = new URLSearchParams(location.search);
-  const [q, setQ] = useState('');
-  const [filtro, setFiltro] = useState(() => (
-    parametros.get('filtro')
-    || sessionStorage.getItem(FILTRO_STORAGE_KEY)
-    || 'todos'
-  ));
+  // Si la URL trae filtros (ej. desde Inicio → Reincidencias), mandan ellos y no lo guardado
+  const urlConFiltros = parametros.has('filtro') || parametros.has('curso') || parametros.has('periodo');
+  const [q, setQ] = useState(() => {
+    if (urlConFiltros) return '';
+    try { return sessionStorage.getItem(BUSQUEDA_STORAGE_KEY) || ''; } catch { return ''; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(BUSQUEDA_STORAGE_KEY, q); } catch { /* sin almacenamiento */ }
+  }, [q]);
+  const [inicial] = useState(() => {
+    if (urlConFiltros) {
+      const leido = leerFiltro(parametros.get('filtro')) || { filtro: 'todos', desde: 1 };
+      return {
+        filtro: leido.filtro,
+        rango: { desde: entero(parametros.get('min')) || leido.desde, hasta: entero(parametros.get('max')) },
+      };
+    }
+    const leido = leerFiltro(sessionStorage.getItem(FILTRO_STORAGE_KEY)) || { filtro: 'todos', desde: 1 };
+    return { filtro: leido.filtro, rango: rangoGuardado() || { ...RANGO_INICIAL, desde: leido.desde } };
+  });
+  const [filtro, setFiltroEstado] = useState(inicial.filtro);
+  const [rango, setRango] = useState(inicial.rango);
+  // Al cambiar de estado el rango vuelve a "1 hasta el máximo"
+  const setFiltro = (nuevo) => {
+    setFiltroEstado(nuevo);
+    if (nuevo !== filtro) setRango(RANGO_INICIAL);
+  };
   const [curso, setCurso] = useState(() => (
-    parametros.get('curso')
-    || sessionStorage.getItem(CURSO_STORAGE_KEY)
-    || ''
+    urlConFiltros
+      ? parametros.get('curso') || ''
+      : sessionStorage.getItem(CURSO_STORAGE_KEY) || ''
   ));
+  const [periodoInicial] = useState(() => (urlConFiltros
+    ? leerPeriodo(parametros.get('periodo'), parametros.get('desde'), parametros.get('hasta'))
+    : periodoGuardado()) || { periodo: PERIODO_INICIAL, desde: '', hasta: '' });
+  const [periodo, setPeriodoEstado] = useState(periodoInicial.periodo);
+  const [desdeP, setDesdeP] = useState(periodoInicial.desde);
+  const [hastaP, setHastaP] = useState(periodoInicial.hasta);
+  // "Elegir fechas…" parte con las fechas del período que estaba elegido
+  const setPeriodo = (nuevo) => {
+    if (nuevo === 'personalizado' && periodo !== 'personalizado') {
+      const actual = rangoPeriodo(periodo);
+      setDesdeP(actual.desde);
+      setHastaP(actual.hasta);
+    }
+    setPeriodoEstado(nuevo);
+  };
+  const fechas = useMemo(() => rangoPeriodo(periodo, desdeP, hastaP), [periodo, desdeP, hastaP]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PERIODO_STORAGE_KEY, JSON.stringify({ periodo, desde: desdeP, hasta: hastaP }));
+    } catch { /* sin almacenamiento */ }
+  }, [periodo, desdeP, hastaP]);
   const [alumnos, setAlumnos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const [error, setError] = useState('');
+  const [exportarAbierto, setExportarAbierto] = useState(false);
+  const cerrarExportar = useCallback(() => setExportarAbierto(false), []);
 
+  // Solo vale la respuesta de la última consulta (al cambiar de período rápido)
+  const consultaRef = useRef(0);
   const cargarAlumnos = async () => {
+    const consulta = ++consultaRef.current;
     setCargando(true);
     setError('');
     try {
-      const data = await getAlumnos();
-      setAlumnos(data.alumnos);
+      const data = await getAlumnos(fechas);
+      if (consulta === consultaRef.current) setAlumnos(data.alumnos);
     } catch (e) {
-      setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message);
+      if (consulta === consultaRef.current) {
+        setError(e instanceof TypeError ? 'No hay conexión con el servidor local.' : e.message);
+      }
     } finally {
-      setCargando(false);
+      if (consulta === consultaRef.current) setCargando(false);
     }
   };
 
   useEffect(() => {
     cargarAlumnos();
-  }, []);
+  }, [fechas.desde, fechas.hasta]);
 
   const sincronizar = async () => {
     setSincronizando(true);
     setError('');
     try {
-      if (!esPc) {
-        await iniciarSync();
-        await cargarAlumnos();
-        return;
-      }
-      const credenciales = await getCredencialesPortal();
-      if (!credenciales.guardadas && !credenciales.enMemoria) {
-        navigate('/datos', {
-          replace: false,
-          state: {
-            abrirCredenciales: true,
-            accionModal: 'guardar',
-            mensaje: 'Configura las credenciales del portal para sincronizar.',
-          },
-        });
-        return;
-      }
-      if (credenciales.invalidas) {
-        navigate('/datos', {
-          replace: false,
-          state: {
-            abrirCredenciales: true,
-            accionModal: 'guardar',
-            mensaje: 'Las credenciales guardadas están inválidas. Actualízalas para continuar.',
-          },
-        });
-        return;
-      }
-      await iniciarSync();
-      await cargarAlumnos();
+      // null = faltaban credenciales y se fue a Ajustes
+      if (await sincronizarPortal({ navigate })) await cargarAlumnos();
     } catch (e) {
-      if (!esPc && (e.code === 'CREDENCIALES_REQUERIDAS' || e.code === 'LOGIN_RECHAZADO')) {
-        setError('Sincroniza desde el PC.');
-      } else if (MENSAJES_PORTAL[e.code]) {
-        setError(MENSAJES_PORTAL[e.code]);
-        if (esPc && (e.code === 'LOGIN_RECHAZADO' || e.code === 'CREDENCIALES_REQUERIDAS')) {
-          navigate('/datos', {
-            replace: false,
-            state: { abrirCredenciales: true, accionModal: 'guardar', mensaje: MENSAJES_PORTAL[e.code] },
-          });
-        }
-      } else {
-        setError(e.message || 'Ocurrió un error inesperado.');
-      }
+      setError(e.message);
     } finally {
       setSincronizando(false);
     }
@@ -129,56 +207,120 @@ export default function Students() {
   }, [curso]);
 
   useEffect(() => {
-    if (filtro !== 'todos') sessionStorage.setItem(FILTRO_STORAGE_KEY, filtro);
-    else sessionStorage.removeItem(FILTRO_STORAGE_KEY);
-  }, [filtro]);
+    try {
+      if (filtro !== 'todos') sessionStorage.setItem(FILTRO_STORAGE_KEY, filtro);
+      else sessionStorage.removeItem(FILTRO_STORAGE_KEY);
+      sessionStorage.setItem(RANGO_STORAGE_KEY, JSON.stringify(rango));
+    } catch { /* sin almacenamiento */ }
+  }, [filtro, rango]);
+
+  const base = filtro;
+  const conRango = CON_RANGO.includes(base);
+  // Límite del slider: la mayor cantidad registrada en el curso elegido (mínimo 1)
+  const maximo = useMemo(() => {
+    if (!conRango) return 1;
+    const campo = CAMPO_RANGO[base];
+    return Math.max(1, ...alumnos.filter((a) => !curso || a.curso === curso).map((a) => a[campo] || 0));
+  }, [alumnos, base, conRango, curso]);
+  const desde = Math.min(Math.max(rango.desde, 1), maximo);
+  const hasta = rango.hasta == null ? maximo : Math.min(Math.max(rango.hasta, desde), maximo);
+  const rangoCambiado = conRango && (desde > 1 || hasta < maximo);
+  // Si se deja la manija en el máximo, sigue al máximo aunque cambien los datos o el curso
+  const cambiarRango = (r) => setRango({ desde: r.desde, hasta: r.hasta >= maximo ? null : r.hasta });
 
   const rutaRetorno = useMemo(() => {
     const retorno = new URLSearchParams();
     if (curso) retorno.set('curso', curso);
     if (filtro !== 'todos') retorno.set('filtro', filtro);
-    return retorno.toString() ? `/alumnos?${retorno}` : '/alumnos';
-  }, [curso, filtro]);
+    if (conRango && rango.desde > 1) retorno.set('min', rango.desde);
+    if (conRango && rango.hasta != null) retorno.set('max', rango.hasta);
+    // Siempre lleva el período, para volver al mismo desde la ficha
+    retorno.set('periodo', periodo);
+    if (periodo === 'personalizado') {
+      if (desdeP) retorno.set('desde', desdeP);
+      if (hastaP) retorno.set('hasta', hastaP);
+    }
+    return `/alumnos?${retorno}`;
+  }, [curso, filtro, conRango, rango, periodo, desdeP, hastaP]);
 
   // Se recalcula en cada tecla; no necesita ir al back
   const lista = useMemo(() => {
-    const t = limpiar(q.trim());
+    const enRango = (n) => n >= desde && n <= hasta;
     return alumnos.filter((a) =>
-      (!t || limpiar(`${a.rut} ${a.nombres} ${a.apellidos} ${a.curso}`).includes(t)) &&
+      coincide(q, a.rut, a.nombres, a.apellidos, a.curso) &&
       (!curso || a.curso === curso) &&
-      (filtro === 'todos' ||
-        (filtro === 'sin' && (a.pendientes > 0 || a.atrasos > 0)) ||
-        (filtro === 'reinc' && a.atrasos >= 3) ||
-        (filtro === 'ok' && a.pendientes === 0 && a.atrasos === 0)));
-  }, [alumnos, q, filtro, curso]);
+      (base === 'todos' ||
+        (base === 'inasist' && enRango(a.pendientes)) ||
+        (base === 'atrasos' && enRango(a.atrasos)) ||
+        (base === 'ok' && alDia(a))));
+  }, [alumnos, q, base, desde, hasta, curso]);
 
-  const hayFiltros = q || curso || filtro !== 'todos';
-  const limpiarTodo = () => { setQ(''); setCurso(''); setFiltro('todos'); };
+  // Con un filtro activo, cada tarjeta muestra solo el dato de ese filtro
+  const verInasist = base === 'todos' || base === 'inasist';
+  const verAtrasos = base === 'todos' || base === 'atrasos';
+
+  const hayFiltros = q || curso || filtro !== 'todos' || rangoCambiado || periodo !== PERIODO_INICIAL;
+  const limpiarTodo = () => {
+    setQ('');
+    setCurso('');
+    setFiltro('todos');
+    setRango(RANGO_INICIAL);
+    setPeriodo(PERIODO_INICIAL);
+  };
 
   return (
     <>
       <div className="audit-header">
         <h2>Alumnos</h2>
+        <button type="button" className="btn ghost alumnos-exportar" onClick={() => setExportarAbierto(true)}>
+          <ArrowDownUp size={16} style={{ verticalAlign: -3, marginRight: 8 }} />Exportar / Importar
+        </button>
       </div>
+      {/* Tras importar justificaciones cambian los pendientes: se recarga la lista */}
+      <ExportarImportarSheet abierto={exportarAbierto} onCerrar={cerrarExportar} onImportado={cargarAlumnos} />
 
-      {error && !cargando && <p className="msg" role="alert" style={{ color: 'var(--bad)', background: 'var(--bad-soft)' }}>{error}</p>}
+      {error && !cargando && <p className="msg error" role="alert">{error}</p>}
       <div className="searchbox">
         <Search size={18} />
         <input className="input" type="search" placeholder="RUT, nombre o curso" value={q}
           onChange={(e) => setQ(e.target.value)} aria-label="Buscar alumno" />
       </div>
 
-      <div className="filterbar">
-        <Chips opciones={FILTROS} valor={filtro} onChange={setFiltro} />
+      {/* En escritorio se ven los chips; en el teléfono, un desplegable (los chips no caben) */}
+      <div className="filterbar con-select">
+        <Chips opciones={CHIPS} valor={base} onChange={setFiltro} />
+        <select className="input filtro-select" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar por estado">
+          {CHIPS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
         <select className="input curso" value={curso} onChange={(e) => setCurso(e.target.value)} disabled={!cursos.length} aria-label="Filtrar por curso">
           <option value="">Todos los cursos</option>
           {cursos.map((c) => <option key={c}>{c}</option>)}
         </select>
+        <select className="input periodo" value={periodo} onChange={(e) => setPeriodo(e.target.value)} aria-label="Período">
+          {PERIODOS_ALUMNOS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
       </div>
+      {periodo === 'personalizado' && (
+        <div className="audit-custom-dates">
+          <input className="input" type="date" value={desdeP} onChange={(e) => setDesdeP(e.target.value)} aria-label="Fecha desde" />
+          <input className="input" type="date" value={hastaP} onChange={(e) => setHastaP(e.target.value)} aria-label="Fecha hasta" />
+        </div>
+      )}
+
+      {conRango && alumnos.length > 0 && (
+        <RangoSlider min={1} max={maximo} desde={desde} hasta={hasta} onChange={cambiarRango}
+          etiqueta={base === 'inasist' ? 'Cantidad de inasistencias' : 'Cantidad de atrasos'}
+          unidad={`${base === 'inasist' ? 'inasistencia' : 'atraso'}${hasta === 1 ? '' : 's'}`} />
+      )}
 
       <div className="row muted">
-        <span>{lista.length} {lista.length === 1 ? 'alumno' : 'alumnos'}</span>
-        {hayFiltros && <button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
+        <span>
+          {plural(lista.length, 'alumno')}
+          {base === 'ok'
+            ? ' · sin nada pendiente en todo el año'
+            : fechas.desde && fechas.hasta && ` · pendientes del ${fechaCorta(fechas.desde)} al ${fechaCorta(fechas.hasta)}`}
+        </span>
+        {hayFiltros &&<button className="linkbtn" onClick={limpiarTodo}><X size={14} /> Limpiar filtros</button>}
       </div>
 
       {lista.length === 0
@@ -197,16 +339,33 @@ export default function Students() {
                 </button>
               </section>
             )
-            : <EmptyState texto={error || 'Ningún alumno coincide con los filtros.'} filas={3} />
+            : error
+              ? <EmptyState texto={error} filas={3} />
+              : <SinResultados base={base} buscando={Boolean(q || curso || rangoCambiado)} onLimpiar={limpiarTodo} />
         : <div className="list cols">{lista.map((a) => (
-            <Link key={a.rut} to={`/alumnos/${encodeURIComponent(a.rut)}`}
+            <Link key={a.rut}
+              to={`/alumnos/${encodeURIComponent(a.rut)}${VISTA_POR_FILTRO[base] ? `?vista=${VISTA_POR_FILTRO[base]}` : ''}`}
               state={{ returnTo: rutaRetorno }}
-              className="item">
-              <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {a.rut}</span></div>
+              className="item alumno">
+              <div><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso} · {formatearRut(a.rut)}</span></div>
               <div className="tags">
-                {a.atrasos > 0 && <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`}>{a.atrasos} atrasos sin justificar</span>}
-                {a.pendientes > 0 && <span className="tag warn">{a.pendientes} inasistencias sin justificar</span>}
-                {a.pendientes === 0 && a.atrasos === 0 && <span className="tag ok">Al día</span>}
+                {verInasist && a.pendientes > 0 && (
+                  <span className={`tag ${a.pendientes >= 3 ? 'bad' : 'warn'}`} title="Inasistencias sin justificar">
+                    <CalendarX size={13} aria-hidden />{plural(a.pendientes, 'inasistencia')}{a.pendientes >= 3 ? ' · 3 o más' : ''}
+                  </span>
+                )}
+                {verAtrasos && a.atrasos > 0 && (
+                  <span className={`tag ${a.atrasos >= 3 ? 'bad' : 'warn'}`} title="Atrasos sin justificar">
+                    <Clock size={13} aria-hidden />{plural(a.atrasos, 'atraso')}{a.atrasos >= 3 ? ' · reincidente' : ''}
+                  </span>
+                )}
+                {alDia(a) && <span className="tag ok">Al día</span>}
+                {pendientesFuera(a) > 0 && (
+                  <span className="tag" style={{ color: 'var(--muted)' }}
+                    title="Nada pendiente en este período, pero sí en otras fechas del año">
+                    {plural(pendientesFuera(a), 'pendiente')} en otras fechas
+                  </span>
+                )}
               </div>
             </Link>))}</div>}
     </>

@@ -10,7 +10,7 @@ const TIMEOUT_SIDE = 12000;
 // Prefijo del grupo "Asistencia" en el menú
 const MENU_ASISTENCIA = '#nav > ul > li:nth-child(2) > div > ul > li:nth-child(1)';
 // Posición de cada opción dentro del grupo.
-const POSICION = { atrasos: 2, mensual: 5 };
+const POSICION = { clase: 1, atrasos: 2, mensual: 5 };
 
 function errorPortal(codigo, mensaje, causa) {
   const error = new Error(mensaje);

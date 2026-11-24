@@ -39,13 +39,19 @@ execSync(`npx @electron/rebuild -f -w better-sqlite3 -v ${electronVersion} -m "$
   stdio: 'inherit',
 });
 
-// 4. Descargar Firefox (respaldo de Edge) preparacion para linux y Windows
+// 4. Firefox (respaldo del extractor): solo en Linux, donde no hay Edge.
+// En Windows se usa Edge del sistema; Para incluirlo igual: INCLUIR_FIREFOX=1
 const browsersDir = path.join(root, 'browsers');
-execSync('npx playwright install firefox', {
-  cwd: dest,
-  stdio: 'inherit',
-  env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsersDir },
-});
+if (process.platform === 'linux' || process.env.INCLUIR_FIREFOX === '1') {
+  execSync('npx playwright install firefox', {
+    cwd: dest,
+    stdio: 'inherit',
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsersDir },
+  });
+} else {
+  fs.rmSync(browsersDir, { recursive: true, force: true }); // restos de un build anterior
+  console.log('Firefox omitido (Windows usa Edge). Para incluirlo: INCLUIR_FIREFOX=1');
+}
 
 // electron-builder excluye node_modules cuando está en la raíz del recurso.
 // En src sí se conserva y Node lo resuelve desde index.js.

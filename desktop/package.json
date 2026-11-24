@@ -9,7 +9,9 @@
     "build:front": "npm --prefix ../inspectoria-front run build",
     "prepare:back": "node scripts/prepare-back.js",
     "pack": "npm run build:front && npm run prepare:back && electron-builder --dir",
-    "dist": "npm run build:front && npm run prepare:back && electron-builder"
+    "dist": "npm run build:front && npm run prepare:back && electron-builder",
+    "dist:win": "npm run build:front && npm run prepare:back && electron-builder --win",
+    "dist:linux": "npm run build:front && npm run prepare:back && electron-builder --linux"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
@@ -45,18 +47,22 @@
       {
         "from": "front-dist",
         "to": "front-dist"
-      },
-      {
-        "from": "browsers",
-        "to": "browsers"
       }
     ],
     "win": {
-      "target": "portable"
+      "target": "nsis",
+      "icon": "assets/icons/icon.ico"
     },
     "linux": {
+      "extraResources": [
+        {
+          "from": "browsers",
+          "to": "browsers"
+        }
+      ],
       "target": "AppImage",
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "assets/icons/icon.png"
     }
   }
 }

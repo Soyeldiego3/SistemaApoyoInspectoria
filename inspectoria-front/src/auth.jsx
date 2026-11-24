@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { cerrarSesion, getCuenta, getToken, login as apiLogin } from './api.js';
+import {
+  cerrarSesion, getCuenta, getToken, login as apiLogin, loginConQr as apiLoginConQr,
+} from './api.js';
 
 const AuthContext = createContext(null);
 
@@ -21,8 +23,11 @@ export function AuthProvider({ children }) {
       setCargando(false);
       return null;
     }
+    const tokenConsultado = getToken();
     try {
       const cuenta = await getCuenta();
+      // Si mientras tanto se inició otra sesión (QR del teléfono), esta respuesta ya no vale
+      if (getToken() !== tokenConsultado) return null;
       setUsuario(cuenta.usuario);
       setRol(cuenta.rol);
       return cuenta;
@@ -46,6 +51,14 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const ingresarConQr = async (codigo) => {
+    const data = await apiLoginConQr(codigo);
+    setUsuario(data.usuario);
+    setRol(data.rol);
+    setCargando(false);
+    return data;
+  };
+
   return (
     <AuthContext.Provider value={{
       usuario,
@@ -53,6 +66,7 @@ export function AuthProvider({ children }) {
       cargando,
       esAdmin: rol === 'admin',
       ingresar,
+      ingresarConQr,
       salir,
       refreshCuenta,
     }}>

@@ -5,7 +5,7 @@
   --accent-2: var(--accent); --on-accent-2: var(--on-accent); /* color de realce (pestaña activa, chip activo) */
   --nav-activo: var(--accent-2);
   --ok: #30d19b; --warn: #ffb020; --bad: #ff5a5f;
-  --ok-soft: rgba(48,209,155,.12); --bad-soft: rgba(255,90,95,.12);
+  --ok-soft: rgba(48,209,155,.12); --bad-soft: rgba(255,90,95,.12); --warn-soft: rgba(255,176,32,.12);
   --hover: rgba(255,255,255,.06); --skeleton-hi: #3d3d42; --shadow: rgba(0,0,0,.45);
   --r: 22px;
   color-scheme: dark;
@@ -16,7 +16,7 @@
   --page: #e5e5ea; --bg: #f2f2f7; --card: #fff; --card-2: #e9e9ee; --line: #d8d8dc; --nav: #fff;
   --text: #1c1c1e; --muted: #6b6b72; --accent: #007aff; --accent-soft: #dbeaff;
   --ok: #1f9e6e; --warn: #b26a00; --bad: #d92d3a;
-  --ok-soft: rgba(31,158,110,.12); --bad-soft: rgba(217,45,58,.1);
+  --ok-soft: rgba(31,158,110,.12); --bad-soft: rgba(217,45,58,.1); --warn-soft: rgba(178,106,0,.1);
   --hover: rgba(0,0,0,.05); --skeleton-hi: #f7f7f9; --shadow: rgba(0,0,0,.15);
   color-scheme: light;
 }
@@ -33,8 +33,21 @@
 /* En claro el texto amarillo sobre blanco no se lee: la pestaña activa queda en azul */
 :root[data-modo="claro"][data-paleta="lasalle"] { --accent: #003a8c; --accent-2: #f2b800; --nav-activo: var(--accent); }
 
+/* Colores de gráficos (Gráficos): cada paleta define 3 que combinan entre sí; --graf-1 es el color principal */
+:root { --graf-1: var(--accent); --graf-2: #64d2ff; --graf-3: #bf5af2; }                 /* Azul */
+:root[data-modo="claro"] { --graf-2: #0091c2; --graf-3: #8e44c9; }
+:root[data-paleta="lavanda"] { --graf-2: #f28fb3; --graf-3: #5ec8c0; }                   /* rosa y turquesa suaves */
+:root[data-modo="claro"][data-paleta="lavanda"] { --graf-2: #c2477a; --graf-3: #2a8f88; }
+:root[data-paleta="oficina"] { --graf-2: #8fa3b8; --graf-3: #b08d57; }                   /* gris azulado y ocre, sobrios */
+:root[data-modo="claro"][data-paleta="oficina"] { --graf-2: #5f7488; --graf-3: #8a6a35; }
+:root[data-paleta="lasalle"] { --graf-2: #ffcc00; --graf-3: #8fb3ff; }                   /* amarillo y celeste institucional */
+:root[data-modo="claro"][data-paleta="lasalle"] { --graf-2: #f2b800; --graf-3: #4a78c2; }
+
 * { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
+/* Tamaño del texto (Ajustes → Apariencia). Todo usa rem, así que escala la app completa. */
+:root[data-texto="grande"] { font-size: 112.5%; }
+:root[data-texto="muy-grande"] { font-size: 125%; }
 body { background: var(--page); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
 button, input, select { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
@@ -75,8 +88,30 @@ a { color: inherit; text-decoration: none; }
 .form { display: grid; gap: 14px; }
 
 .list { display: grid; gap: 8px; }
+/* Tantas columnas como quepan (mín. 380px c/u): 1 en teléfono/tablet, 2 en escritorio.
+   min(100%, …) evita que la grilla se desborde y aparezca scroll horizontal. */
+.list.cols { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
 .item { background: var(--card); border-radius: 18px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.item > :first-child { min-width: 0; overflow-wrap: anywhere; }
 .item b { display: block; }
+/* Tarjeta de alumno: si nombre y etiquetas no caben en una línea, las etiquetas bajan */
+.item.alumno { flex-wrap: wrap; row-gap: 8px; }
+.item.alumno > div:first-child { flex: 1 1 200px; }
+.item.alumno .tags { flex: 0 1 auto; margin-left: auto; }
+/* Tarjeta que lleva a otra vista: se ilumina y sube un poco al pasar el mouse */
+.item.enlace { color: inherit; text-decoration: none; transition: background-color .15s, box-shadow .15s, transform .15s; }
+.item.enlace:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.curso-item { flex-wrap: wrap; row-gap: 8px; }
+.curso-item .tags { margin-left: auto; align-items: center; }
+.curso-flecha { color: var(--muted); flex: none; transition: color .15s, transform .15s; }
+@media (hover: hover) {
+  .item.enlace:hover { background-image: linear-gradient(var(--hover), var(--hover)); box-shadow: 0 6px 18px var(--shadow); transform: translateY(-1px); }
+  .item.enlace:hover .curso-flecha { color: var(--accent); transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .item.enlace, .curso-flecha { transition: none; }
+  .item.enlace:hover, .item.enlace:hover .curso-flecha { transform: none; }
+}
 .tag { font-size: .75rem; padding: 4px 10px; border-radius: 20px; background: var(--card-2); white-space: nowrap; }
 .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); } .tag.bad { color: var(--bad); }
 .msg { padding: 12px 14px; border-radius: 14px; background: var(--ok-soft); color: var(--ok); font-size: .9rem; }
@@ -94,12 +129,33 @@ a { color: inherit; text-decoration: none; }
 .rowbtn { width: 100%; border: 0; text-align: left; cursor: pointer; }
 .rowbtn.sel { outline: 2px solid var(--accent); }
 .tags { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.tags.start { justify-content: flex-start; }
+.tag svg { vertical-align: -2px; margin-right: 4px; }
+.kpis.ficha .card { display: grid; gap: 8px; align-content: start; }
+
+/* Ficha del alumno: registros agrupados por mes, cada fila con un bloque calendario */
+.meses { display: grid; gap: 10px; max-width: 860px; }
+.mes { display: grid; gap: 8px; align-content: start; }
+.mes h3 { margin: 0; font-size: inherit; }
+.mes-titulo { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 4px; border: 0; background: none; text-align: left; cursor: pointer;
+  font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text); border-radius: 10px; }
+.mes-titulo .muted { font-size: .8rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.mes-chevron { flex: none; color: var(--muted); transition: transform .15s; }
+.mes-titulo[aria-expanded="true"] .mes-chevron { transform: rotate(90deg); }
+@media (hover: hover) { .mes-titulo:hover { background: var(--hover); } }
+.fila-fecha { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cal { flex: none; width: 46px; height: 46px; border-radius: 12px; background: var(--card-2); display: grid; place-content: center; text-align: center; line-height: 1; }
+.cal b { font-size: 1.15rem; }
+.cal span { font-size: .62rem; font-weight: 600; letter-spacing: .06em; color: var(--muted); margin-top: 3px; }
+.cal.pendiente { background: var(--bad-soft); color: var(--bad); }
+.cal.pendiente span { color: var(--bad); }
 .check { width: 20px; height: 20px; border-radius: 7px; border: 2px solid var(--muted); }
 .check.on { background: var(--accent); border-color: var(--accent); }
 .seg { display: flex; background: var(--card); border-radius: 14px; padding: 4px; gap: 4px; }
 .seg button { flex: 1; border: 0; background: none; padding: 10px 6px; border-radius: 10px; font-size: .85rem; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--card-2); color: var(--text); font-weight: 600; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+/* Teléfono: hoja inferior. Tablet: diálogo centrado. Escritorio: panel lateral. */
 .sheet { width: 100%; max-width: 480px; min-height: 70dvh; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; align-content: start; background: var(--card); border-radius: 26px 26px 0 0; padding: 12px 20px calc(20px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
 /* Selector desplegable propio: los textos largos hacen salto de línea en vez de cortarse */
 .selector { position: relative; }
@@ -127,6 +183,21 @@ a { color: inherit; text-decoration: none; }
 .actionbar { position: sticky; left: auto; transform: none; max-width: none; padding: 0; bottom: calc(76px + env(safe-area-inset-bottom)); }
 .center .card { width: min(100%, 400px); }
 
+/* ---------- Tablet / ventanas medianas: ocupa todo el ancho, sin franjas ---------- */
+@media (min-width: 600px) {
+  body { background: var(--bg); }
+  .app { max-width: none; }
+  .nav { max-width: none; }
+  .topbar, .content { width: 100%; max-width: 760px; margin: 0 auto; }
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+  .kpis > :last-child { grid-column: auto; }
+  /* Paneles (justificar, credenciales) como diálogo centrado, del alto de su contenido.
+     overflow visible: la lista de "Tipo" flota sobre el diálogo sin cortarse ni estirarlo. */
+  .overlay { align-items: center; padding: 24px; }
+  .sheet { max-width: 520px; min-height: 0; max-height: none; overflow: visible; border-radius: 26px; padding: 24px; }
+  .grab { display: none; }
+}
+
 /* ---------- Escritorio ---------- */
 @media (min-width: 900px) {
   body { background: var(--bg); }
@@ -145,8 +216,9 @@ a { color: inherit; text-decoration: none; }
   .kpis { grid-template-columns: repeat(3, 1fr); }
   .kpis > :last-child { grid-column: auto; }
   .charts { grid-template-columns: repeat(3, 1fr); }
+  /* Inasistencias día a día usa 2 columnas; el Top 5 queda a su lado */
+  .charts .grafico-ancho { grid-column: span 2; }
   .cols2 { grid-template-columns: 1fr 1fr; }
-  .list.cols { grid-template-columns: 1fr 1fr; }
   .filters { grid-template-columns: 1fr auto; align-items: end; }
   .filters .btn { width: auto; padding-inline: 32px; }
   .content > input.input { max-width: 480px; }
@@ -156,8 +228,8 @@ a { color: inherit; text-decoration: none; }
   .audit-filter-grid select:last-child { grid-column: auto; }
 
   /* El panel de justificativo es un cajón lateral: la lista sigue visible */
-  .overlay { align-items: stretch; justify-content: flex-end; }
-  .sheet { max-width: 480px; height: 100%; max-height: none; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
+  .overlay { align-items: stretch; justify-content: flex-end; padding: 0; }
+  .sheet { max-width: 480px; height: 100%; max-height: none; overflow-y: auto; border-radius: 26px 0 0 26px; align-content: start; padding: 32px 28px; }
   .grab { display: none; }
 }
 
@@ -173,6 +245,7 @@ a { color: inherit; text-decoration: none; }
 .curso { padding: 10px 14px; }
 .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .iconbtn { border: 0; cursor: pointer; color: var(--muted); }
+.iconbtn:disabled { opacity: .4; cursor: default; }
 .audit-header { display: flex; align-items: center; justify-content: space-between; }
 .audit-header h2 { font-size: 1.05rem; }
 .audit-sync { width: 44px; height: 44px; border-radius: 14px; background: var(--card-2); display: grid; place-items: center; }
@@ -186,6 +259,89 @@ a { color: inherit; text-decoration: none; }
 .audit-custom-dates .input { min-width: 0; padding: 10px 8px; }
 .audit-last-sync { text-align: right; }
 @media (min-width: 900px) { .filterbar { grid-template-columns: 1fr 220px; align-items: center; } }
+
+/* Ajustes → Extracción automática */
+.sync-rango { margin: 14px 0 2px; font-size: .85rem; }
+@media (min-width: 900px) {
+  .sync-card .btn { width: auto; min-width: 240px; padding-inline: 28px; vertical-align: middle; }
+}
+
+/* Ventana Exportar / Importar (Inicio y Alumnos) */
+.exportar-modo { display: flex; justify-content: space-between; gap: 12px; padding: 4px 2px; }
+.exportar-modo label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.exportar-modo input { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+.exportar-modo .exportar { color: var(--ok); } .exportar-modo .exportar input { accent-color: var(--ok); }
+.exportar-modo .importar { color: var(--bad); } .exportar-modo .importar input { accent-color: var(--bad); }
+.exportar-nota { font-size: .85rem; }
+.exportar-archivos { margin: 0 0 0 18px; font-size: .9rem; display: grid; gap: 4px; }
+.exportar-resultado details ul { margin: 6px 0 0 18px; font-size: .85rem; }
+.alumnos-exportar { width: auto; padding: 10px 16px; font-size: .9rem; }
+.inicio-acciones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+@media (max-width: 599px) {
+  .inicio-fila { flex-direction: column; align-items: stretch; }
+  .inicio-acciones > * { flex: 1; text-align: center; }
+}
+
+/* Alumnos: slider de rango (cantidad de inasistencias o atrasos), estilo filtro de precio.
+   Dos <input type="range"> superpuestos; solo sus manijas reciben el puntero. */
+.rango { max-width: 520px; padding: 2px 4px; }
+.rango-cabecera { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: .9rem; }
+.rango-cabecera span { color: var(--muted); }
+.rango-cabecera b { color: var(--accent); font-weight: 600; }
+/* El margen superior deja lugar a la burbuja del valor sin tapar la cabecera */
+.rango-pista { position: relative; height: 34px; margin-top: 22px; }
+.rango-fondo, .rango-tramo { position: absolute; top: 50%; height: 4px; margin-top: -2px; border-radius: 4px; }
+.rango-fondo { left: 0; right: 0; background: var(--line); }
+.rango-tramo { background: var(--accent); }
+.rango-pista input[type="range"] {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: none;
+  -webkit-appearance: none; appearance: none; pointer-events: none;
+}
+.rango-pista input[type="range"]::-webkit-slider-runnable-track { background: none; height: 100%; }
+.rango-pista input[type="range"]::-moz-range-track { background: none; }
+.rango-pista input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; pointer-events: auto; cursor: grab;
+  width: 18px; height: 18px; margin-top: 8px; border-radius: 50%; border: none;
+  background: var(--accent); box-shadow: 0 0 0 0 transparent; transition: box-shadow .15s;
+}
+.rango-pista input[type="range"]::-moz-range-thumb {
+  pointer-events: auto; cursor: grab; width: 18px; height: 18px; border-radius: 50%; border: none;
+  background: var(--accent); transition: box-shadow .15s;
+}
+/* Halo alrededor de la manija al pasar el mouse o arrastrar, como en el filtro de precio */
+.rango-pista input[type="range"]:hover::-webkit-slider-thumb,
+.rango-pista input[type="range"]:focus-visible::-webkit-slider-thumb,
+.rango-pista input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent); }
+.rango-pista input[type="range"]:hover::-moz-range-thumb,
+.rango-pista input[type="range"]:focus-visible::-moz-range-thumb,
+.rango-pista input[type="range"]:active::-moz-range-thumb { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent); }
+.rango-pista input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; }
+.rango-pista input[type="range"]:focus { outline: none; }
+.rango-burbuja {
+  position: absolute; bottom: calc(100% + 2px); transform: translateX(-50%); pointer-events: none;
+  padding: 3px 9px; border-radius: 6px; background: var(--card-2); color: var(--text);
+  font-size: .8rem; font-weight: 600; box-shadow: 0 2px 8px var(--shadow); white-space: nowrap;
+}
+.rango-burbuja::after {
+  content: ''; position: absolute; left: 50%; top: 100%; margin-left: -5px;
+  border: 5px solid transparent; border-top-color: var(--card-2);
+}
+.rango-limites { display: flex; justify-content: space-between; font-size: .75rem; margin-top: -2px; }
+
+/* Alumnos: en el teléfono los chips se reemplazan por un desplegable junto al de curso */
+.filterbar.con-select { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.filterbar.con-select .chips { display: none; }
+.filterbar.con-select select { min-width: 0; padding: 11px 8px; border-radius: 12px; font-size: .82rem; }
+/* El período va en su propia fila en el teléfono */
+.filterbar.con-select select.periodo { grid-column: 1 / -1; }
+@media (min-width: 900px) {
+  .filterbar.con-select { grid-template-columns: 1fr 190px 190px; gap: 10px; }
+  .filterbar.con-select .chips { display: flex; }
+  .filterbar.con-select .filtro-select { display: none; }
+  .filterbar.con-select select.curso,
+  .filterbar.con-select select.periodo { padding: 10px 14px; border-radius: 14px; font-size: inherit; }
+  .filterbar.con-select select.periodo { grid-column: auto; }
+}
 
 /* Animación de carga 3x3 durante la extracción automática */
 .gridloader { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 36px; height: 36px; flex: none; }
@@ -214,3 +370,131 @@ a { color: inherit; text-decoration: none; }
   .nav a:not(.active):hover { color: var(--text); background: var(--hover); }
 }
 @media (prefers-reduced-motion: no-preference) { .nav a { transition: background .15s, color .15s; } }
+
+/* Auditar: avisos, prioridad y ayuda */
+.msg.error { background: var(--bad-soft); color: var(--bad); }
+.msg.aviso { background: var(--warn-soft); color: var(--warn); display: grid; gap: 6px; }
+.msg.aviso .btn { justify-self: start; margin-top: 4px; width: auto; }
+.audit-meta { display: block; }
+.audit-senales { margin-top: 8px; }
+.audit-razones { display: block; margin-top: 6px; font-size: .8rem; }
+.audit-nivel { flex-direction: column; align-items: flex-end; }
+.kpis .card .detalle { margin-top: 8px; font-size: .8rem; }
+.audit-nota { font-size: .85rem; }
+
+/* Badge de alertas nuevas sobre "Auditar" */
+.nav-icono { position: relative; display: inline-grid; place-items: center; }
+.nav-badge { cursor: pointer; position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--bad); color: #fff; font-size: .65rem; font-weight: 700;
+  line-height: 18px; text-align: center; }
+
+/* Auditar → Alertas */
+.alerta-grupo { display: block; }
+.alerta-grupo + .alerta-grupo { margin-top: 6px; }
+.alerta-grupo > summary { cursor: pointer; font-weight: 600; padding: 4px 2px 10px; list-style-position: inside; }
+.alerta { display: grid; gap: 12px; background: var(--card); border-radius: 18px; padding: 18px 20px; }
+.alerta p.muted { margin-top: 4px; }
+.alerta-cabecera { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.alerta-cabecera b { display: block; }
+.alerta-alumno { color: inherit; text-decoration: none; border-radius: 8px; }
+.alerta-alumno:hover b, .alerta-alumno:focus-visible b { color: var(--accent); text-decoration: underline; }
+.alerta-titulo { font-weight: 600; }
+.alerta-acciones { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.alerta-acciones .alerta-gestion { width: auto; min-width: 200px; padding: 9px 12px; border-radius: 12px; font-size: .88rem; }
+@media (max-width: 480px) { .alerta-acciones .alerta-gestion { flex: 1 1 100%; } }
+
+.alerta textarea { width: 100%; min-height: 56px; resize: vertical; font: inherit; color: inherit;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+/* Alertas (Curso + Período) y Comparar cursos (Tipo + Período): dos filtros lado a lado */
+.audit-filter-grid.dos-columnas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.audit-filter-grid.dos-columnas select:last-child { grid-column: auto; }
+/* "Otro mes…": el selector de mes ocupa toda la fila */
+.audit-custom-dates.un-campo { grid-template-columns: 1fr; }
+
+/* Calendario de inasistencias (Gráficos): lunes a domingo, una fila por semana */
+.calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.calendario-cab { font-size: .75rem; color: var(--muted); text-align: center; }
+.calendario-dia { position: relative; overflow: hidden; border-radius: 4px; background: var(--card-2);
+  min-height: 48px; padding: 6px 8px; display: grid; align-content: space-between; }
+.calendario-dia .intensidad { position: absolute; inset: 0; background: var(--graf-3); }
+.calendario-dia > span, .calendario-dia > b { position: relative; }
+.calendario-dia > span { font-size: .75rem; color: var(--text); opacity: .75; }
+.calendario-dia.sin-registro { background: var(--card-2); opacity: .6; border: 1px dashed var(--muted); }
+.calendario-dia.finde { background: transparent; border: 1px solid var(--line); }
+.calendario-dia.finde > span { opacity: .5; }
+.calendario-unidad { font-size: .65rem; font-weight: 400; opacity: .75; }
+/* Día actual: borde con el color principal (outline se dibuja encima de la capa de color) */
+.calendario-dia.hoy { outline: 2px solid var(--accent); outline-offset: -2px; opacity: 1; }
+.calendario-dia.hoy > span { font-weight: 700; opacity: 1; }
+/* Días del calendario con inasistencias: se pueden abrir para ver los alumnos */
+button.calendario-dia { border: 0; color: inherit; text-align: left; cursor: pointer; }
+button.calendario-dia:hover { outline: 2px solid var(--text); outline-offset: -2px; }
+.calendario-dia.hoy:hover { outline-color: var(--accent); }
+/* Panel centrado (inasistencias del día): igual en teléfono y escritorio.
+   El panel entero hace scroll si la lista es larga, así no hay dos scrolls anidados. */
+.overlay.centrado { align-items: center; justify-content: center; padding: 16px; }
+.sheet.modal { max-width: 480px; height: auto; min-height: 0; max-height: 85dvh; overflow-y: auto;
+  border-radius: 20px; padding: 20px; }
+.calendario-dia.vacio { visibility: hidden; }
+.calendario-leyenda { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: .75rem; color: var(--muted); }
+.calendario-leyenda i { width: 14px; height: 14px; border-radius: 3px; background: var(--graf-3); }
+
+/* Asistencia por clase (vista temporal): filtros y tabla alumno × bloque */
+.clase-grupo { display: grid; gap: 8px; }
+.clase-grupo-titulo { font-size: 1rem; margin: 6px 0 0; }
+.clase-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.clase-tabla-caja { padding: 8px 0; overflow-x: auto; }
+.clase-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; table-layout: fixed; }
+/* Ancho fijo e igual en todas las tablas: nombre 40 %, el resto se reparte entre los bloques */
+.clase-tabla .clase-col-alumno { width: 40%; }
+.clase-tabla tbody th { overflow-wrap: anywhere; }
+.clase-tabla th, .clase-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.clase-tabla thead th { font-size: .75rem; color: var(--muted); font-weight: 600; text-align: center; white-space: nowrap; }
+.clase-tabla thead th:first-child, .clase-tabla tbody th { text-align: left; }
+.clase-tabla tbody th { position: sticky; left: 0; background: var(--card); font-weight: 500; min-width: 170px; }
+.clase-tabla tbody th a { color: inherit; text-decoration: none; }
+.clase-tabla tbody tr:last-child > * { border-bottom: 0; }
+.clase-tabla td { text-align: center; font-weight: 700; color: var(--muted); }
+.clase-tabla td.estado-P { color: var(--ok); }
+.clase-tabla td.estado-A { color: var(--bad); background: var(--bad-soft); }
+.clase-tabla td.estado-T { color: var(--warn); }
+.clase-parcial { display: table; margin-top: 4px; }
+.clase-leyenda b { margin-right: 4px; }
+.clase-leyenda .estado-P { color: var(--ok); }
+.clase-leyenda .estado-A { color: var(--bad); }
+.clase-leyenda .estado-T { color: var(--warn); }
+
+/* Ficha del alumno: selector de vista (lista / calendario), como en una tienda */
+.vista-controles { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 860px; }
+.vista-controles .chips { min-width: 0; }
+.modo-vista { flex: none; display: inline-flex; gap: 2px; padding: 3px; background: var(--card); border-radius: 12px; }
+.modo-vista button { width: 40px; height: 34px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+  display: grid; place-items: center; cursor: pointer; }
+.modo-vista button.on { background: var(--card-2); color: var(--text); }
+@media (hover: hover) { .modo-vista button:not(.on):hover { color: var(--text); background: var(--hover); } }
+
+/* Ficha del alumno: vista calendario (rojo = inasistencias, amarillo = atrasos) */
+.calendario-alumno { display: grid; gap: 14px; max-width: 860px; }
+.calendario-alumno-titulo { display: grid; justify-items: center; gap: 2px; text-align: center; }
+.calendario-alumno .calendario-dia { min-height: 58px; border-radius: 8px; font: inherit; }
+.calendario-alumno .calendario-dia.presente > span { opacity: .9; }
+.calendario-estado { position: relative; font-size: .72rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendario-estado-sub { position: relative; font-size: .62rem; opacity: .8; }
+.calendario-dia.inasistencia.pendiente { background: var(--bad); color: #fff; }
+.calendario-dia.inasistencia.justificada { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 45%, transparent); }
+.calendario-dia.atraso.pendiente { background: var(--warn); color: #1c1c1e; }
+:root[data-modo="claro"] .calendario-dia.atraso.pendiente { color: #fff; }
+.calendario-dia.atraso.justificada { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 45%, transparent); }
+.calendario-dia.inasistencia > span, .calendario-dia.atraso > span { color: inherit; opacity: .9; font-weight: 600; }
+.calendario-dia.sel { outline: 3px solid var(--accent); outline-offset: 1px; }
+button.calendario-dia.sel:hover { outline-color: var(--accent); outline-offset: 1px; }
+.calendario-check { position: absolute; top: 5px; right: 5px; width: 18px; height: 18px; border-radius: 6px;
+  background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.calendario-alumno-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .75rem; color: var(--muted); }
+.calendario-alumno-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.calendario-alumno-leyenda i { width: 14px; height: 14px; border-radius: 4px; background: var(--card-2); }
+.calendario-alumno-leyenda i.inasistencia.pendiente { background: var(--bad); }
+.calendario-alumno-leyenda i.inasistencia.justificada { background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad); }
+.calendario-alumno-leyenda i.atraso.pendiente { background: var(--warn); }
+.calendario-alumno-leyenda i.atraso.justificada { background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn); }
+.calendario-alumno-leyenda i.sin-registro { background: transparent; border: 1px dashed var(--muted); }

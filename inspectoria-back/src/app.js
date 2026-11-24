@@ -10,9 +10,13 @@ const redRouter = require('./routes/red');
 const usuariosRouter = require('./routes/usuarios');
 const auditoriaRouter = require('./routes/auditoria');
 const dashboardRouter = require('./routes/dashboard');
+const graficosRouter = require('./routes/graficos');
 const setupRouter = require('./routes/setup');
 const cuentaRouter = require('./routes/cuenta');
 const ajustesRouter = require('./routes/ajustes');
+const registroRouter = require('./routes/registro');
+const exportarRouter = require('./routes/exportar');
+const respaldoRouter = require('./routes/respaldo');
 const { requerirSesion } = require('./middleware/sesion');
 const { requerirRedLocal } = require('./middleware/red_local');
 const { requerirRol } = require('./middleware/roles');
@@ -74,7 +78,11 @@ app.use('/api/cuenta', requerirSesion, cuentaRouter);
 app.use('/api/usuarios', requerirSesion, requerirRol('admin'), usuariosRouter);
 app.use('/api/auditoria', requerirSesion, auditoriaRouter);
 app.use('/api/dashboard', requerirSesion, dashboardRouter);
-app.use('/api/ajustes', requerirSesion, requerirLoopback, requerirRol('admin'), ajustesRouter);
+app.use('/api/graficos', requerirSesion, graficosRouter);
+app.use('/api/registro', requerirSesion, registroRouter);
+app.use('/api/exportar', requerirSesion, exportarRouter);
+app.use('/api/respaldo', requerirSesion, respaldoRouter);
+app.use('/api/ajustes', requerirSesion, requerirLoopback, ajustesRouter);
 app.get('/api/cursos', requerirSesion, (req, res) => {
   try {
     const cursos = require('./db/conexion').prepare(`

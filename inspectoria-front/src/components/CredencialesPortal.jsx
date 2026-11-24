@@ -5,13 +5,15 @@ import {
   olvidarCredencialesPortal,
   probarCredencialesPortal,
 } from '../api.js';
-import CredencialesSheet, { MENSAJES_PORTAL } from './CredencialesSheet.jsx';
+import CredencialesSheet from './CredencialesSheet.jsx';
+import { MENSAJES_PORTAL } from '../portal.js';
 
 const TIMEOUT_MS = 45000;
 const VACIAS = { usuario: '', pass: '', urlPortal: '', recordar: false, enMemoria: false };
 
 // Tarjeta de Ajustes: estado de las credenciales del portal y acciones Modificar / Probar / Olvidar.
-export default function CredencialesPortal() {
+// `version` cambia cuando otra tarjeta (Extracción automática) modifica las credenciales.
+export default function CredencialesPortal({ version = 0 }) {
   const [estadoPortal, setEstadoPortal] = useState('cargando'); // cargando | vacio | ok | invalidas | error
   const [portal, setPortal] = useState(null);
   const [modal, setModal] = useState(null); // null | 'guardar' | 'probar'
@@ -36,13 +38,14 @@ export default function CredencialesPortal() {
     }
   };
 
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    controllerRef.current?.abort();
+  }, []);
+
   useEffect(() => {
     cargarEstadoPortal();
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      controllerRef.current?.abort();
-    };
-  }, []);
+  }, [version]);
 
   const limpiarTimeout = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -146,8 +149,8 @@ export default function CredencialesPortal() {
           {guardadas && <button className="btn peligro" onClick={olvidar}>Olvidar</button>}
         </div>
         {aviso && (
-          <p className="msg" role={aviso.tipo === 'error' ? 'alert' : 'status'} style={{ marginTop: 14,
-            ...(aviso.tipo === 'error' ? { color: 'var(--bad)', background: 'var(--bad-soft)' } : {}) }}>
+          <p className={aviso.tipo === 'error' ? 'msg error' : 'msg'} role={aviso.tipo === 'error' ? 'alert' : 'status'}
+            style={{ marginTop: 14 }}>
             {aviso.texto}
           </p>
         )}

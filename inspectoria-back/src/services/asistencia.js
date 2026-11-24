@@ -1,6 +1,7 @@
 const xlsx = require('xlsx');
 const Database = require('better-sqlite3');
 const { DB_PATH } = require('../db/ruta');
+const { SIN_JUSTIFICAR, sqlJustificado, normalizarJustificativos } = require('./justificativos');
 
 const MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
   agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
@@ -122,18 +123,36 @@ function abrirDb(ruta = DB_PATH) {
         CHECK (estado_documento IN ('PENDIENTE','APROBADO','RECHAZADO')),
       duracion_ms      INTEGER,
       creado_en        TEXT,
+      aplica_a         TEXT,                       -- 'inasistencia' | 'atraso' | NULL (ambos)
+      observacion      TEXT,                       -- columna OBS del Master de registro
       CHECK (fecha_fin >= fecha_inicio)
     );
     CREATE INDEX IF NOT EXISTS idx_just_alumno ON justificativo(rut_alumno, fecha_inicio, fecha_fin);
-
+  `);
+  const columnasJustificativo = db.pragma('table_info(justificativo)');
+  if (!columnasJustificativo.some((columna) => columna.name === 'duracion_ms')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN duracion_ms INTEGER');
+  }
+  if (!columnasJustificativo.some((columna) => columna.name === 'creado_en')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN creado_en TEXT');
+  }
+  if (!columnasJustificativo.some((columna) => columna.name === 'aplica_a')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN aplica_a TEXT');
+  }
+  if (!columnasJustificativo.some((columna) => columna.name === 'observacion')) {
+    db.exec('ALTER TABLE justificativo ADD COLUMN observacion TEXT');
+  }
+  // Las vistas creadas con una regla de justificación anterior se recrean una sola vez
+  for (const vista of ['v_asistencia', 'v_atraso']) {
+    const fila = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?").get(vista);
+    if (fila && !fila.sql.includes(SIN_JUSTIFICAR)) db.exec(`DROP VIEW ${vista}`);
+  }
+  db.exec(`
     -- Vista cómoda: cada fila de asistencia con su alumno, curso y si la ausencia está justificada
     CREATE VIEW IF NOT EXISTS v_asistencia AS
     SELECT a.id_asistencia, al.rut, al.apellidos, al.nombres, c.nombre AS curso,
            m.anio, a.fecha, a.estado,
-           CASE WHEN a.estado = 'A' AND EXISTS (
-                  SELECT 1 FROM justificativo j
-                  WHERE j.rut_alumno = al.rut AND j.estado_documento = 'APROBADO'
-                    AND a.fecha BETWEEN j.fecha_inicio AND j.fecha_fin)
+           CASE WHEN a.estado IN ('A','F') AND ${sqlJustificado('al.rut', 'a.fecha', 'inasistencia')}
                 THEN 1 ELSE 0 END AS justificada
     FROM asistencia a
     JOIN matricula m ON m.id_matricula = a.id_matricula
@@ -151,6 +170,18 @@ function abrirDb(ruta = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS idx_atraso_fecha ON atraso(fecha);
 
+    -- Asistencia por bloque horario ("Asistencia por clase" del portal), extraída de su tabla HTML
+    CREATE TABLE IF NOT EXISTS asistencia_clase (
+      id_asistencia_clase INTEGER PRIMARY KEY,
+      id_matricula INTEGER NOT NULL REFERENCES matricula(id_matricula),
+      fecha        TEXT    NOT NULL,              -- YYYY-MM-DD
+      hora_inicio  TEXT    NOT NULL,              -- HH:MM
+      hora_fin     TEXT    NOT NULL,              -- HH:MM
+      estado       TEXT    NOT NULL CHECK (estado IN ('P','A','T')),
+      UNIQUE (id_matricula, fecha, hora_inicio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asistencia_clase_fecha ON asistencia_clase(fecha);
+
     CREATE TABLE IF NOT EXISTS sync_ejecucion (
       id_ejecucion INTEGER PRIMARY KEY,
       fecha        TEXT    NOT NULL,
@@ -158,14 +189,24 @@ function abrirDb(ruta = DB_PATH) {
     );
     CREATE INDEX IF NOT EXISTS idx_sync_ejecucion_fecha ON sync_ejecucion(fecha);
 
+    -- Gestión de alertas de patrones (Auditar → Alertas). NO se borra al cerrar la app:
+    -- solo guarda qué se hizo con cada alerta, no la asistencia. Sin FK a alumno porque
+    -- esa tabla sí se vacía. clave = rut:tipo:variante
+    CREATE TABLE IF NOT EXISTS alerta_gestion (
+      clave          TEXT PRIMARY KEY,
+      rut            TEXT NOT NULL,
+      estado         TEXT NOT NULL CHECK (estado IN ('revisada','citado','descartada')),
+      nota           TEXT,
+      actualizado_en TEXT NOT NULL,
+      usuario        TEXT
+    );
+
     -- Cada atraso con: estado de asistencia ese día, justificado según el portal
     -- y justificado según TUS justificativos aprobados (para detectar desacuerdos)
     CREATE VIEW IF NOT EXISTS v_atraso AS
     SELECT t.id_atraso, al.rut, al.apellidos, al.nombres, c.nombre AS curso, m.anio,
            t.fecha, t.hora_llegada, t.justificado_portal,
-           EXISTS (SELECT 1 FROM justificativo j
-                   WHERE j.rut_alumno = al.rut AND j.estado_documento = 'APROBADO'
-                     AND t.fecha BETWEEN j.fecha_inicio AND j.fecha_fin) AS justificado_doc,
+           ${sqlJustificado('al.rut', 't.fecha', 'atraso')} AS justificado_doc,
            (SELECT s.estado FROM asistencia s
             WHERE s.id_matricula = m.id_matricula AND s.fecha = t.fecha) AS estado_dia
     FROM atraso t
@@ -173,13 +214,8 @@ function abrirDb(ruta = DB_PATH) {
     JOIN alumno al   ON al.rut = m.rut_alumno
     JOIN curso c     ON c.id_curso = m.id_curso;
   `);
-  const columnasJustificativo = db.pragma('table_info(justificativo)');
-  if (!columnasJustificativo.some((columna) => columna.name === 'duracion_ms')) {
-    db.exec('ALTER TABLE justificativo ADD COLUMN duracion_ms INTEGER');
-  }
-  if (!columnasJustificativo.some((columna) => columna.name === 'creado_en')) {
-    db.exec('ALTER TABLE justificativo ADD COLUMN creado_en TEXT');
-  }
+  // Limpia duplicados de justificativos guardados antes de que se sobrescribieran (solo si hay)
+  transaccion(db, () => normalizarJustificativos(db));
   return db;
 }
 
