@@ -39,6 +39,30 @@ function atenderInicioWindows(proceso, message) {
   }
 }
 
+// "Buscar carpeta…" de la copia externa de respaldos (routes/respaldo.js → /elegir-carpeta)
+async function atenderElegirCarpeta(proceso, message) {
+  if (message?.type !== 'respaldo:elegir-carpeta') return;
+  let ruta = null;
+  try {
+    const opciones = {
+      title: 'Carpeta para la copia de respaldo',
+      buttonLabel: 'Elegir carpeta',
+      properties: ['openDirectory', 'createDirectory'],
+    };
+    const { canceled, filePaths } = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, opciones)
+      : await dialog.showOpenDialog(opciones);
+    if (!canceled && filePaths?.[0]) ruta = filePaths[0];
+  } catch (error) {
+    console.error('Elegir carpeta de respaldo:', error.message);
+  }
+  try {
+    if (proceso.connected) proceso.send({ type: 'respaldo:carpeta', ruta });
+  } catch (error) {
+    console.error('Elegir carpeta de respaldo:', error.message);
+  }
+}
+
 function startBackend() {
   // En desarrollo el back lo corres tú con "npm run dev" (usa tu Node normal)
   if (!app.isPackaged) return;
@@ -69,7 +93,10 @@ function startBackend() {
   proceso.stdout.on('data', (d) => console.log('[back]', d.toString()));
   proceso.stderr.on('data', (d) => console.error('[back]', d.toString()));
   proceso.on('error', (error) => console.error('Error del backend:', error.message));
-  proceso.on('message', (message) => atenderInicioWindows(proceso, message));
+  proceso.on('message', (message) => {
+    atenderInicioWindows(proceso, message);
+    atenderElegirCarpeta(proceso, message);
+  });
   proceso.on('exit', (code) => {
     console.log('Backend terminó con código', code);
     backend = null;

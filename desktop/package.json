@@ -11,8 +11,7 @@
     "pack": "npm run build:front && npm run prepare:back && electron-builder --dir",
     "dist": "npm run build:front && npm run prepare:back && electron-builder",
     "dist:win": "npm run build:front && npm run prepare:back && electron-builder --win",
-    "dist:linux": "npm run build:front && npm run prepare:back && electron-builder --linux",
-    "//dist:linux": "Correr dist:linux en Linux: better-sqlite3 se compila para el sistema donde se ejecuta prepare-back"
+    "dist:linux": "npm run build:front && npm run prepare:back && electron-builder --linux"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",
@@ -51,7 +50,7 @@
       }
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "icon": "assets/icons/icon.ico"
     },
     "linux": {
