@@ -18,7 +18,8 @@ import { coincide, formatearRut, plural } from '../texto.js';
 //   atrasosTotal / pendientesTotal = lo mismo, pero de todo el año descargado
 // "Al día" = no le queda nada sin justificar en todo el año (no solo en el período).
 // Período: por defecto "Este mes" (igual que "Reincidencias" en Inicio); así los números no
-// suman todo el año. En la URL: ?periodo=mes o ?periodo=personalizado&desde=&hasta=
+// suman todo el año. "Todos" muestra solo a quienes tienen algo pendiente en el período.
+// En la URL: ?periodo=mes o ?periodo=personalizado&desde=&hasta=
 // Filtro = estado (chips). Con inasistencias o atrasos se elige además un rango de cantidad
 // con el slider (ej. de 3 a 20). En la URL: ?filtro=atrasos&min=3&max=20
 const CHIPS = [
@@ -50,9 +51,6 @@ const PERIODO_STORAGE_KEY = 'inspectoria.alumnos.periodo';
 
 // Sin inasistencias ni atrasos sin justificar en todo el año descargado
 const alDia = (a) => (a.pendientesTotal ?? a.pendientes) === 0 && (a.atrasosTotal ?? a.atrasos) === 0;
-// Sin pendientes en el período, pero sí en otras fechas del año
-const pendientesFuera = (a) => (a.pendientes === 0 && a.atrasos === 0
-  ? (a.pendientesTotal ?? 0) + (a.atrasosTotal ?? 0) : 0);
 
 const PERIODOS_ALUMNOS = PERIODOS.filter((o) => ['mes', 'mesAnterior', '30dias', 'anio', 'personalizado'].includes(o.id));
 const PERIODO_INICIAL = 'mes';
@@ -82,6 +80,7 @@ function rangoGuardado() {
 // Sin alumnos que mostrar con los filtros actuales: mensaje según el chip elegido
 // (con búsqueda o curso, el mensaje general y el botón para limpiar)
 const SIN_RESULTADOS = {
+  todos: ['Nadie tiene pendientes', 'No hay inasistencias ni atrasos sin justificar en este período.'],
   ok: ['Nadie está al día', 'Todos los alumnos tienen al menos una inasistencia o un atraso sin justificar en el año.'],
   inasist: ['Nadie tiene inasistencias pendientes', 'No hay inasistencias sin justificar en este período.'],
   atrasos: ['Nadie tiene atrasos pendientes', 'No hay atrasos sin justificar en este período.'],
@@ -249,7 +248,7 @@ export default function Students() {
     return alumnos.filter((a) =>
       coincide(q, a.rut, a.nombres, a.apellidos, a.curso) &&
       (!curso || a.curso === curso) &&
-      (base === 'todos' ||
+      ((base === 'todos' && (a.pendientes > 0 || a.atrasos > 0)) ||
         (base === 'inasist' && enRango(a.pendientes)) ||
         (base === 'atrasos' && enRango(a.atrasos)) ||
         (base === 'ok' && alDia(a))));
@@ -360,12 +359,6 @@ export default function Students() {
                   </span>
                 )}
                 {alDia(a) && <span className="tag ok">Al día</span>}
-                {pendientesFuera(a) > 0 && (
-                  <span className="tag" style={{ color: 'var(--muted)' }}
-                    title="Nada pendiente en este período, pero sí en otras fechas del año">
-                    {plural(pendientesFuera(a), 'pendiente')} en otras fechas
-                  </span>
-                )}
               </div>
             </Link>))}</div>}
     </>

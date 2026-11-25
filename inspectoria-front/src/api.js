@@ -216,7 +216,7 @@ async function descargarArchivo(path, nombrePorDefecto) {
   return {
     blob: await response.blob(),
     nombre: simple?.[1] || nombrePorDefecto,
-    // 'contrasena' | 'equipo' | 'plano': con 'equipo' el archivo solo se restaura en este PC
+    // 'app' | 'contrasena' | 'equipo' | 'plano': con 'equipo' (antiguos) solo se restaura en este PC
     clave: response.headers.get('x-respaldo-clave') || null,
   };
 }
@@ -241,22 +241,37 @@ export function restaurarRespaldo(archivo, contrasena) {
   });
 }
 
-// { conContrasena, carpetaExterna, minContrasena } (admin, solo desde el PC)
+// { conContrasena, carpetaExterna, minContrasena, intervaloMin, intervalos, proximoRespaldo,
+//   ultimaRevision, ultimoResultado, selectorCarpeta } (solo desde el PC)
 export function getConfigRespaldo() {
   return request('/respaldo/config');
 }
 
-// { contrasena?, carpetaExterna? } → misma forma que getConfigRespaldo
+// { contrasena? (null la quita), carpetaExterna? ('' la quita), intervaloMin? } → misma forma que getConfigRespaldo
 export function setConfigRespaldo(cambios) {
   return request('/respaldo/config', { method: 'PUT', body: JSON.stringify(cambios) });
+}
+
+// Abre el diálogo de carpeta de la app de escritorio → configuración (con `cancelado: true` si se cerró)
+export function elegirCarpetaRespaldo() {
+  return request('/respaldo/elegir-carpeta', { method: 'POST' });
 }
 
 export function listarRespaldosAutomaticos() {
   return request('/respaldo/automaticos');
 }
 
-export function descargarRespaldoAutomatico(nombre) {
-  return descargarArchivo(`/respaldo/automaticos/${encodeURIComponent(nombre)}`, nombre);
+// "Guardar copia ahora" → { archivo, resultado: 'creado' | 'sin_cambios' }
+export function guardarCopiaAhora() {
+  return request('/respaldo/automaticos', { method: 'POST' });
+}
+
+// Recupera una copia de la lista; mismos errores y respuesta que restaurarRespaldo
+export function recuperarCopiaGuardada(nombre, contrasena) {
+  return request(`/respaldo/automaticos/${encodeURIComponent(nombre)}/restaurar`, {
+    method: 'POST',
+    headers: contrasena ? { 'X-Clave-Respaldo': encodeURIComponent(contrasena) } : {},
+  });
 }
 
 export function iniciarSync(credenciales, options = {}) {

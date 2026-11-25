@@ -10,7 +10,7 @@ import Segmented from '../components/Segmented.jsx';
 import Chips from '../components/Chips.jsx';
 import CredencialesPortal from '../components/CredencialesPortal.jsx';
 import ExtraccionAutomatica from '../components/ExtraccionAutomatica.jsx';
-import RespaldoInformacion from '../components/RespaldoInformacion.jsx';
+import CopiasSeguridad from '../components/CopiasSeguridad.jsx';
 import QrInicioSesion from '../components/QrInicioSesion.jsx';
 
 // Opciones del selector de paleta, con una muestra de color antes del nombre
@@ -123,6 +123,7 @@ export default function Settings() {
     <div className="dash">
       <h2>Ajustes</h2>
 
+      {/* ── Conectar desde el teléfono (solo PC) ── */}
       {esPc && (
         <section className="card">
           <div className="row">
@@ -152,14 +153,15 @@ export default function Settings() {
             <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
           )}
         </section>
-      )}      
+      )}
 
+      {/* ── Extracción automática (components/ExtraccionAutomatica.jsx) ── */}
       <ExtraccionAutomatica onSincronizado={() => setVersionPortal((v) => v + 1)} />
 
+      {/* ── Credenciales del portal (components/CredencialesPortal.jsx, solo PC) ── */}
       {esPc && <CredencialesPortal version={versionPortal} />}
 
-      <RespaldoInformacion />
-
+      {/* ── Apariencia ── */}
       <section className="card">
         <h2>Apariencia</h2>
         <p className="muted">Se guarda solo en este dispositivo.</p>
@@ -171,6 +173,7 @@ export default function Settings() {
         <Segmented opciones={TAMANOS} valor={texto} onChange={cambiarTexto} />
       </section>
 
+      {/* ── Inicio con Windows (solo en la app instalada) ── */}
       {esPc && inicioWindows?.disponible && (
         <section className="card">
           <div className="row">
@@ -189,6 +192,7 @@ export default function Settings() {
         </section>
       )}
 
+      {/* ── Sincronización: mostrar navegador (admin, solo PC) ── */}
       {esAdmin && esPc && (
         <section className="card">
           <div className="row">
@@ -204,6 +208,9 @@ export default function Settings() {
           </div>
         </section>
       )}
+
+      {/* ── Copias de seguridad (components/CopiasSeguridad.jsx) ── */}
+      <CopiasSeguridad />
 
       {mensaje && <p className="msg" role="status">{mensaje}</p>}
       {error && <p className="msg" style={{ color: 'var(--bad)' }} role="alert">{error}</p>}
