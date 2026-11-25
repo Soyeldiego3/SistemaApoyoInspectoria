@@ -4,21 +4,20 @@
 
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
-- Pantalla de carga ante de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
-
-- Asegurarse que la conexion con el backend es seguro. y no existen urls ni nada sin protejer ni asegurar.
-
-- evitar subir archivos que no sean excel y asegurar medidas de control para evitar posibles ejecuciones de codigo malisioso.
+- Pantalla de carga antes de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
 
 - revisar que las consultas sql sean statements para evitar la inyeccion sql.
 
 - Al no tener usuario creado en la bd. mostar crear usuario primero al abrir el programa.
+
 
 ## En progreso
 
 
 
 ## Completado
+
+- En alumnos al filtrar por "este mes" no deberian salir alumnos con justificaiones pendientes de otros meses. agregar filtro para ver todos aparte. 
 
 - Vista tipo calendario en estudent detail. poder alternar entre vista lista, calendario 
 

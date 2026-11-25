@@ -11,6 +11,6 @@ Sistema de Apoyo para la auditoria y registro de justificaciones para la asisten
 
 2. npm install
 
-3. npm run pack
+3. npm run dist
 
 esto generara nuevas carpetas, en la llamada "release" se guardan los datos y el archivo ejecutable del sistema. 
