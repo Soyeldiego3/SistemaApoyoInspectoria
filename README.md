@@ -1,7 +1,7 @@
 # SistemaApoyoInspectoria
 Sistema de Apoyo para la auditoria y registro de justificaciones para la asistencia de los alumnos.
 
-- Implementacion de Playwright para la extraccion de datos desde el portal institucional.
+- Implementacion de [Playwright](https://github.com/microsoft/playwright) en el backend para la extraccion de datos desde el portal institucional.
 - Diferentes vistas para el analisis de la asitencia y atrasos de los alumnos.
 - Vista de Auditoria para facilitar la identitifacion de patrones que podrian afectar a la convivencia escolar.
 
