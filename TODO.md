@@ -4,11 +4,12 @@
 
 - mostrar porcentaje de asistencia anual y mensual por alumno.
 
-- Pantalla de carga antes de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
+
 
 - revisar que las consultas sql sean statements para evitar la inyeccion sql.
 
 - Al no tener usuario creado en la bd. mostar crear usuario primero al abrir el programa.
+
 
 
 ## En progreso
@@ -16,6 +17,10 @@
 
 
 ## Completado
+
+- Pantalla de carga antes de abrir la app. como demora un poco en cargar agregar una pantalla de carga similar a discord antes de inciar el sitema real ?
+
+- Al iniciar con windows, luego de reiniciar al inciar por primera vez da error: No se pudo iniciar el servidor interno. 
 
 - En alumnos al filtrar por "este mes" no deberian salir alumnos con justificaiones pendientes de otros meses. agregar filtro para ver todos aparte. 
 

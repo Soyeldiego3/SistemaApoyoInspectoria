@@ -12,7 +12,9 @@ iniciarServidor();
 // (corte de luz, cierre forzado), por eso también al iniciar.
 const respaldar = respaldoProgramado.respaldarAhora;
 
-respaldar({ soloSiFaltaHoy: true });
+// Se deja pasar unos segundos: el respaldo es síncrono (lee, descifra y compara el último)
+// y, si corre apenas se abre, bloquea al servidor justo cuando la ventana espera /api/salud
+setTimeout(() => respaldar({ soloSiFaltaHoy: true }), 3000);
 respaldoProgramado.iniciar();
 
 process.on('unhandledRejection', (reason) => {
