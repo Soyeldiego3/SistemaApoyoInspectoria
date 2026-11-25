@@ -9,4 +9,6 @@ Sistema de Apoyo para la auditoria y registro de justificaciones para la asisten
 
 3. npm run dist
 
-esto generara nuevas carpetas, en la llamada "release" se guardan los datos y el archivo ejecutable del sistema. 
+Esto generara nuevas carpetas, .\SistemaApoyoInspectoria\desktop\release\Apoyo Inspectoria Setup 1.X.X.exe
+
+Aqui se guardan los datos y el instalador del sistema. 
