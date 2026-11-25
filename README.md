@@ -1,5 +1,9 @@
 # SistemaApoyoInspectoria
-Sistema de Apoyo para la auditoria y registro de justificaciones para la asistencia de los alumnos
+Sistema de Apoyo para la auditoria y registro de justificaciones para la asistencia de los alumnos.
+
+- Implementacion de Playwright para la extraccion de datos desde el portal institucional.
+- Diferentes vistas para el analisis de la asitencia y atrasos de los alumnos.
+- Vista de Auditoria para facilitar la identitifacion de patrones que podrian afectar a la convivencia escolar.
 
 ![Vista Demo del Proyecto](./demos/demo_dark.png)
 
@@ -13,4 +17,6 @@ Sistema de Apoyo para la auditoria y registro de justificaciones para la asisten
 
 3. npm run dist
 
-esto generara nuevas carpetas, en la llamada "release" se guardan los datos y el archivo ejecutable del sistema. 
+Esto generara nuevas carpetas, .\SistemaApoyoInspectoria\desktop\release\Apoyo Inspectoria Setup 1.X.X.exe
+
+Aqui se guardan los datos y el instalador del sistema. 
