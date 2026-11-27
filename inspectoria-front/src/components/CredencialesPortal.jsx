@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import {
   getCredencialesPortal,
   guardarCredencialesPortal,
@@ -6,6 +7,7 @@ import {
   probarCredencialesPortal,
 } from '../api.js';
 import CredencialesSheet from './CredencialesSheet.jsx';
+import GridLoader from './GridLoader.jsx';
 import { MENSAJES_PORTAL } from '../portal.js';
 
 const TIMEOUT_MS = 45000;
@@ -19,6 +21,7 @@ export default function CredencialesPortal({ version = 0 }) {
   const [modal, setModal] = useState(null); // null | 'guardar' | 'probar'
   const [credenciales, setCredenciales] = useState(VACIAS);
   const [procesando, setProcesando] = useState(false);
+  const [probando, setProbando] = useState(false);
   const [mensajeModal, setMensajeModal] = useState('');
   const [aviso, setAviso] = useState(null); // { tipo: 'ok' | 'error', texto }
   const passRef = useRef(null);
@@ -110,6 +113,21 @@ export default function CredencialesPortal({ version = 0 }) {
     setCredenciales((actuales) => ({ ...actuales, pass: '' }));
   };
 
+  // Con credenciales guardadas o en memoria se prueban directo, sin pedirlas de nuevo
+  const probarGuardadas = async () => {
+    setProbando(true);
+    setAviso(null);
+    try {
+      await probarCredencialesPortal(null);
+      setAviso({ tipo: 'ok', texto: 'Conexión al portal verificada.' });
+      await cargarEstadoPortal();
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: textoError(e) });
+    } finally {
+      setProbando(false);
+    }
+  };
+
   const olvidar = async () => {
     if (!window.confirm('¿Olvidar las credenciales guardadas y en memoria?')) return;
     try {
@@ -142,10 +160,19 @@ export default function CredencialesPortal({ version = 0 }) {
             </p>
           )}
           {portal?.urlPortal && <p className="muted">Portal: {portal.urlPortal}</p>}
+          {portal?.urlAbrir && (
+            <a className="linkbtn" href={portal.urlAbrir} target="_blank" rel="noreferrer" style={{ marginTop: 6 }}>
+              <ExternalLink size={14} /> Abrir portal en el navegador
+            </a>
+          )}
         </div>
         <div className="portal-acciones">
           <button className="btn" onClick={() => abrirModal('guardar')}>Modificar</button>
-          <button className="btn outline" onClick={() => abrirModal('probar')}>Probar conexión</button>
+          <button className={probando ? 'btn outline sincronizando' : 'btn outline'} disabled={probando}
+            onClick={() => (guardadas ? probarGuardadas() : abrirModal('probar'))}>
+            {probando && <GridLoader pequeno />}
+            {probando ? 'Probando…' : 'Probar conexión'}
+          </button>
           {guardadas && <button className="btn peligro" onClick={olvidar}>Olvidar</button>}
         </div>
         {aviso && (

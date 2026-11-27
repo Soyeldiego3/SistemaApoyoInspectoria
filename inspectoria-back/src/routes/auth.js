@@ -10,7 +10,7 @@ const router = express.Router();
 router.post('/login', (req, res) => {
   const { usuario, password } = req.body ?? {};
   if (!usuarios.hayUsuarios()) {
-    return res.status(500).json({ error: 'No hay usuarios creados. En el servidor ejecuta: npm run usuario -- crear <nombre>' });
+    return res.status(500).json({ error: 'No hay usuarios creados.' });
   }
   if (typeof usuario !== 'string' || typeof password !== 'string' || !usuario.trim() || !password) {
     return res.status(400).json({ error: 'Ingresa tu usuario y tu contraseña.' });

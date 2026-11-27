@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, dialog, Menu, nativeTheme, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -251,7 +251,11 @@ function createWindow() {
     },
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Los enlaces externos (p. ej. "Abrir portal") se abren en el navegador del sistema
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   mainWindow.webContents.on('will-navigate', (event, url) => {
     try {
       const destino = new URL(url);

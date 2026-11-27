@@ -1,6 +1,6 @@
 const express = require('express');
 const credenciales = require('../services/credenciales_portal');
-const { probarConexion } = require('../extractores/sesion_portal');
+const { probarConexion, URL_PORTAL_POR_DEFECTO } = require('../extractores/sesion_portal');
 const auditoria = require('../services/auditoria_sistema');
 
 const router = express.Router();
@@ -36,6 +36,8 @@ router.get('/credenciales', (req, res) => {
       guardadas: Boolean(disco),
       usuario: disponibles?.usuario || null,
       urlPortal: disponibles?.urlPortal || null,
+      // URL que se abre en el navegador para comprobar que el portal responde
+      urlAbrir: disponibles?.urlPortal || process.env.PORTAL_URL || URL_PORTAL_POR_DEFECTO,
       invalidas: Boolean(disponibles?.invalidas),
       enMemoria: Boolean(memoria),
     });
@@ -90,8 +92,11 @@ router.put('/credenciales', async (req, res) => {
   }
 
   try {
-    await probarConexion({ usuario: usuario.trim(), pass, urlPortal });
-    credenciales.guardar({ usuario: usuario.trim(), pass, urlPortal });
+    const datos = { usuario: usuario.trim(), pass, urlPortal };
+    await probarConexion(datos);
+    // Si estaban solo en memoria, siguen solo en memoria
+    if (!credenciales.existe() && credenciales.leerEnMemoria()) credenciales.guardarEnMemoria(datos);
+    else credenciales.guardar(datos);
     auditoria.registrar('portal.credenciales_modificadas', req.usuario.nombre, {});
     return res.json({ ok: true, mensaje: 'Credenciales guardadas.' });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import GridLoader from './GridLoader.jsx';
 
 // Panel con el formulario de credenciales del portal.
 // accion: 'sync' (sincronizar con estas credenciales) | 'probar' | 'guardar'
@@ -41,7 +42,8 @@ export default function CredencialesSheet({
               value={credenciales.pass}
               ref={passRef}
               onChange={(e) => setCredenciales({ ...credenciales, pass: e.target.value })}
-              autoComplete="current-password" style={{ paddingRight: 48 }} />
+              autoComplete="current-password" style={{ paddingRight: 48 }}
+              placeholder={accion === 'guardar' && guardadas ? 'Guardada · escribe una nueva para cambiarla' : undefined} />
             <button type="button" className="iconbtn" onClick={() => setMostrarPass(!mostrarPass)}
               aria-label={mostrarPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               style={{ position: 'absolute', right: 12, top: 12 }}>
@@ -72,7 +74,8 @@ export default function CredencialesSheet({
           </>
         )}
         {mensajeError && <p role="alert" style={{ color: 'var(--bad)', fontSize: '.9rem' }}>{mensajeError}</p>}
-        <button className="btn" disabled={procesando}>
+        <button className={procesando ? 'btn sincronizando' : 'btn'} disabled={procesando}>
+          {procesando && <GridLoader pequeno />}
           {procesando ? 'Procesando…' :
             accion === 'probar' ? 'Probar conexión' :
             accion === 'guardar' ? (sincronizaAlGuardar ? 'Guardar y sincronizar' : 'Guardar y verificar') :

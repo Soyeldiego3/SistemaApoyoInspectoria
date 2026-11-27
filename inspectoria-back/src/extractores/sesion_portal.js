@@ -198,4 +198,4 @@ async function irAMenu(page, clave) {
   }
 }
 
-module.exports = { abrirSesion, probarConexion, irAMenu };
+module.exports = { abrirSesion, probarConexion, irAMenu, URL_PORTAL_POR_DEFECTO };

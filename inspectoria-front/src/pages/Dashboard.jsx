@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import KpiCard from '../components/KpiCard.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import BarsChart from '../components/BarsChart.jsx';
+import GridLoader from '../components/GridLoader.jsx';
 import { getDashboard } from '../api.js';
 import { useDetalleSync } from '../detalleSync.js';
 import {
@@ -98,18 +99,20 @@ export default function Dashboard() {
               'Sin datos sincronizados todavía'}
           </p>
           <div className="inicio-acciones">
-            {syncEstado === 'error' || syncEstado === 'cargando' || (!esPc && syncEstado !== 'requiere') ? (
-              <button type="button" className="btn dark" style={{ width: 'auto' }}
-                onClick={reintentar} disabled={syncEstado === 'cargando'}>
-                <RefreshCw size={15} className={syncEstado === 'cargando' ? 'audit-spin' : undefined}
-                  style={{ verticalAlign: -2, marginRight: 5 }} />
+            {syncEstado !== 'requiere' ? (
+              <button type="button" className={syncEstado === 'cargando' ? 'btn dark sincronizando' : 'btn dark'}
+                style={{ width: 'auto' }} onClick={reintentar} disabled={syncEstado === 'cargando'}>
+                {syncEstado === 'cargando'
+                  ? <GridLoader pequeno />
+                  : <RefreshCw size={15} style={{ verticalAlign: -2, marginRight: 5 }} />}
                 {syncEstado === 'cargando' ? 'Sincronizando…'
-                  : syncEstado === 'error' ? 'Reintentar' : 'Sincronizar en el PC'}
+                  : syncEstado === 'error' ? 'Reintentar'
+                  : !esPc ? 'Sincronizar en el PC' : 'Sincronizar ahora'}
               </button>
             ) : (
-              <Link to="/ajustes" state={{ abrirCredenciales: syncEstado === 'requiere', accionModal: 'sync' }}
+              <Link to="/ajustes" state={{ abrirCredenciales: true, accionModal: 'sync' }}
                 className="btn dark" style={{ width: 'auto' }}>
-                {syncEstado === 'requiere' ? 'Configurar credenciales' : 'Ir a Sincronizar'}
+                Configurar credenciales
               </Link>
             )}
           </div>
