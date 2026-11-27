@@ -1,7 +1,8 @@
 // Exportar datos (ventana "Exportar / Importar"): asistencia y atrasos en Excel o PDF,
 // y el Master de inasistencias justificadas (Excel; con todos los cursos, un ZIP).
 // Siempre del año escolar más reciente.
-const ExcelJS = require('exceljs');
+// exceljs se carga recién al usarlo (es pesado y alarga el arranque del backend)
+const ExcelJS = { get Workbook() { return require('exceljs').Workbook; } };
 const JSZip = require('jszip');
 const PDFDocument = require('pdfkit');
 const { ErrorRegistro, exportarMaster } = require('./registroMaster');

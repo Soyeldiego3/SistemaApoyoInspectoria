@@ -7,7 +7,8 @@
 //           C = código 1..6, D = fórmula con el texto, O = observación.
 // Solo inasistencias: los atrasos no forman parte de este formato.
 const path = require('path');
-const ExcelJS = require('exceljs');
+// exceljs se carga recién al usarlo (es pesado y alarga el arranque del backend)
+const ExcelJS = { get Workbook() { return require('exceljs').Workbook; } };
 const XLSX = require('xlsx');
 const {
   CODIGOS, sinTildes, codigoDeTipo, sqlUltimoTipo, recortarSuperpuestos,

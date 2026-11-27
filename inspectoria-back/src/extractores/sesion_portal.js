@@ -1,4 +1,5 @@
-const { chromium, firefox } = require('playwright');
+// playwright es pesado: se carga recién al abrir el navegador, no al iniciar el backend
+const playwright = () => require('playwright');
 const configuracion = require('../services/configuracion');
 
 const URL_PORTAL_POR_DEFECTO = 'http://50.19.6.170:8080';
@@ -69,12 +70,12 @@ function candidatosNavegador() {
   if (process.platform !== 'linux') {
     candidatos.push({
       nombre: 'Microsoft Edge',
-      lanzar: () => chromium.launch({ channel: 'msedge', headless }),
+      lanzar: () => playwright().chromium.launch({ channel: 'msedge', headless }),
     });
   }
   candidatos.push({
     nombre: 'Firefox',
-    lanzar: () => firefox.launch({ headless }),
+    lanzar: () => playwright().firefox.launch({ headless }),
   });
   return candidatos;
 }

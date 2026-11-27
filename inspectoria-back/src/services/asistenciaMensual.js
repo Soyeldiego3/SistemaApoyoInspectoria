@@ -14,7 +14,8 @@
 // También se importa el Excel mensual que descarga la sincronización (A2 "Curso 7°A · Julio
 // 2026 · …", con RUT), reutilizando parsearAsistencia/guardar.
 const path = require('path');
-const ExcelJS = require('exceljs');
+// exceljs se carga recién al usarlo (es pesado y alarga el arranque del backend)
+const ExcelJS = { get Workbook() { return require('exceljs').Workbook; } };
 const JSZip = require('jszip');
 const XLSX = require('xlsx');
 const { sinTildes } = require('./justificativos');
