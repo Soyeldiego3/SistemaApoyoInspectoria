@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import NumberFlow from '@number-flow/react';
 import BarsChart from '../components/BarsChart.jsx';
 import DonutChart from '../components/DonutChart.jsx';
 import CalendarioInasistencias from '../components/CalendarioInasistencias.jsx';
@@ -239,7 +240,9 @@ export default function Charts() {
                           <div className="row">
                             <b>{a.nombres} {a.apellidos}</b>
                             {/* 85 %: mínimo de asistencia para la promoción */}
-                            <span className={`tag ${a.asistencia < 85 ? 'bad' : 'ok'}`}>{a.asistencia}%</span>
+                            <span className={`tag ${a.asistencia < 85 ? 'bad' : 'ok'}`}>
+                              <NumberFlow value={a.asistencia} suffix="%" locales="en-US" format={{ maximumFractionDigits: 1 }} />
+                            </span>
                           </div>
                           <div className="bar"><i style={{ width: `${a.asistencia}%`, background: 'var(--graf-1)' }} /></div>
                         </Link>
@@ -263,7 +266,7 @@ export default function Charts() {
               </button>
             </div>
             <p className="muted" style={{ margin: '6px 0 8px' }}>
-              Top {top.length || 5} alumnos · {topTipo === 'atrasos' ? '1' : '2'} de 2
+              Top <NumberFlow value={top.length || 5} /> alumnos · <NumberFlow value={topTipo === 'atrasos' ? 1 : 2} /> de 2
             </p>
             {top.length ? (
               <div className="list">
@@ -272,7 +275,7 @@ export default function Charts() {
                     state={{ returnTo: '/graficos', returnLabel: 'Gráficos' }} className="item" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6, background: 'var(--card-2)' }}>
                     <div className="row">
                       <span><b>{a.nombres} {a.apellidos}</b><span className="muted">{a.curso}</span></span>
-                      <span className={`tag ${configTop.tag}`}>{a[configTop.campo]}</span>
+                      <span className={`tag ${configTop.tag}`}><NumberFlow value={a[configTop.campo]} /></span>
                     </div>
                     <div className="bar"><i style={{ width: `${a[configTop.campo] / maxTop * 100}%`, background: configTop.color }} /></div>
                   </Link>

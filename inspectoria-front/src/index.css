@@ -498,3 +498,65 @@ button.calendario-dia.sel:hover { outline-color: var(--accent); outline-offset: 
 .calendario-alumno-leyenda i.atraso.pendiente { background: var(--warn); }
 .calendario-alumno-leyenda i.atraso.justificada { background: var(--warn-soft); box-shadow: inset 0 0 0 1px var(--warn); }
 .calendario-alumno-leyenda i.sin-registro { background: transparent; border: 1px dashed var(--muted); }
+
+/* ---------- Login (clases propias: no tocan .card/.btn/.input que usan otras páginas) ---------- */
+/* Colores propios del login: oscuros por defecto; el modo claro los reemplaza por los del tema.
+   Lo azul (logo, botón, foco) sigue a la paleta con var(--accent). */
+.login-pantalla {
+  --lg-fondo: #141416; --lg-tarjeta: #222226; --lg-borde: #34343a; --lg-texto: #fff;
+  --lg-suave: #9a9aa0; --lg-label: #b4b4ba; --lg-icono: #8a8a92; --lg-pie: #74747c;
+  --lg-input: #2c2c31; --lg-input-borde: #3a3a40; --lg-sombra: rgba(0,0,0,.45); --lg-hover: rgba(255,255,255,.05);
+}
+:root[data-modo="claro"] .login-pantalla {
+  --lg-fondo: var(--page); --lg-tarjeta: var(--card); --lg-borde: var(--line); --lg-texto: var(--text);
+  --lg-suave: var(--muted); --lg-label: var(--muted); --lg-icono: var(--muted); --lg-pie: var(--muted);
+  --lg-input: var(--card-2); --lg-input-borde: var(--line); --lg-sombra: var(--shadow); --lg-hover: var(--hover);
+}
+.login-pantalla { min-height: 100dvh; display: grid; place-items: center; padding: 20px;
+  background: radial-gradient(900px 500px at 50% -10%, color-mix(in srgb, var(--accent) 35%, transparent) 0%, transparent 60%), var(--lg-fondo); }
+.login-tarjeta { width: 100%; max-width: 400px; display: grid; gap: 16px; color: var(--lg-texto);
+  background: var(--lg-tarjeta); border: 1px solid var(--lg-borde); border-radius: 24px; padding: 36px 32px;
+  box-shadow: 0 24px 60px var(--lg-sombra); }
+/* Margen inferior 10px + gap 16px = 26px bajo el subtítulo */
+.login-encabezado { text-align: center; margin-bottom: 10px; }
+.login-logo { width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 18px; display: grid; place-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 80%, #fff), var(--accent));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 35%, transparent); }
+.login-titulo { font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; }
+.login-subtitulo { color: var(--lg-suave); font-size: .9rem; margin: 6px 0 0; }
+.login-aviso { color: var(--lg-label); font-size: .85rem; margin-top: 10px; }
+.login-campo { display: grid; gap: 6px; }
+.login-campo label { font-size: .8rem; color: var(--lg-label); }
+.login-control { position: relative; }
+.login-icono { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--lg-icono); pointer-events: none; }
+.login-input { width: 100%; height: 48px; padding: 0 44px; border-radius: 14px; border: 1px solid var(--lg-input-borde);
+  background: var(--lg-input); color: var(--lg-texto); font: inherit; }
+.login-input::placeholder { color: var(--lg-pie); }
+.login-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+.login-input:disabled { opacity: .7; }
+.login-ver { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px;
+  display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--lg-icono); cursor: pointer; }
+.login-ver:hover { color: var(--lg-texto); }
+.login-ver:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.login-error { color: var(--bad); font-size: .9rem; }
+.login-btn { width: 100%; height: 50px; margin-top: 6px; border: 0; border-radius: 14px; color: var(--on-accent); font: inherit; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, #fff), var(--accent));
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent); }
+.login-btn:disabled { opacity: .6; cursor: progress; }
+.login-btn.exito, .login-btn.exito:disabled { opacity: 1; color: #fff; background: linear-gradient(180deg, #3adba6, #22c08c); box-shadow: 0 8px 20px rgba(34,192,140,.3); }
+.login-btn-secundario { width: 100%; height: 46px; border: 1px solid var(--lg-input-borde); border-radius: 14px; background: transparent;
+  color: var(--lg-texto); font: inherit; font-weight: 600; cursor: pointer; }
+.login-btn-secundario:hover { background: var(--lg-hover); }
+/* Margen superior 8px + gap 16px = 24px bajo el botón */
+.login-pie { text-align: center; color: var(--lg-pie); font-size: .75rem; margin-top: 8px; }
+@media (max-width: 380px) { .login-tarjeta { padding: 30px 22px; } }
+
+/* Animaciones del login: entrada de la tarjeta, trazo del check y salida tras el login correcto */
+@media (prefers-reduced-motion: no-preference) {
+  .login-tarjeta { animation: login-entrada .5s ease-out; transition: opacity .45s ease, transform .45s ease; }
+  .login-tarjeta.saliendo { opacity: 0; transform: translateY(-12px) scale(.97); }
+  .login-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: login-trazo .35s ease-out forwards; }
+  @keyframes login-entrada { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+  @keyframes login-trazo { to { stroke-dashoffset: 0; } }
+}

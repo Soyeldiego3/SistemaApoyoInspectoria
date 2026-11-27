@@ -1,3 +1,4 @@
+import NumberFlow from '@number-flow/react';
 import { Skeleton } from './Skeleton.jsx';
 import { fechaLocal } from '../fechas.js';
 
@@ -64,7 +65,7 @@ export default function CalendarioInasistencias({ desde, hasta, dias = [], onEle
             <>
               {nivel >= 0 && <i className="intensidad" style={{ opacity: NIVELES[nivel] }} />}
               <span style={nivel >= 2 ? { color: 'var(--on-accent)' } : undefined}>{numeroDia}</span>
-              <b style={nivel >= 2 ? { color: 'var(--on-accent)' } : undefined}>{n} <small className="calendario-unidad">inas.</small></b>
+              <b style={nivel >= 2 ? { color: 'var(--on-accent)' } : undefined}><NumberFlow value={n} /> <small className="calendario-unidad">inas.</small></b>
             </>
           );
           // Solo los días con inasistencias se pueden abrir para ver los alumnos
