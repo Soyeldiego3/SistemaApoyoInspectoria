@@ -338,7 +338,8 @@ function desempaquetar(buffer, contrasena) {
   }
   try {
     const comprimido = descifrar(archivo, secreto, ETIQUETA_RESPALDO);
-    return JSON.parse(zlib.gunzipSync(comprimido).toString('utf8'));
+    // Tope al descomprimir: un archivo pequeño no puede expandirse a GB y tumbar la app
+    return JSON.parse(zlib.gunzipSync(comprimido, { maxOutputLength: 100 * 1024 * 1024 }).toString('utf8'));
   } catch (error) {
     if (error.code !== 'CLAVE_INCORRECTA') throw new ErrorRespaldo('La copia está dañada.');
     if (archivo.clave === 'contrasena') {

@@ -1,4 +1,4 @@
-const { normalizarRut, normalizarCurso, separarNombre, transaccion } = require('./asistencia');
+const { normalizarRut, normalizarCurso, separarNombre, transaccion, preparadorMatricula } = require('./asistencia');
 
 // "HORA DE LLEGADA" / "Sí" -> "hora de llegada" / "si" (sin tildes ni mayúsculas)
 const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -52,13 +52,7 @@ function guardarAtrasos(db, atrasos, { desde, hasta, curso = null, transaccionar
     ? db.prepare(`DELETE FROM atraso WHERE fecha BETWEEN ? AND ? AND id_matricula IN (
         SELECT m.id_matricula FROM matricula m JOIN curso c ON c.id_curso = m.id_curso WHERE c.nombre = ?)`)
     : db.prepare(`DELETE FROM atraso WHERE fecha BETWEEN ? AND ?`);
-  const upCurso = db.prepare(`INSERT INTO curso (nombre) VALUES (?) ON CONFLICT(nombre) DO NOTHING`);
-  const getCurso = db.prepare(`SELECT id_curso FROM curso WHERE nombre = ?`);
-  const upAlumno = db.prepare(`INSERT INTO alumno (rut, nombres, apellidos) VALUES (@rut, @nombres, @apellidos)
-    ON CONFLICT(rut) DO UPDATE SET nombres = excluded.nombres, apellidos = excluded.apellidos`);
-  const upMat = db.prepare(`INSERT INTO matricula (rut_alumno, id_curso, anio) VALUES (?, ?, ?)
-    ON CONFLICT(rut_alumno, id_curso, anio) DO NOTHING`);
-  const getMat = db.prepare(`SELECT id_matricula FROM matricula WHERE rut_alumno = ? AND id_curso = ? AND anio = ?`);
+  const ids = preparadorMatricula(db);
   const ins = db.prepare(`INSERT INTO atraso (id_matricula, fecha, hora_llegada, justificado_portal)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(id_matricula, fecha, hora_llegada) DO UPDATE SET justificado_portal = excluded.justificado_portal`);
@@ -66,12 +60,7 @@ function guardarAtrasos(db, atrasos, { desde, hasta, curso = null, transaccionar
   const ejecutar = () => {
     cursoN ? borrar.run(desde, hasta, cursoN) : borrar.run(desde, hasta);
     for (const a of enAlcance) {
-      upCurso.run(a.curso);
-      const { id_curso } = getCurso.get(a.curso);
-      upAlumno.run({ rut: a.rut, nombres: a.nombres, apellidos: a.apellidos });
-      const anio = +a.fecha.slice(0, 4);
-      upMat.run(a.rut, id_curso, anio);
-      const { id_matricula } = getMat.get(a.rut, id_curso, anio);
+      const id_matricula = ids.matricula(a, ids.curso(a.curso), +a.fecha.slice(0, 4));
       ins.run(id_matricula, a.fecha, a.hora_llegada, a.justificado_portal);
     }
     return enAlcance.length;

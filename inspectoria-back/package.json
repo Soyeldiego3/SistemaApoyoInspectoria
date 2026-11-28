@@ -24,6 +24,7 @@
     "jszip": "^3.10.2",
     "pdfkit": "^0.21.0",
     "playwright": "^1.64.0",
+    "selfsigned": "^5.5.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

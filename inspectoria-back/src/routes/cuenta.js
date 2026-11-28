@@ -17,10 +17,15 @@ router.put('/password', (req, res) => {
   if (nueva.length < 8 || nueva.length > 128) {
     return res.status(400).json({ ok: false, codigo: 'CLAVE_INVALIDA', mensaje: 'La contraseña nueva debe tener entre 8 y 128 caracteres.' });
   }
+  if (auth.bloqueado(req.ip)) {
+    return res.status(429).json({ ok: false, codigo: 'BLOQUEADO', mensaje: 'Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.' });
+  }
   const usuario = usuarios.buscar(req.usuario.nombre);
   if (!usuario || !auth.passwordValida(actual, usuario.password_hash)) {
+    auth.registrarFallo(req.ip);
     return res.status(403).json({ ok: false, codigo: 'CLAVE_ACTUAL_INCORRECTA', mensaje: 'La contraseña actual es incorrecta.' });
   }
+  auth.limpiarFallos(req.ip);
   usuarios.cambiarClave(usuario.nombre, auth.hashearPassword(nueva));
   auditoria.registrar('cuenta.clave_cambiada', usuario.nombre, {});
   res.json({ ok: true, mensaje: 'Contraseña actualizada.' });

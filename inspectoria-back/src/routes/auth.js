@@ -4,10 +4,15 @@ const usuarios = require('../db/usuarios');
 const { requerirSesion } = require('../middleware/sesion');
 const { canjearCodigo } = require('../services/qr_login');
 const auditoriaSistema = require('../services/auditoria_sistema');
+const { esLoopback } = require('../services/red');
 
 const router = express.Router();
 
 router.post('/login', (req, res) => {
+  // En red la conexión no va cifrada: el teléfono entra solo con el QR, así la contraseña no sale del PC
+  if (!esLoopback(req.socket.remoteAddress)) {
+    return res.status(403).json({ error: 'Desde el teléfono inicia sesión escaneando el código QR del PC.' });
+  }
   const { usuario, password } = req.body ?? {};
   if (!usuarios.hayUsuarios()) {
     return res.status(500).json({ error: 'No hay usuarios creados.' });

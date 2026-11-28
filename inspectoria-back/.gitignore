@@ -16,6 +16,8 @@ secret.key
 portal.cred.json
 app.config.json
 respaldo.clave.json
+# Certificado HTTPS de "Acceso en red" (se genera en cada equipo)
+*.pem
 
 # Logs
 *.log

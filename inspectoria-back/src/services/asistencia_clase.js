@@ -1,4 +1,4 @@
-const { normalizarRut, normalizarCurso, separarNombre, transaccion } = require('./asistencia');
+const { normalizarRut, normalizarCurso, separarNombre, transaccion, preparadorMatricula } = require('./asistencia');
 
 // "Presente" / "ALUMNO" -> "presente" / "alumno" (sin tildes ni mayúsculas)
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -83,25 +83,16 @@ function guardarAsistenciaClase(db, data, { transaccionar = true } = {}) {
       JOIN curso c ON c.id_curso = m.id_curso
       WHERE c.nombre = ? AND m.anio = ?
     )`);
-  const upCurso = db.prepare(`INSERT INTO curso (nombre) VALUES (?) ON CONFLICT(nombre) DO NOTHING`);
-  const getCurso = db.prepare(`SELECT id_curso FROM curso WHERE nombre = ?`);
-  const upAlumno = db.prepare(`INSERT INTO alumno (rut, nombres, apellidos) VALUES (@rut, @nombres, @apellidos)
-    ON CONFLICT(rut) DO UPDATE SET nombres = excluded.nombres, apellidos = excluded.apellidos`);
-  const upMat = db.prepare(`INSERT INTO matricula (rut_alumno, id_curso, anio) VALUES (?, ?, ?)
-    ON CONFLICT(rut_alumno, id_curso, anio) DO NOTHING`);
-  const getMat = db.prepare(`SELECT id_matricula FROM matricula WHERE rut_alumno = ? AND id_curso = ? AND anio = ?`);
+  const ids = preparadorMatricula(db);
   const ins = db.prepare(`INSERT INTO asistencia_clase (id_matricula, fecha, hora_inicio, hora_fin, estado)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id_matricula, fecha, hora_inicio) DO UPDATE SET hora_fin = excluded.hora_fin, estado = excluded.estado`);
 
   const ejecutar = () => {
     borrar.run(data.fecha, data.hora_inicio, data.curso, anio);
-    upCurso.run(data.curso);
-    const { id_curso } = getCurso.get(data.curso);
+    const idCurso = ids.curso(data.curso);
     for (const al of data.alumnos) {
-      upAlumno.run({ rut: al.rut, nombres: al.nombres, apellidos: al.apellidos });
-      upMat.run(al.rut, id_curso, anio);
-      const { id_matricula } = getMat.get(al.rut, id_curso, anio);
+      const id_matricula = ids.matricula(al, idCurso, anio);
       ins.run(id_matricula, data.fecha, data.hora_inicio, data.hora_fin, al.estado);
     }
     return data.alumnos.length;

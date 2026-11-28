@@ -123,7 +123,7 @@ router.get('/alumnos/:rut', (req, res) => {
 router.post('/alumnos/:rut/justificativos', (req, res) => {
   try {
     const { tipo, desde, hasta, duracionMs, aplicaA } = req.body ?? {};
-    if (typeof tipo !== 'string' || !tipo.trim() ||
+    if (typeof tipo !== 'string' || !tipo.trim() || tipo.length > 100 ||
       !/^\d{4}-\d{2}-\d{2}$/.test(desde) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || hasta < desde) {
       return res.status(400).json({ error: 'Tipo y rango de fechas inválidos.' });

@@ -2,6 +2,7 @@ const os = require('os');
 const { leer, guardar } = require('./configuracion');
 
 const PUERTO = Number(process.env.PORT || 3005);
+const PUERTO_HTTPS = Number(process.env.HTTPS_PORT || 3443); // acceso en red (teléfono)
 const VIRTUAL_ADAPTER = /virtualbox|vmware|hyper-v|wsl|docker|vethernet|default switch|loopback|tunnel/i;
 
 function normalizarIp(ip) {
@@ -58,10 +59,10 @@ function interfacesPrivadas() {
 function obtenerInfo() {
   const configuracion = leer();
   const interfaces = interfacesPrivadas();
-  const urls = interfaces.map(({ address }) => `http://${address}:${PUERTO}`);
+  const urls = interfaces.map(({ address }) => `https://${address}:${PUERTO_HTTPS}`);
   return {
     habilitada: Boolean(configuracion.redHabilitada),
-    puerto: PUERTO,
+    puerto: PUERTO_HTTPS,
     urls,
     principal: urls[0] || null,
     interfaces,
@@ -78,6 +79,9 @@ function cambiarRed(habilitada) {
 }
 
 module.exports = {
+  PUERTO,
+  PUERTO_HTTPS,
+  interfacesPrivadas,
   normalizarIp,
   esLoopback,
   esPrivada,

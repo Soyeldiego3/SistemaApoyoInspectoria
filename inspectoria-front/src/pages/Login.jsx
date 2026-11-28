@@ -45,7 +45,7 @@ export default function Login() {
       .catch((err) => {
         setError(err instanceof TypeError
           ? 'No se pudo conectar con el PC. Revisa que estés en la misma red.'
-          : 'El código QR venció o ya se usó. Escanea el código nuevo o ingresa con tu usuario.');
+          : 'El código QR venció o ya se usó. Escanea el código nuevo del PC.');
         setSearchParams({}, { replace: true }); // el código no queda en la URL ni en el historial
         setCanjeandoQr(false);
       });
@@ -66,6 +66,24 @@ export default function Login() {
   // Si ya hay una sesión iniciada, no se vuelve a mostrar el login
   // (salvo durante la animación de login correcto, que navega al terminar).
   if (getToken() && !codigoQr && !exito) return <Navigate to="/" replace />;
+
+  // El teléfono entra solo con el QR del PC: la contraseña no viaja por la red
+  if (!esPc) {
+    return (
+      <div className="login-pantalla">
+        <div className="login-tarjeta">
+          <div className="login-encabezado">
+            <div className="login-logo"><ShieldCheck size={26} color="#fff" /></div>
+            <h1 className="login-titulo">Inspectoría</h1>
+            <p className="login-subtitulo">
+              Para entrar desde el teléfono, escanea el código QR del PC en Ajustes → Conectar desde el teléfono.
+            </p>
+          </div>
+          {error && <p role="alert" className="login-error">{error}</p>}
+        </div>
+      </div>
+    );
+  }
 
   const enviar = async (e) => {
     e.preventDefault();

@@ -219,7 +219,8 @@ function abrirDb(ruta = DB_PATH) {
   return db;
 }
 
-function guardar(db, data, { transaccionar = true } = {}) {
+/** Crea curso, alumno y matrícula si no existen y devuelve sus ids (lo usan los guardar*). */
+function preparadorMatricula(db) {
   const upCurso = db.prepare(`INSERT INTO curso (nombre) VALUES (?) ON CONFLICT(nombre) DO NOTHING`);
   const getCurso = db.prepare(`SELECT id_curso FROM curso WHERE nombre = ?`);
   const upAlumno = db.prepare(`INSERT INTO alumno (rut, nombres, apellidos) VALUES (@rut, @nombres, @apellidos)
@@ -227,6 +228,21 @@ function guardar(db, data, { transaccionar = true } = {}) {
   const upMat = db.prepare(`INSERT INTO matricula (rut_alumno, id_curso, anio) VALUES (?, ?, ?)
     ON CONFLICT(rut_alumno, id_curso, anio) DO NOTHING`);
   const getMat = db.prepare(`SELECT id_matricula FROM matricula WHERE rut_alumno = ? AND id_curso = ? AND anio = ?`);
+  return {
+    curso: (nombre) => {
+      upCurso.run(nombre);
+      return getCurso.get(nombre).id_curso;
+    },
+    matricula: (al, idCurso, anio) => {
+      upAlumno.run({ rut: al.rut, nombres: al.nombres, apellidos: al.apellidos });
+      upMat.run(al.rut, idCurso, anio);
+      return getMat.get(al.rut, idCurso, anio).id_matricula;
+    },
+  };
+}
+
+function guardar(db, data, { transaccionar = true } = {}) {
+  const ids = preparadorMatricula(db);
   const upAsis = db.prepare(`INSERT INTO asistencia (id_matricula, fecha, estado) VALUES (?, ?, ?)
     ON CONFLICT(id_matricula, fecha) DO UPDATE SET estado = excluded.estado`);
   const desde = `${data.anio}-${String(data.mes).padStart(2, '0')}-01`;
@@ -242,13 +258,10 @@ function guardar(db, data, { transaccionar = true } = {}) {
     // El reporte mensual es la fuente completa del alcance: elimina días
     // que ya no aparecen antes de insertar la versión actual.
     borrar.run(desde, hasta, data.curso, data.anio);
-    upCurso.run(data.curso);
-    const { id_curso } = getCurso.get(data.curso);
+    const idCurso = ids.curso(data.curso);
     let n = 0;
     for (const al of data.alumnos) {
-      upAlumno.run({ rut: al.rut, nombres: al.nombres, apellidos: al.apellidos });
-      upMat.run(al.rut, id_curso, data.anio);
-      const { id_matricula } = getMat.get(al.rut, id_curso, data.anio);
+      const id_matricula = ids.matricula(al, idCurso, data.anio);
       for (const r of al.registros) { upAsis.run(id_matricula, r.fecha, r.estado); n++; }
     }
     return n;
@@ -256,4 +269,6 @@ function guardar(db, data, { transaccionar = true } = {}) {
   return transaccionar ? transaccion(db, ejecutar) : ejecutar();
 }
 
-module.exports = { parsearAsistencia, abrirDb, guardar, transaccion, normalizarRut, normalizarCurso, separarNombre };
+module.exports = {
+  parsearAsistencia, abrirDb, guardar, transaccion, preparadorMatricula, normalizarRut, normalizarCurso, separarNombre,
+};

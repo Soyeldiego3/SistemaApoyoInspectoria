@@ -17,6 +17,14 @@ const { conReintentos } = require('../services/reintentos');
 
 const router = express.Router();
 const URL_PORTAL_CONFIGURADA = process.env.PORTAL_URL;
+
+// Desde el teléfono solo se usan las credenciales guardadas en el PC
+router.use((req, res, next) => {
+  if (req.body && !esLoopback(req.socket.remoteAddress)) {
+    for (const clave of ['usuario', 'pass', 'urlPortal', 'recordar', 'enMemoria']) delete req.body[clave];
+  }
+  next();
+});
 let dbWritable;
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];

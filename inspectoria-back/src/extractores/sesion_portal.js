@@ -125,6 +125,9 @@ async function esperarLogin(page) {
 
 // Abre el navegador y hace login UNA sola vez.
 async function abrirSesion({ usuario, pass, urlPortal } = {}) {
+  if (!/^https?:\/\//i.test(urlPortal || URL_PORTAL_POR_DEFECTO)) {
+    throw errorPortal('PORTAL_INACCESIBLE', 'La URL del portal debe empezar con http:// o https://.');
+  }
   const browser = await abrirNavegador();
   try {
     const page = await browser.newPage();

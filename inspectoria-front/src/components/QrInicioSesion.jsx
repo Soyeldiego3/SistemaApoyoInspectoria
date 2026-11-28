@@ -57,7 +57,7 @@ export default function QrInicioSesion({ urlBase }) {
       <p className="muted" style={{ margin: 0, fontSize: '.8rem', textAlign: 'center', maxWidth: 180 }} aria-live="polite">
         {qr
           ? <>Entra como <strong>{qr.usuario}</strong>. Se renueva en {restante} s.</>
-          : 'Al escanear tendrás que ingresar con tu usuario.'}
+          : 'Generando código…'}
       </p>
     </div>
   );

@@ -47,7 +47,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       frameAncestors: ["'none'"],
-      // La app se sirve solo por http en la red local
+      // En el PC se sirve por http en 127.0.0.1; en la red, por https (no forzar upgrade)
       upgradeInsecureRequests: null,
     },
   },
@@ -101,5 +101,15 @@ app.get('/api/cursos', requerirSesion, (req, res) => {
 });
 
 app.use(express.static(FRONT_DIR));
+
+// Cualquier otra URL: 404 sin detalles
+app.use((req, res) => res.status(404).json({ error: 'No encontrado.' }));
+
+// Errores no controlados (p. ej. JSON mal formado): mensaje genérico, sin stack ni rutas del PC
+app.use((error, req, res, next) => {
+  console.error('Error en la petición:', error.message);
+  const estado = error.status || 500;
+  res.status(estado).json({ error: estado < 500 ? 'Solicitud inválida.' : 'Error interno.' });
+});
 
 module.exports = app;

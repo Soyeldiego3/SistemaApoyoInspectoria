@@ -1,6 +1,6 @@
 const express = require('express');
 const { obtenerInfo, cambiarRed } = require('../services/red');
-const { reiniciarServidor } = require('../services/servidor');
+const { actualizarRed } = require('../services/servidor');
 const { requerirLoopback } = require('../middleware/loopback');
 const auditoria = require('../services/auditoria_sistema');
 const usuarios = require('../db/usuarios');
@@ -49,7 +49,7 @@ router.put('/config', requerirLoopback, (req, res) => {
     const info = cambiarRed(req.body.habilitada);
     auditoria.registrar('red.acceso_modificado', req.usuario.nombre, { habilitada: req.body.habilitada });
     res.json(info);
-    setImmediate(() => reiniciarServidor().catch((error) => {
+    setImmediate(() => actualizarRed().catch((error) => {
       console.error('Error al reiniciar el servidor de red:', error.message);
     }));
   } catch (error) {

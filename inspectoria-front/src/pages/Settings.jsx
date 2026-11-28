@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Copy } from 'lucide-react';
 import {
   getAjustes, getRedInfo, setInicioWindows, setNavegadorHeadless, setRedEnabled,
 } from '../api.js';
@@ -79,16 +78,6 @@ export default function Settings() {
     }
   };
 
-  const copiarUrl = async () => {
-    if (!red?.principal) return;
-    try {
-      await navigator.clipboard.writeText(red.principal);
-      mostrarMensaje('URL copiada.');
-    } catch {
-      mostrarError('No se pudo copiar la URL. Cópiala manualmente.');
-    }
-  };
-
   const cambiarNavegadorVisible = async (visible) => {
     setHeadlessCargando(true);
     try {
@@ -129,7 +118,7 @@ export default function Settings() {
           <div className="row">
             <div>
               <h2>Conectar desde el teléfono</h2>
-              <p className="muted">El PC y el teléfono deben estar en la misma red.</p>
+              <p className="muted">El PC y el teléfono deben estar en la misma red. La primera vez el teléfono avisará que la conexión no es privada: toca Avanzado → Continuar.</p>
             </div>
             <label className="row" style={{ gap: 8 }}>
               <input type="checkbox" checked={Boolean(red?.habilitada)} disabled={redCargando || !red}
@@ -138,17 +127,14 @@ export default function Settings() {
             </label>
           </div>
           {red?.habilitada && red.principal ? (
-            <div className="row" style={{ alignItems: 'center', marginTop: 16 }}>
-              <div>
-                <p className="big" style={{ fontSize: '1.2rem', margin: 0 }}>{red.principal}</p>
-                <button className="btn ghost" onClick={copiarUrl} style={{ marginTop: 10 }}>
-                  <Copy size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Copiar URL
-                </button>
-              </div>
+            <div style={{ display: 'grid', justifyItems: 'center', gap: 4, marginTop: 16 }}>
               <QrInicioSesion urlBase={red.principal} />
+              <p className="muted" style={{ margin: 0, fontSize: '.8rem' }}>
+                Servidor en {red.principal.replace('https://', '')}
+              </p>
             </div>
           ) : red ? (
-            <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar una URL y un código QR.</p>
+            <p className="muted" style={{ marginTop: 16 }}>Activa el acceso en red para mostrar el código QR.</p>
           ) : (
             <p className="muted" style={{ marginTop: 16 }}>Cargando configuración de red…</p>
           )}
